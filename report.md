@@ -1534,7 +1534,7 @@ Common status codes: `400`, `401`, `403`, `404`, `409`, `422`, `429`, `500`, `50
 
 ## Community Sources Used Only for Pain Points
 
-46. Hacker News Kubernetes cost discussion. [1](https://news.ycombinator.com/item?id=39589595)
+46. Hacker News Kubernetes cost discussion. [1](https://news.ycombinator.t com/item?id=39589595)
 47. Hacker News Infracost discussion. [4](https://news.ycombinator.com/item?id=37062007)
 48. Hacker News proactive Kubernetes cost PR discussion. [3](https://news.ycombinator.com/item?id=46542480)
 49. Reddit AWS cost reduction thread. [2](https://www.reddit.com/r/aws/comments/xwascc/reducing_aws_costs/)
