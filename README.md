@@ -11,7 +11,7 @@ GreenCloud is a proposed FinOps and GreenOps platform for understanding and redu
 
 ---
 
-## 1. What Problem Does It Solve? (Simple Language)
+## 1. What Problem Does It Solve?
 
 Cloud is easy to start, hard to control.
 - Engineers launch VMs, Kubernetes pods, disks, DBs, load balancers and forget them → you keep paying.
