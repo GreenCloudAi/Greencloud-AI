@@ -2,7 +2,6 @@
 
 **Project:** GreenCloud AI  
 **Purpose:** An AI platform that helps organizations reduce cloud cost and carbon emissions across AWS, Azure, and Google Cloud by analyzing resources, forecasting demand, and recommending or automating optimizations.  
-**Prepared by:** Arena.ai agentic software research assistant  
 **Date:** 2026-07-31  
 **Important limitation:** This is a targeted systematic-style research report, not a legally exhaustive systematic literature review. I prioritized peer-reviewed work, official documentation, and active open-source projects. Some commercial competitor internals and exact pricing are not public. Where public evidence was not found, the report says so explicitly.
 
