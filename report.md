@@ -2,8 +2,11 @@
 
 **Project:** GreenCloud AI  
 **Purpose:** An AI platform that helps organizations reduce cloud cost and carbon emissions across AWS, Azure, and Google Cloud by analyzing resources, forecasting demand, and recommending or automating optimizations.  
-**Date:** 2026-07-31  
-**Important limitation:** This is a targeted systematic-style research report, not a legally exhaustive systematic literature review. I prioritized peer-reviewed work, official documentation, and active open-source projects. Some commercial competitor internals and exact pricing are not public. Where public evidence was not found, the report says so explicitly.
+**Date:** 2026-08-06  
+**Authors:** Anshul Yadav, Anjishnu Srivastava, Anubhav Bansal, Aru Pandey  
+
+
+**Scope & Methodology:** This systematic research report synthesizes evidence from peer-reviewed literature, official cloud provider documentation (AWS, Azure, GCP), industry standards (FinOps Foundation FOCUS v1.3, Green Software Foundation SCI), and open-source telemetry systems. Commercial competitor internals and exact negotiated pricing are noted where non-public, adhering to a strict empirical confidence scoring policy.
 
 ---
 
@@ -12,9 +15,10 @@
 - **High confidence:** peer-reviewed papers, official vendor documentation, official project docs/GitHub, or standards documents.
 - **Medium confidence:** reputable engineering blogs, official marketplace listings, public case studies, or GitHub metadata.
 - **Low confidence:** community discussions, Reddit, Hacker News, Stack Overflow, or third-party pricing pages. These are used only for pain-point discovery, not as technical proof.
-- **No invented facts:** if a feature, benchmark, price, dataset, or competitor internal architecture was not found in public evidence, it is marked **Evidence not found** or **Not enough published evidence was found**.
+- **No invented facts:** if a feature, benchmark, price, dataset, or competitor internal architecture was not found in public evidence, it is explicitly marked **Evidence not found** or **Not enough published evidence was found**.
 
 ---
+
 
 # Table of Contents
 

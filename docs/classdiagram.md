@@ -1,4 +1,7 @@
-## 14.2 Class Diagram
+# Software Domain Class Diagram & Object Model
+
+## Class Diagram
+
 
 ```mermaid
 classDiagram

@@ -1,4 +1,7 @@
-## 13.2 ER Diagram
+# Entity-Relationship (ER) Diagram & Database Schema
+
+## ER Diagram
+
 
 ```mermaid
 erDiagram
