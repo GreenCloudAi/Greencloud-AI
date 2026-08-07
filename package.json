@@ -1,0 +1,31 @@
+{
+  "name": "greencloud-ai",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "test:e2e": "node scripts/run-e2e.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cost-explorer": "^3.500.0",
+    "@aws-sdk/client-ec2": "^3.500.0",
+    "@aws-sdk/client-sts": "^3.500.0",
+    "@prisma/client": "^5.10.0",
+    "lucide-react": "^0.330.0",
+    "next": "^14.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.20",
+    "@types/react": "^18.2.57",
+    "@types/react-dom": "^18.2.19",
+    "prisma": "^5.10.0",
+    "typescript": "^5.3.3"
+  }
+}
