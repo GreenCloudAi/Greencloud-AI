@@ -65,8 +65,8 @@ export class AwsCloudConnector {
         const instances = res.Instances || [];
         for (const inst of instances) {
           // Simplistic mapping for the SDK output
-          const tags = (inst.Tags || []).map(t => ({ Key: t.Key || "", Value: t.Value || "" }));
-          const env = tags.find(t => t.Key.toLowerCase() === "environment")?.Value || "unknown";
+          const tags = (inst.Tags || []).map((t: { Key?: string; Value?: string }) => ({ Key: t.Key || "", Value: t.Value || "" }));
+          const env = tags.find((t: { Key: string; Value: string }) => t.Key.toLowerCase() === "environment")?.Value || "unknown";
           
           list.push({
             InstanceId: inst.InstanceId || "unknown",
@@ -105,7 +105,7 @@ export class AwsCloudConnector {
       const volumes = response.Volumes || [];
 
       for (const vol of volumes) {
-        const tags = (vol.Tags || []).map(t => ({ Key: t.Key || "", Value: t.Value || "" }));
+        const tags = (vol.Tags || []).map((t: { Key?: string; Value?: string }) => ({ Key: t.Key || "", Value: t.Value || "" }));
         const attachment = vol.Attachments && vol.Attachments.length > 0 ? vol.Attachments[0] : null;
 
         list.push({
@@ -145,7 +145,7 @@ export class AwsCloudConnector {
       const addresses = response.Addresses || [];
 
       for (const addr of addresses) {
-        const tags = (addr.Tags || []).map(t => ({ Key: t.Key || "", Value: t.Value || "" }));
+        const tags = (addr.Tags || []).map((t: { Key?: string; Value?: string }) => ({ Key: t.Key || "", Value: t.Value || "" }));
         list.push({
           PublicIp: addr.PublicIp || "0.0.0.0",
           AllocationId: addr.AllocationId || "unknown",
