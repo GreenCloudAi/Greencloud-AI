@@ -72,10 +72,12 @@ export class TenantIsolatedDb {
   async listResources(filters: { provider?: string; region?: string; resourceType?: string } = {}) {
     return prisma.cloudResource.findMany({
       where: {
-        cloudAccount: { tenantId: this.tenantId },
+        cloudAccount: {
+          tenantId: this.tenantId,
+          provider: filters.provider
+        },
         resourceType: filters.resourceType,
-        region: filters.region,
-        cloudAccount: { provider: filters.provider }
+        region: filters.region
       },
       include: {
         carbonEmissions: {
