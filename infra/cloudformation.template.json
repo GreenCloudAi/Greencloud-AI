@@ -1,0 +1,170 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "GreenCloud AI Read-Only IAM Role (GreenCloudReadOnlyRole) for secure, keyless cross-account telemetry and cost ingestion.",
+  "Parameters": {
+    "GreenCloudTenantExternalId": {
+      "Type": "String",
+      "Description": "Unique GreenCloud External ID assigned to your tenant for STS AssumeRole authentication security (format: greencloud-<tenant-id>)."
+    },
+    "GreenCloudAccountId": {
+      "Type": "String",
+      "Default": "123456789012",
+      "Description": "GreenCloud AWS Account ID authorized to assume this read-only role."
+    },
+    "EnableCURAccess": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": ["true", "false"],
+      "Description": "Set to true if GreenCloud should read raw AWS Cost and Usage Reports (CUR) from an S3 bucket."
+    },
+    "CURS3BucketName": {
+      "Type": "String",
+      "Default": "",
+      "Description": "Name of the S3 bucket storing AWS Cost and Usage Reports (required if EnableCURAccess is true)."
+    }
+  },
+  "Conditions": {
+    "IsCURAccessEnabled": {
+      "Fn::Equals": [{ "Ref": "EnableCURAccess" }, "true"]
+    }
+  },
+  "Resources": {
+    "GreenCloudReadOnlyRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "GreenCloudReadOnlyRole",
+        "Description": "Least-privilege read-only role for GreenCloud AI FinOps & GreenOps telemetry ingestion.",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${GreenCloudAccountId}:root"
+                }
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "sts:ExternalId": { "Ref": "GreenCloudTenantExternalId" }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "GreenCloudTelemetryAndCostReadPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "CostExplorerReadAccess",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ce:GetCostAndUsage",
+                    "ce:GetCostForecast",
+                    "ce:GetDimensionValues",
+                    "ce:GetReservationUtilization",
+                    "ce:GetTags"
+                  ],
+                  "Resource": "*",
+                  "Description": "Required by GreenCloud Cost Engine to ingest billing totals and reconcile service costs."
+                },
+                {
+                  "Sid": "STSIdentityValidation",
+                  "Effect": "Allow",
+                  "Action": [
+                    "sts:GetCallerIdentity"
+                  ],
+                  "Resource": "*",
+                  "Description": "Required to validate cross-account role identity during onboarding."
+                },
+                {
+                  "Sid": "EC2AndNetworkInventoryReadAccess",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:DescribeInstances",
+                    "ec2:DescribeVolumes",
+                    "ec2:DescribeAddresses",
+                    "ec2:DescribeRegions",
+                    "ec2:DescribeSnapshots",
+                    "ec2:DescribeTags",
+                    "ec2:DescribeInstanceTypes",
+                    "ec2:DescribeInstanceStatus"
+                  ],
+                  "Resource": "*",
+                  "Description": "Required by GreenCloud Ingestion Service to discover EC2 instances, unattached EBS volumes, and unassociated Elastic IPs."
+                },
+                {
+                  "Sid": "CloudWatchMetricReadAccess",
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:GetMetricData",
+                    "cloudwatch:GetMetricStatistics",
+                    "cloudwatch:ListMetrics"
+                  ],
+                  "Resource": "*",
+                  "Description": "Required to collect CPU utilization, disk IOPS, and network traffic metrics for rightsizing calculations."
+                },
+                {
+                  "Sid": "ResourceGroupsTaggingApiReadAccess",
+                  "Effect": "Allow",
+                  "Action": [
+                    "tag:GetResources",
+                    "tag:GetTagKeys",
+                    "tag:GetTagValues"
+                  ],
+                  "Resource": "*",
+                  "Description": "Required to parse resource tags for business unit, environment, and team cost allocation."
+                },
+                {
+                  "Sid": "ComputeOptimizerReadAccess",
+                  "Effect": "Allow",
+                  "Action": [
+                    "compute-optimizer:GetEC2InstanceRecommendations",
+                    "compute-optimizer:GetEBSVolumeRecommendations"
+                  ],
+                  "Resource": "*",
+                  "Description": "Required to cross-reference AWS Compute Optimizer rightsizing signals with GreenCloud Recommendation Engine."
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "GreenCloudCURS3ReadPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "CURS3BucketReadAccess",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    { "Fn::Sub": "arn:aws:s3:::${CURS3BucketName}" },
+                    { "Fn::Sub": "arn:aws:s3:::${CURS3BucketName}/*" }
+                  ],
+                  "Description": "Optional read access to AWS Cost and Usage Report S3 bucket when CUR ingestion is enabled by customer."
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "RoleARN": {
+      "Description": "The ARN of the GreenCloudReadOnlyRole to enter into the GreenCloud AI onboarding dashboard.",
+      "Value": { "Fn::GetAtt": ["GreenCloudReadOnlyRole", "Arn"] }
+    },
+    "ExternalID": {
+      "Description": "The External ID configured for this tenant role connection.",
+      "Value": { "Ref": "GreenCloudTenantExternalId" }
+    }
+  }
+}
