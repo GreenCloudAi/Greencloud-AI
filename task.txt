@@ -1,0 +1,13 @@
+Acceptance criteria for “working” MVP
+Do not call it production-ready until it can consistently meet these criteria:
+
+ A customer can connect an AWS account without sharing static keys.
+ Data ingestion survives retries and partial failures.
+ Cost totals are reconciled to AWS Cost Explorer / CUR.
+ Every recommendation is traceable to data and calculations.
+ Tenant access is isolated and tested.
+ No write permission is required for the standard connector.
+ Tickets/PRs require a human approval workflow.
+ User can see sync freshness, errors, and audit history.
+ A demo AWS account can be set up repeatedly using documented infrastructure.
+ E2E tests cover onboarding, ingestion, dashboard, recommendation, and ticket creation.
