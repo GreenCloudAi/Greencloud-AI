@@ -1,0 +1,115 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Tenant {
+  id                 String               @id @default(uuid())
+  name               String
+  plan               String               @default("standard")
+  createdAt          DateTime             @default(now())
+  cloudAccounts      CloudAccount[]
+  recommendations    Recommendation[]
+  auditLogs          AuditLog[]
+}
+
+model CloudAccount {
+  id                 String               @id @default(uuid())
+  tenantId           String
+  tenant             Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider           String               // e.g. "aws", "azure", "gcp"
+  externalAccountId  String
+  name               String
+  status             String               // "pending_validation", "active", "sync_failed"
+  roleArn            String?
+  syncFreshness      DateTime?
+  syncError          String?
+  resources          CloudResource[]
+  costLineItems      CostLineItem[]
+}
+
+model CloudResource {
+  id                 String               @id @default(uuid())
+  cloudAccountId     String
+  cloudAccount       CloudAccount         @relation(fields: [cloudAccountId], references: [id], onDelete: Cascade)
+  providerResourceId String
+  resourceType       String               // e.g. "ec2", "ebs", "eip", "k8s_pod"
+  region             String
+  lifecycleState     String               // e.g. "running", "available", "unassociated", "stopped"
+  tags               String               // Store JSON string of tags [{Key, Value}]
+  telemetryMetrics   String?              // JSON string of CloudWatch / Prometheus metrics history [{timestamp, cpuUtil, memoryUtil}]
+  firstSeenAt        DateTime             @default(now())
+  lastSeenAt         DateTime             @default(now())
+  costLineItems      CostLineItem[]
+  carbonEmissions    CarbonEmission[]
+  recommendations    Recommendation[]
+}
+
+model CostLineItem {
+  id                 String               @id @default(uuid())
+  cloudAccountId     String
+  cloudAccount       CloudAccount         @relation(fields: [cloudAccountId], references: [id], onDelete: Cascade)
+  resourceId         String?
+  resource           CloudResource?       @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  chargeDate         DateTime
+  providerService    String               // e.g. "AmazonEC2", "AmazonEBS"
+  billedCost         Float
+  effectiveCost      Float
+  currency           String               @default("USD")
+}
+
+model CarbonEmission {
+  id                 String               @id @default(uuid())
+  resourceId         String
+  resource           CloudResource        @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  ts                 DateTime             @default(now())
+  energyKwh          Float
+  operationalGco2e   Float
+  embodiedGco2e      Float
+  method             String               @default("hybrid_ccf")
+  confidence         Float                @default(1.0)
+}
+
+model Recommendation {
+  id                      String               @id @default(uuid())
+  tenantId                String
+  tenant                  Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  resourceId              String
+  resource                CloudResource        @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  category                String               // "idle_cleanup", "rightsizing", "carbon_aware"
+  title                   String
+  status                  String               // "active", "approved", "dismissed", "executed"
+  estimatedMonthlySavings Float
+  estimatedGco2eSavings   Float
+  riskScore               Float
+  confidence              Float
+  evidence                String               // JSON string of calculations & trace data
+  createdAt               DateTime             @default(now())
+  approvals               Approval[]
+}
+
+model Approval {
+  id                 String               @id @default(uuid())
+  recommendationId   String
+  recommendation     Recommendation       @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  approver           String
+  decision           String               // "approved", "dismissed"
+  comment            String?
+  decidedAt          DateTime             @default(now())
+}
+
+model AuditLog {
+  id                 String               @id @default(uuid())
+  tenantId           String
+  tenant             Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor              String
+  action             String               // e.g. "connect_account", "sync_triggered", "recommendation_approved"
+  objectType         String
+  objectId           String
+  ts                 DateTime             @default(now())
+  metadata           String?              // JSON metadata string
+}

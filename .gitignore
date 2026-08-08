@@ -1,0 +1,36 @@
+# Dependencies
+/node_modules
+/.pnpm
+/.yarn
+
+# Next.js Build & Cache Outputs
+/.next/
+/out/
+/build
+/dist
+
+# Debug Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment Variables & Local Configs
+.env
+.env*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Prisma SQLite Local Database Files & Cache
+prisma/*.db
+prisma/*.db-journal
+tsconfig.tsbuildinfo
+
+# OS & Editor Files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
