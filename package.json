@@ -1,0 +1,37 @@
+{
+  "name": "greencloud-ai",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} src/services/seed.ts",
+    "test:e2e": "node scripts/run-e2e.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.500.0",
+    "@aws-sdk/client-cost-explorer": "^3.500.0",
+    "@aws-sdk/client-ec2": "^3.500.0",
+    "@aws-sdk/client-sts": "^3.500.0",
+    "@prisma/client": "^5.10.0",
+    "clsx": "^2.1.0",
+    "lucide-react": "^0.330.0",
+    "next": "^14.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "recharts": "^2.12.0",
+    "tailwind-merge": "^2.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "prisma": "^5.10.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}
