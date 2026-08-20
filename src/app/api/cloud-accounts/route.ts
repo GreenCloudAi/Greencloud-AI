@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     const db = new TenantIsolatedDb(tenant.id);
     const body = await request.json();
 
-    const { provider, externalAccountId, name, roleArn } = body;
+    const { provider, externalAccountId, name, roleArn, externalId } = body;
 
     if (!provider || !externalAccountId || !name) {
       return NextResponse.json(
@@ -36,7 +36,8 @@ export async function POST(request: Request) {
       provider,
       externalAccountId,
       name,
-      roleArn
+      roleArn,
+      externalId
     });
 
     await db.logAction(

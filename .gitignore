@@ -1,5 +1,7 @@
 # dependencies / node_modules
 node_modules/
+/.pnp
+.pnp.js
 
 # Next.js build output
 .next/
@@ -9,12 +11,45 @@ dist/
 
 # TypeScript build cache
 tsconfig.tsbuildinfo
+*.tsbuildinfo
 
-# environment variables
+# SQLite Database & Local Data
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+prisma/dev.db*
+
+# Environment & Secrets (CRITICAL)
 .env
 .env*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# logs & OS files
+# AWS / Cloud credentials backups or accidental key dumps
+*.pem
+*.key
+*.pub
+*credentials*
+*secret*
+!docs/
+!infra/
+
+# Generated tickets / pull requests with customer details
+tickets/
+pull_requests/
+
+# logs & debug
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# OS Files & IDE
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
