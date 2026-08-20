@@ -1,7 +1,10 @@
 import { prisma } from "./db";
-import { IngestionService } from "./ingestion";
-import { RecommendationEngine } from "./recommendationEngine";
 
+/**
+ * Seeds a default tenant if one doesn't exist.
+ * In production mode, no mock data is created — the user must connect
+ * a real AWS account via the /onboarding page with a valid IAM Role ARN.
+ */
 export async function seedDefaultTenant() {
   // Check if tenant exists
   const existingTenant = await prisma.tenant.findFirst();
@@ -9,47 +12,28 @@ export async function seedDefaultTenant() {
     return existingTenant;
   }
 
-  console.log("Seeding default tenant...");
+  console.log("[Seed] Creating default tenant...");
   const tenant = await prisma.tenant.create({
     data: {
-      name: "Acme Cloud Corp",
-      plan: "enterprise"
-    }
+      name: "GreenCloud Default Organization",
+      plan: "enterprise",
+    },
   });
 
-  // Create default mock AWS account
-  console.log("Seeding default AWS account...");
-  const account = await prisma.cloudAccount.create({
-    data: {
-      tenantId: tenant.id,
-      provider: "aws",
-      externalAccountId: "112233445566",
-      name: "Acme AWS Production",
-      status: "pending_validation"
-    }
-  });
-
-  // Run the first ingestion automatically to populate the dashboard!
-  console.log("Running initial sync for default AWS account...");
-  const ingest = new IngestionService(tenant.id, account.id);
-  await ingest.runSync();
-
-  // Run recommendation engine
-  console.log("Running initial recommendation sweep...");
-  const recs = new RecommendationEngine(tenant.id);
-  await recs.generateRecommendations();
-
-  // Create an initial audit log
+  // Create initial audit log
   await prisma.auditLog.create({
     data: {
       tenantId: tenant.id,
       actor: "system",
-      action: "database_seeded",
+      action: "tenant_created",
       objectType: "tenant",
       objectId: tenant.id,
-      metadata: JSON.stringify({ message: "Default tenant and mock AWS account provisioned." })
-    }
+      metadata: JSON.stringify({
+        message: "Default tenant created. Connect an AWS account via /onboarding to begin.",
+      }),
+    },
   });
 
+  console.log(`[Seed] Tenant created: ${tenant.id}. Navigate to /onboarding to connect your AWS account.`);
   return tenant;
 }

@@ -1,5 +1,7 @@
 # dependencies / node_modules
 node_modules/
+/.pnp
+.pnp.js
 
 # Next.js build output
 .next/
@@ -9,12 +11,33 @@ dist/
 
 # TypeScript build cache
 tsconfig.tsbuildinfo
+*.tsbuildinfo
 
-# environment variables
+# SQLite Database (allow non-sensitive seed dev.db, ignore temporary journals)
+*.db-journal
+
+# Environment & Secrets (CRITICAL)
 .env
 .env*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# logs & OS files
+# AWS / Cloud private key dumps
+*.pem
+*.key
+*.pub
+
+# logs & debug
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# OS Files & IDE
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/

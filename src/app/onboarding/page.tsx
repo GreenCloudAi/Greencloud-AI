@@ -39,7 +39,8 @@ export default function Onboarding() {
           provider: "aws",
           externalAccountId: accountId,
           name,
-          roleArn
+          roleArn,
+          externalId: externalId || undefined
         })
       });
 

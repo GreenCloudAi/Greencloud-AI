@@ -17,7 +17,7 @@ export interface TicketPayload {
 }
 
 export class TicketService {
-  private static workspaceRoot = "c:/Users/cosmi/OneDrive/Documents/GitHub/Greencloud-AI";
+  private static workspaceRoot = process.cwd();
 
   /**
    * Generates a markdown format Jira Ticket file.

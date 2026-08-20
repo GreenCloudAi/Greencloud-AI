@@ -41,7 +41,7 @@ export class TenantIsolatedDb {
     })
   }
 
-  async createAccount(data: { provider: string; externalAccountId: string; name: string; roleArn?: string }) {
+  async createAccount(data: { provider: string; externalAccountId: string; name: string; roleArn?: string; externalId?: string }) {
     return prisma.cloudAccount.create({
       data: {
         tenantId: this.tenantId,
@@ -49,6 +49,7 @@ export class TenantIsolatedDb {
         externalAccountId: data.externalAccountId,
         name: data.name,
         roleArn: data.roleArn,
+        externalId: data.externalId,
         status: 'pending_validation'
       }
     })

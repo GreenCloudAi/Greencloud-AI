@@ -26,6 +26,7 @@ model CloudAccount {
   name               String
   status             String               // "pending_validation", "active", "sync_failed"
   roleArn            String?
+  externalId         String?              // STS AssumeRole ExternalId for confused deputy protection
   syncFreshness      DateTime?
   syncError          String?
   resources          CloudResource[]
@@ -41,6 +42,10 @@ model CloudResource {
   region             String
   lifecycleState     String               // e.g. "running", "available", "unassociated"
   tags               String               // Store JSON string of tags
+  instanceType       String?              // EC2 instance type (e.g. "t3.medium", "m5.large")
+  sizeGb             Float?               // EBS volume size in GB
+  monthlyCost        Float?               // Estimated monthly cost in USD
+  telemetryMetrics   String?              // JSON: CloudWatch CPU/Memory time series
   firstSeenAt        DateTime             @default(now())
   lastSeenAt         DateTime             @default(now())
   costLineItems      CostLineItem[]
