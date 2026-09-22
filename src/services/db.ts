@@ -70,6 +70,49 @@ export class TenantIsolatedDb {
     })
   }
 
+  async deleteAccount(accountId: string) {
+    const account = await this.getAccount(accountId)
+    if (!account) throw new Error('Cloud account not found or unauthorized')
+
+    // Find all resources belonging to this account
+    const resources = await prisma.cloudResource.findMany({
+      where: { cloudAccountId: accountId }
+    })
+
+    // Clean up dependent records in transaction
+    await prisma.$transaction([
+      ...resources.map((r) =>
+        prisma.approval.deleteMany({
+          where: { recommendation: { resourceId: r.id } }
+        })
+      ),
+      ...resources.map((r) =>
+        prisma.recommendation.deleteMany({ where: { resourceId: r.id } })
+      ),
+      ...resources.map((r) =>
+        prisma.carbonEmission.deleteMany({ where: { resourceId: r.id } })
+      ),
+      ...resources.map((r) =>
+        prisma.costLineItem.deleteMany({ where: { resourceId: r.id } })
+      ),
+      prisma.cloudResource.deleteMany({ where: { cloudAccountId: accountId } }),
+      prisma.costLineItem.deleteMany({ where: { cloudAccountId: accountId } }),
+      prisma.cloudAccount.delete({ where: { id: accountId } }),
+      prisma.auditLog.create({
+        data: {
+          tenantId: this.tenantId,
+          actor: 'user',
+          action: 'account_disconnected',
+          objectType: 'cloud_account',
+          objectId: accountId,
+          metadata: JSON.stringify({ name: account.name, provider: account.provider, externalAccountId: account.externalAccountId })
+        }
+      })
+    ])
+
+    return { success: true }
+  }
+
   async listResources(filters: { provider?: string; region?: string; resourceType?: string } = {}) {
     return prisma.cloudResource.findMany({
       where: {
