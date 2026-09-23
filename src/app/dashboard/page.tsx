@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
   LayoutDashboard,
+  LayoutGrid,
   DollarSign,
   Leaf,
   Server,
@@ -225,6 +226,17 @@ export default function DashboardPage() {
   const [currentTab, setCurrentTab] = useState<
     "overview" | "cost" | "carbon" | "infrastructure" | "recommendations" | "audit"
   >("overview");
+  const [activeNavItem, setActiveNavItem] = useState<string>("overview");
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    infrastructure: true,
+    costs: true,
+    sustainability: true,
+    optimization: true,
+  });
+
+  const toggleSection = (section: string) => {
+    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
 
   // Dashboard Data State
   const [data, setData] = useState<DashboardData | null>(null);
@@ -545,13 +557,13 @@ Apply the proposed Terraform configuration change or safely update the resource 
       {/* 1. LEFT SIDEBAR NAVIGATION                                                */}
       {/* ========================================================================= */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#FFFDF7] border-r border-[#ECE5CC] flex flex-col justify-between transition-transform duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#FFFDF7] border-r border-[#ECE5CC] flex flex-col justify-between transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${
           mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex flex-col flex-grow">
+        <div className="flex flex-col flex-grow min-h-0">
           {/* Brand Header */}
-          <div className="p-5 border-b border-[#ECE5CC] flex items-center justify-between">
+          <div className="p-4 border-b border-[#ECE5CC] flex items-center justify-between shrink-0">
             <Link href="/" className="flex items-center gap-2.5 group">
               <div className="w-8 h-8 rounded-xl bg-[#FFF76A] border border-[#DFD6B5] flex items-center justify-center text-[#2E2B1A] shadow-xs group-hover:scale-105 transition-transform">
                 <svg className="w-4 h-4 text-[#2E2B1A]" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -559,10 +571,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                 </svg>
               </div>
               <div>
-                <span className="font-black text-[15px] tracking-tight block text-[#2E2B1A]">
+                <span className="font-black text-[14.5px] tracking-tight block text-[#2E2B1A]">
                   GreenCloud AI
                 </span>
-                <span className="font-mono text-[9.5px] uppercase font-bold text-[#8D8975] tracking-wider block">
+                <span className="font-mono text-[9px] uppercase font-bold text-[#8D8975] tracking-wider block">
                   FinOps & Carbon
                 </span>
               </div>
@@ -577,165 +589,435 @@ Apply the proposed Terraform configuration change or safely update the resource 
             </button>
           </div>
 
-          {/* Primary Navigation Tabs (1 to 5) */}
-          <nav className="p-3 space-y-1">
-            <span className="text-[10px] font-mono font-bold text-[#8D8975] uppercase tracking-wider px-3 py-1.5 block">
-              Core Modules
-            </span>
-
-            {/* Tab 1: Cloud Overview */}
+          {/* Navigation Tree (Scrollable) */}
+          <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
+            {/* Top Item: Overview */}
             <button
               type="button"
               onClick={() => {
                 setCurrentTab("overview");
+                setActiveNavItem("overview");
                 setMobileSidebarOpen(false);
               }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all cursor-pointer ${
-                currentTab === "overview"
-                  ? "bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD] shadow-2xs"
-                  : "text-[#686450] hover:bg-[#FAF6E8] hover:text-[#2E2B1A]"
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-[13.5px] font-bold transition-all cursor-pointer ${
+                activeNavItem === "overview" && currentTab === "overview"
+                  ? "bg-[#FAF6E8] text-[#2E2B1A]"
+                  : "text-[#686450] hover:bg-[#FAF6E8]/60 hover:text-[#2E2B1A]"
               }`}
             >
-              <div className="flex items-center gap-2.5">
-                <LayoutDashboard className="w-4 h-4 shrink-0" />
-                <span>Cloud Overview</span>
-              </div>
+              <LayoutGrid className="w-4 h-4 text-[#2E2B1A]" />
+              <span>Overview</span>
             </button>
 
-            {/* Tab 2: Cost Intelligence */}
-            <button
-              type="button"
-              onClick={() => {
-                setCurrentTab("cost");
-                setMobileSidebarOpen(false);
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all cursor-pointer ${
-                currentTab === "cost"
-                  ? "bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD] shadow-2xs"
-                  : "text-[#686450] hover:bg-[#FAF6E8] hover:text-[#2E2B1A]"
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <DollarSign className="w-4 h-4 shrink-0" />
-                <span>Cost Intelligence</span>
-              </div>
-            </button>
+            {/* Group 1: Infrastructure */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => toggleSection("infrastructure")}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 text-[13px] font-bold text-[#555240] hover:text-[#2E2B1A] transition-colors group cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Server className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
+                  <span className="text-[#555240] group-hover:text-[#2E2B1A]">Infrastructure</span>
+                </div>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${
+                    openSections.infrastructure ? "" : "-rotate-90"
+                  }`}
+                />
+              </button>
 
-            {/* Tab 3: Carbon Intelligence */}
-            <button
-              type="button"
-              onClick={() => {
-                setCurrentTab("carbon");
-                setMobileSidebarOpen(false);
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all cursor-pointer ${
-                currentTab === "carbon"
-                  ? "bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD] shadow-2xs"
-                  : "text-[#686450] hover:bg-[#FAF6E8] hover:text-[#2E2B1A]"
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Leaf className="w-4 h-4 shrink-0" />
-                <span>Carbon Intelligence</span>
-              </div>
-              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[#FAF6E8] text-[#1F8A70] border border-[#ECE5CC]">
-                GreenOps
-              </span>
-            </button>
-
-            {/* Tab 4: Infrastructure Overview */}
-            <button
-              type="button"
-              onClick={() => {
-                setCurrentTab("infrastructure");
-                setMobileSidebarOpen(false);
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all cursor-pointer ${
-                currentTab === "infrastructure"
-                  ? "bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD] shadow-2xs"
-                  : "text-[#686450] hover:bg-[#FAF6E8] hover:text-[#2E2B1A]"
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Server className="w-4 h-4 shrink-0" />
-                <span>Infrastructure</span>
-              </div>
-              {data && (
-                <span className="font-mono text-[11px] font-bold text-[#8D8975]">
-                  {data.resources.total}
-                </span>
+              {openSections.infrastructure && (
+                <div className="ml-4 pl-3.5 border-l border-[#ECE5CC] space-y-0.5 my-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("infrastructure");
+                      setActiveNavItem("infra-accounts");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "infra-accounts" && currentTab === "infrastructure"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Accounts
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("infrastructure");
+                      setActiveNavItem("infra-resources");
+                      setInfraTypeFilter("all");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "infra-resources" && currentTab === "infrastructure"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Resources
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("infrastructure");
+                      setActiveNavItem("infra-regions");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "infra-regions" && currentTab === "infrastructure"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Regions
+                  </button>
+                </div>
               )}
-            </button>
+            </div>
 
-            {/* Tab 5: Recommendations Summary */}
-            <button
-              type="button"
-              onClick={() => {
-                setCurrentTab("recommendations");
-                setMobileSidebarOpen(false);
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all cursor-pointer ${
-                currentTab === "recommendations"
-                  ? "bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD] shadow-2xs"
-                  : "text-[#686450] hover:bg-[#FAF6E8] hover:text-[#2E2B1A]"
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Sparkles className="w-4 h-4 shrink-0 text-[#9A6B00]" />
-                <span>Recommendations</span>
-              </div>
-              {data && data.recommendations.activeCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF76A] border border-[#DFD6B5] text-[#2E2B1A]">
-                  {data.recommendations.activeCount}
-                </span>
+            {/* Group 2: Costs & Usage */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => toggleSection("costs")}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 text-[13px] font-bold text-[#555240] hover:text-[#2E2B1A] transition-colors group cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <DollarSign className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
+                  <span className="text-[#555240] group-hover:text-[#2E2B1A]">Costs & Usage</span>
+                </div>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${
+                    openSections.costs ? "" : "-rotate-90"
+                  }`}
+                />
+              </button>
+
+              {openSections.costs && (
+                <div className="ml-4 pl-3.5 border-l border-[#ECE5CC] space-y-0.5 my-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("cost");
+                      setActiveNavItem("cost-overview");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "cost-overview" && currentTab === "cost"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Cost Overview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("cost");
+                      setActiveNavItem("cost-explorer");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "cost-explorer" && currentTab === "cost"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Cost Explorer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("cost");
+                      setActiveNavItem("cost-allocation");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "cost-allocation" && currentTab === "cost"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Cost Allocation
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("cost");
+                      setActiveNavItem("cost-budgets");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "cost-budgets" && currentTab === "cost"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Budgets
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("cost");
+                      setActiveNavItem("cost-anomalies");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "cost-anomalies" && currentTab === "cost"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Anomalies
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("cost");
+                      setActiveNavItem("cost-forecast");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "cost-forecast" && currentTab === "cost"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Forecast
+                  </button>
+                </div>
               )}
-            </button>
+            </div>
+
+            {/* Group 3: Sustainability */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => toggleSection("sustainability")}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 text-[13px] font-bold text-[#555240] hover:text-[#2E2B1A] transition-colors group cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Leaf className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
+                  <span className="text-[#555240] group-hover:text-[#2E2B1A]">Sustainability</span>
+                </div>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${
+                    openSections.sustainability ? "" : "-rotate-90"
+                  }`}
+                />
+              </button>
+
+              {openSections.sustainability && (
+                <div className="ml-4 pl-3.5 border-l border-[#ECE5CC] space-y-0.5 my-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("carbon");
+                      setActiveNavItem("sustainability-overview");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "sustainability-overview" && currentTab === "carbon"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Overview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("carbon");
+                      setActiveNavItem("sustainability-carbon");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "sustainability-carbon" && currentTab === "carbon"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Carbon
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("carbon");
+                      setActiveNavItem("sustainability-resources");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "sustainability-resources" && currentTab === "carbon"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Resources
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("carbon");
+                      setActiveNavItem("sustainability-regions");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "sustainability-regions" && currentTab === "carbon"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Regions
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("carbon");
+                      setActiveNavItem("sustainability-sci");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "sustainability-sci" && currentTab === "carbon"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    SCI
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Group 4: Optimization */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => toggleSection("optimization")}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 text-[13px] font-bold text-[#555240] hover:text-[#2E2B1A] transition-colors group cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Sparkles className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
+                  <span className="text-[#555240] group-hover:text-[#2E2B1A]">Optimization</span>
+                </div>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${
+                    openSections.optimization ? "" : "-rotate-90"
+                  }`}
+                />
+              </button>
+
+              {openSections.optimization && (
+                <div className="ml-4 pl-3.5 border-l border-[#ECE5CC] space-y-0.5 my-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("recommendations");
+                      setActiveNavItem("opt-recommendations");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "opt-recommendations" && currentTab === "recommendations"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    <span>Recommendations</span>
+                    <span className="w-5 h-5 rounded-full bg-[#FFF76A] border border-[#DFD6B5] text-[#2E2B1A] font-bold text-[11px] flex items-center justify-center shrink-0">
+                      {data?.recommendations?.activeCount || 4}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("recommendations");
+                      setActiveNavItem("opt-opportunities");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "opt-opportunities" && currentTab === "recommendations"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Opportunities
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("audit");
+                      setActiveNavItem("opt-actions");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
+                      activeNavItem === "opt-actions" && currentTab === "audit"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                    }`}
+                  >
+                    Actions
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Reports */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveNavItem("reports");
+                  setExportModalOpen(true);
+                  setMobileSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-[13px] font-bold transition-all cursor-pointer ${
+                  activeNavItem === "reports"
+                    ? "bg-[#FAF6E8] text-[#2E2B1A]"
+                    : "text-[#2E2B1A] bg-[#FAF6E8]/70 hover:bg-[#FAF6E8]"
+                }`}
+              >
+                <FileText className="w-4 h-4 text-[#8D8975]" />
+                <span>Reports</span>
+              </button>
+            </div>
+
+            {/* Settings */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveNavItem("settings");
+                  setAccountDropdownOpen(true);
+                  setMobileSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3.5 py-2 text-[13px] font-bold transition-all cursor-pointer ${
+                  activeNavItem === "settings"
+                    ? "bg-[#FAF6E8] text-[#2E2B1A] rounded-xl"
+                    : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 rounded-xl"
+                }`}
+              >
+                <Settings className="w-4 h-4 text-[#8D8975]" />
+                <span>Settings</span>
+              </button>
+            </div>
           </nav>
-
-          {/* Secondary Management Links */}
-          <div className="p-3 border-t border-[#ECE5CC] space-y-1">
-            <span className="text-[10px] font-mono font-bold text-[#8D8975] uppercase tracking-wider px-3 py-1.5 block">
-              Governance
-            </span>
-
-            <button
-              type="button"
-              onClick={() => {
-                setCurrentTab("audit");
-                setMobileSidebarOpen(false);
-              }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12.5px] font-semibold transition-all cursor-pointer ${
-                currentTab === "audit"
-                  ? "bg-[#FAF6E8] text-[#2E2B1A] font-bold border border-[#ECE5CC]"
-                  : "text-[#686450] hover:bg-[#FAF6E8]"
-              }`}
-            >
-              <History className="w-4 h-4 text-[#8D8975]" />
-              <span>Audit History</span>
-            </button>
-
-            <Link
-              href="/onboarding"
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12.5px] font-semibold text-[#686450] hover:bg-[#FAF6E8] transition-all"
-            >
-              <PlusCircle className="w-4 h-4 text-[#9A6B00]" />
-              <span>Connect Account</span>
-            </Link>
-          </div>
         </div>
 
         {/* User Profile Badge at Bottom */}
-        <div className="p-4 border-t border-[#ECE5CC] bg-[#FAF6E8]/40">
+        <div className="p-3.5 border-t border-[#ECE5CC] bg-[#FAF6E8]/30 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#FFF76A] border border-[#DFD6B5] flex items-center justify-center font-bold text-[12px] text-[#2E2B1A] shadow-2xs">
+            <div className="w-8 h-8 rounded-full bg-[#FFF76A] border border-[#DFD6B5] flex items-center justify-center font-bold text-[11px] text-[#2E2B1A] shrink-0 shadow-2xs">
               GC
             </div>
             <div className="flex-1 min-w-0">
               <span className="font-bold text-[12.5px] text-[#2E2B1A] block truncate leading-tight">
-                {activeAccount?.name || "GreenCloud User"}
+                {activeAccount?.name || "GreenCloud-Anshul"}
               </span>
-              <span className="text-[10.5px] text-[#8D8975] block truncate">
-                {activeAccount?.provider?.toUpperCase() || "AWS"} Workspace
+              <span className="text-[10.5px] text-[#8D8975] block truncate font-mono">
+                {activeAccount?.provider?.toUpperCase() || "AWS"} ({activeAccount?.externalAccountId ? activeAccount.externalAccountId.slice(-4) : "8593"})
               </span>
             </div>
           </div>
