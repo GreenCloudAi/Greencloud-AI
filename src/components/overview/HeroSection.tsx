@@ -219,8 +219,8 @@ export function HeroSection() {
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-3.5 mb-4">
+            {/* Action Buttons (Centered) */}
+            <div className="flex flex-wrap items-center justify-center gap-3.5 mb-4">
               <Link
                 href="/onboarding"
                 className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[#2E2B1A] font-bold text-[14px] shadow-sm hover:shadow-sunshine-glow transition-all group"
@@ -237,8 +237,8 @@ export function HeroSection() {
               </a>
             </div>
 
-            {/* Clean Enterprise Trust Line */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-[#686450] mb-3.5">
+            {/* Clean Enterprise Trust Line (Centered) */}
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[12px] text-[#686450] mb-3.5">
               <span className="flex items-center gap-1.5 font-medium">
                 <CheckCircle2 className="w-3.5 h-3.5 text-[#1F8A70]" />
                 <span>100% Agentless Setup</span>

@@ -38,21 +38,21 @@ export function WhyGreenOps() {
   ];
 
   return (
-    <section id="why-greenops" className="mb-20 pt-6">
+    <section id="why-greenops" className="mb-20 pt-6 scroll-mt-28">
       <div className="bg-[#FAF6E8] rounded-[24px] sm:rounded-[28px] border border-[#ECE5CC] p-6 sm:p-10 shadow-warm-sm">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FFFDF4] border border-[#ECE5CC] mb-3 shadow-warm-sm">
             <span className="w-2 h-2 rounded-full bg-[#1F8A70]"></span>
             <span className="text-[11px] font-mono font-bold tracking-wider text-[#1F8A70] uppercase">
-              THE GREENOPS CORE THESIS
+              WHY GREENOPS?
             </span>
           </div>
           <h2 className="text-[26px] sm:text-[34px] font-black text-[#2E2B1A] tracking-tight leading-tight mb-2">
             Why Cloud Cost & Carbon Belong Together
           </h2>
           <p className="text-[14px] sm:text-[15px] text-[#686450] leading-relaxed">
-            Cloud efficiency is not just about dollars—every unneeded server burns real electricity and emits measurable greenhouse gases.
+            Cloud efficiency is not just about dollars,every unneeded server burns real electricity and emits measurable greenhouse gases.
           </p>
         </div>
 

@@ -196,7 +196,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "log_tiering" {
   };
 
   return (
-    <section id="optimization" className="scroll-mt-20">
+    <section id="optimization" className="scroll-mt-28">
       <div className="p-6 sm:p-7 rounded-[28px] bg-white border border-[#ECE5CC] shadow-warm-lg">
         {/* Section Header: Title + Badge on left, Filter Tabs on right */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-4 border-b border-[#ECE5CC]">

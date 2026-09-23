@@ -5,11 +5,14 @@
  */
 
 export const GreenCloudConfig = {
-  /** AWS regions to scan during ingestion. Comma-separated in env var. */
-  scanRegions: (process.env.GREENCLOUD_SCAN_REGIONS || "us-east-1")
+  /** AWS regions to scan during ingestion. Comma-separated or 'all' for automatic global discovery. */
+  scanRegions: (process.env.GREENCLOUD_SCAN_REGIONS || "all")
     .split(",")
     .map((r) => r.trim())
     .filter(Boolean),
+
+  /** Whether automatic multi-region global discovery is active. */
+  isAllRegions: (process.env.GREENCLOUD_SCAN_REGIONS || "all").toLowerCase().trim() === "all",
 
   /** Default region for STS and Cost Explorer (global services). */
   defaultRegion: process.env.AWS_DEFAULT_REGION || "us-east-1",

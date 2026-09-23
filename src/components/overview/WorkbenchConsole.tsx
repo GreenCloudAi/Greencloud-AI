@@ -42,7 +42,7 @@ export function WorkbenchConsole({
           </span>
           <span className="text-[#686450] bg-[#FFFDF4] border border-[#ECE5CC] px-2.5 py-1 rounded-full hidden sm:inline-flex items-center gap-1 font-medium">
             <span className="material-symbols-outlined text-[13px] text-[#1F8A70] leading-none">verified</span>
-            <span>FOCUS 1.0</span>
+            <span>Cost Explorer</span>
           </span>
           <span className="px-3 py-1 bg-[#FFFDF4] rounded-full border border-[#ECE5CC] text-[#2E2B1A] font-semibold">
             Last 30 Days

@@ -57,7 +57,7 @@ export function UserPersonasSection() {
   ];
 
   return (
-    <section id="personas" className="mb-20 pt-6">
+    <section id="personas" className="mb-20 pt-6 scroll-mt-28">
       {/* Header */}
       <div className="text-center max-w-2xl mx-auto mb-12">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FBF6E3] border border-[#ECE5CC] mb-3 shadow-warm-sm">

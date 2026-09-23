@@ -13,8 +13,17 @@ dist/
 tsconfig.tsbuildinfo
 *.tsbuildinfo
 
-# SQLite Database (allow non-sensitive seed dev.db, ignore temporary journals)
+# SQLite Database (Local state containing connected accounts & ingested resources)
+*.db
 *.db-journal
+*.sqlite
+*.sqlite3
+prisma/*.db
+prisma/*.db-journal
+
+# Local backups
+*.backup-latest
+*.bak
 
 # Environment & Secrets (CRITICAL)
 .env

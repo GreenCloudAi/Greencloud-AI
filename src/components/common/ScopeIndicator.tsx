@@ -9,7 +9,7 @@ interface ScopeIndicatorProps {
 
 export function ScopeIndicator({
   accountName = "Production AWS",
-  externalAccountId = "793168138593",
+  externalAccountId = "123456789012",
   syncFreshness,
   readOnly = true,
 }: ScopeIndicatorProps) {

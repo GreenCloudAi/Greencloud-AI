@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export function IntegrationMatrix() {
   return (
-    <section className="mb-20 pt-6" id="integrations">
+    <section className="mb-20 pt-6 scroll-mt-28" id="integrations">
       {/* Section Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
         <div>

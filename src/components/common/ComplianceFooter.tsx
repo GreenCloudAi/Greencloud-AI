@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export function ComplianceFooter() {
   return (
-    <footer className="border-t border-[#ECE5CC] bg-[#FFFDF4] py-8 text-[13px] text-[#8D8975]" id="security">
+    <footer className="border-t border-[#ECE5CC] bg-[#FFFDF4] py-8 text-[13px] text-[#8D8975] scroll-mt-28" id="security">
       <div className="max-w-[1440px] mx-auto px-4 sm:px-8 space-y-6">
         {/* Top Row: Brand & Clean Navigation Links */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-5">
@@ -28,13 +28,16 @@ export function ComplianceFooter() {
 
           {/* Clean Navigation Links */}
           <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 font-medium text-[#686450]">
-            <a href="#optimization" className="hover:text-[#2E2B1A] transition-colors">
+            <Link href="/why" className="hover:text-[#2E2B1A] transition-colors">
+              Why?
+            </Link>
+            <a href="/#optimization" className="hover:text-[#2E2B1A] transition-colors">
               Recommendations
             </a>
-            <a href="#how-it-works" className="hover:text-[#2E2B1A] transition-colors">
+            <Link href="/how-it-works" className="hover:text-[#2E2B1A] transition-colors">
               How It Works
-            </a>
-            <a href="#documentation" className="hover:text-[#2E2B1A] transition-colors">
+            </Link>
+            <a href="/#documentation" className="hover:text-[#2E2B1A] transition-colors">
               Documentation
             </a>
             <Link href="/dashboard" className="hover:text-[#2E2B1A] transition-colors">

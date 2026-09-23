@@ -2,17 +2,20 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ArrowRight, Menu, X, Sparkles } from "lucide-react";
 
 export function NavigationBar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
 
   const navLinks = [
-    { label: "Product", href: "#overview" },
-    { label: "How it works", href: "#how-it-works" },
-    { label: "Cost & Carbon", href: "#optimization" },
-    { label: "Security", href: "#security" },
-    { label: "Documentation", href: "#documentation" },
+    { label: "Product", href: "/" },
+    { label: "Why?", href: "/why" },
+    { label: "How it works", href: "/how-it-works" },
+    { label: "Cost & Carbon", href: "/#optimization" },
+    { label: "Security", href: "/#security" },
+    { label: "Documentation", href: "/#documentation" },
   ];
 
   return (
@@ -37,27 +40,36 @@ export function NavigationBar() {
         </Link>
 
         {/* Desktop Navigation Links (Properly Spaced & Clean) */}
-        <nav className="hidden lg:flex items-center gap-7 text-[13.5px] font-medium text-[#686450]">
-          {navLinks.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              className="hover:text-[#2E2B1A] transition-colors py-1 relative group"
-            >
-              <span>{link.label}</span>
-              <span className="absolute bottom-0 left-0 w-0 h-[2px] bg-[#9A6B00] transition-all group-hover:w-full rounded-full"></span>
-            </a>
-          ))}
+        <nav className="hidden lg:flex items-center gap-4 xl:gap-5 text-[13.5px] font-medium text-[#686450]">
+          {navLinks.map((link) => {
+            const isActive = link.href === pathname;
+            return (
+              <Link
+                key={link.label}
+                href={link.href}
+                className={`py-1 px-2.5 rounded-full transition-all relative ${
+                  isActive
+                    ? "bg-[#FAF6E8] text-[#2E2B1A] font-bold border border-[#ECE5CC] shadow-2xs"
+                    : "hover:text-[#2E2B1A]"
+                }`}
+              >
+                <span>{link.label}</span>
+                {isActive && (
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-[2px] bg-[#1F8A70] rounded-full"></span>
+                )}
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Right Action Buttons */}
         <div className="flex items-center gap-3 shrink-0">
-          <a
-            href="#optimization"
+          <Link
+            href="/dashboard"
             className="hidden md:inline-flex items-center justify-center px-4 py-1.5 rounded-full text-[13px] font-semibold text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8] transition-colors"
           >
             Live Demo
-          </a>
+          </Link>
 
           <Link
             href="/onboarding"
@@ -84,7 +96,7 @@ export function NavigationBar() {
       {mobileMenuOpen && (
         <div className="lg:hidden mt-2 p-4 bg-[#FFFDF7] border border-[#ECE5CC] rounded-3xl shadow-warm-lg flex flex-col gap-2 font-medium text-[14px] text-[#2E2B1A] animate-in fade-in slide-in-from-top-2 duration-150">
           {navLinks.map((link) => (
-            <a
+            <Link
               key={link.label}
               href={link.href}
               onClick={() => setMobileMenuOpen(false)}
@@ -92,16 +104,16 @@ export function NavigationBar() {
             >
               <span>{link.label}</span>
               <ArrowRight className="w-4 h-4 text-[#8D8975]" />
-            </a>
+            </Link>
           ))}
           <div className="pt-3 mt-1 border-t border-[#ECE5CC] flex items-center justify-between text-xs font-semibold">
-            <a
-              href="#optimization"
+            <Link
+              href="/dashboard"
               onClick={() => setMobileMenuOpen(false)}
               className="text-[#1F8A70] hover:underline"
             >
               Explore Live Demo →
-            </a>
+            </Link>
             <Link
               href="/onboarding"
               onClick={() => setMobileMenuOpen(false)}
