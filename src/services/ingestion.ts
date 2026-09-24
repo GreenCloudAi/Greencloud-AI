@@ -269,27 +269,23 @@ export class IngestionService {
     // --- Sub-scan 4: Billing (Cost Explorer → FOCUS Normalization) ---
     try {
       Logger.info("INGEST", "BILLING_INGEST_START", "Starting Cost Explorer 30-day billing scan...");
-      const todayStr = syncTime.toISOString().slice(0, 10);
       const thirtyDaysAgo = new Date(
         syncTime.getTime() - 30 * 24 * 3600 * 1000
       );
       const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().slice(0, 10);
+      // Cost Explorer End date is exclusive in UTC, so tomorrow ensures today's spend is included
+      const tomorrow = new Date(syncTime.getTime() + 24 * 3600 * 1000);
+      const tomorrowStr = tomorrow.toISOString().slice(0, 10);
 
       const billRows = await withRetry(
-        () => connector.fetchBillingSummary(thirtyDaysAgoStr, todayStr),
+        () => connector.fetchBillingSummary(thirtyDaysAgoStr, tomorrowStr),
         "Cost Explorer Ingestion"
       );
       Logger.success("INGEST", "BILLING_INGEST_FETCHED", `Retrieved ${billRows.length} FOCUS-normalized cost records.`);
 
       // Clean up previous cost records for re-sync safety
       await prisma.costLineItem.deleteMany({
-        where: {
-          cloudAccountId: this.accountId,
-          chargeDate: {
-            gte: thirtyDaysAgo,
-            lte: syncTime,
-          },
-        },
+        where: { cloudAccountId: this.accountId },
       });
 
       for (const row of billRows) {

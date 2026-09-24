@@ -40,7 +40,7 @@ export function NavigationBar() {
         {/* Brand Logo & Title */}
         <Link href="/" className="flex items-center gap-2.5 sm:gap-3 group focus:outline-none shrink-0">
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#FFF76A] border border-[#DFD6B5] flex items-center justify-center text-[#2E2B1A] shadow-sm transition-transform group-hover:scale-105">
-            <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#2E2B1A]" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#2E2B1A]" width="20" height="20" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
               <path d="M24 4C25.7818 14.2173 33.7827 22.2182 44 24C33.7827 25.7818 25.7818 33.7827 24 44C22.2182 33.7827 14.2173 25.7818 4 24C14.2173 22.2182 22.2182 14.2173 24 4Z" fill="currentColor" />
             </svg>
           </div>

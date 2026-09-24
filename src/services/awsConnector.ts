@@ -622,14 +622,36 @@ export class AwsCloudConnector {
         credentials,
       });
 
-      const command = new GetCostAndUsageCommand({
-        TimePeriod: { Start: startDate, End: endDate },
-        Granularity: "DAILY",
-        Metrics: ["UnblendedCost"],
-        GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
-      });
+      // Query Cost Explorer filtering out Credit and Refund record types
+      // so actual cloud resource spend matches AWS Console even when credits/free plan apply.
+      let response;
+      try {
+        const command = new GetCostAndUsageCommand({
+          TimePeriod: { Start: startDate, End: endDate },
+          Granularity: "DAILY",
+          Filter: {
+            Not: {
+              Dimensions: {
+                Key: "RECORD_TYPE",
+                Values: ["Credit", "Refund"],
+              },
+            },
+          },
+          Metrics: ["UnblendedCost"],
+          GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
+        });
+        response = await ceClient.send(command);
+      } catch (filterErr: any) {
+        Logger.warn("AWS", "COST_EXPLORER_FILTER_FALLBACK", `Filter query failed (${filterErr.message}), falling back to unfiltered GetCostAndUsage.`);
+        const fallbackCommand = new GetCostAndUsageCommand({
+          TimePeriod: { Start: startDate, End: endDate },
+          Granularity: "DAILY",
+          Metrics: ["UnblendedCost"],
+          GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
+        });
+        response = await ceClient.send(fallbackCommand);
+      }
 
-      const response = await ceClient.send(command);
       const rows: CostExplorerRow[] = [];
 
       for (const day of response.ResultsByTime || []) {
@@ -640,11 +662,11 @@ export class AwsCloudConnector {
           const cost = parseFloat(
             grp.Metrics?.UnblendedCost?.Amount || "0"
           );
-          if (cost > 0) {
+          if (cost > 0.000001) {
             rows.push({
               Date: date,
               Service: service,
-              Cost: parseFloat(cost.toFixed(4)),
+              Cost: parseFloat(cost.toFixed(6)),
             });
           }
         }

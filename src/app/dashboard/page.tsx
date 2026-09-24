@@ -648,7 +648,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
           <div className="p-4 border-b border-[#ECE5CC] flex items-center justify-between shrink-0">
             <Link href="/" className="flex items-center gap-2.5 group">
               <div className="w-8 h-8 rounded-xl bg-[#FFF76A] border border-[#DFD6B5] flex items-center justify-center text-[#2E2B1A] shadow-xs group-hover:scale-105 transition-transform">
-                <svg className="w-4 h-4 text-[#2E2B1A]" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <svg className="w-4 h-4 text-[#2E2B1A]" width="16" height="16" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
                   <path d="M24 4C25.7818 14.2173 33.7827 22.2182 44 24C33.7827 25.7818 25.7818 33.7827 24 44C22.2182 33.7827 14.2173 25.7818 4 24C14.2173 22.2182 22.2182 14.2173 24 4Z" fill="currentColor" />
                 </svg>
               </div>
@@ -1414,14 +1414,14 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       </span>
                     </div>
                     <div className="text-[28px] font-black text-[#2E2B1A] tracking-tight">
-                      {data?.costs.totalCost !== null ? `$${data?.costs.totalCost.toLocaleString()}` : "--"}
+                      {data?.costs.totalCost !== null ? `$${data?.costs.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--"}
                     </div>
                     <p className="text-[11.5px] text-[#686450] mt-1 font-medium truncate">
-                      Run rate: ${data?.costs.dailyBurnRate ? (data.costs.dailyBurnRate * 30).toFixed(2) : "18.22"}/mo across active regions
+                      Run rate: ${data?.costs?.dailyBurnRate != null ? (data.costs.dailyBurnRate * 30).toFixed(2) : (data?.costs?.totalCost != null ? data.costs.totalCost.toFixed(2) : "0.00")}/mo across active regions
                     </p>
                   </div>
                   <div className="mt-3 pt-2.5 border-t border-[#ECE5CC] text-[11.5px] text-[#8D8975] flex items-center justify-between">
-                    <span>Burn: {data?.costs.dailyBurnRate !== null ? `~$${data?.costs.dailyBurnRate}/day` : "--"}</span>
+                    <span>Burn: {data?.costs?.dailyBurnRate !== null && data?.costs?.dailyBurnRate !== undefined ? `~$${data.costs.dailyBurnRate.toFixed(2)}/day` : "--"}</span>
                     <span>
                       {data?.scanCoverage?.activeRegionsWithRunningCompute && data.scanCoverage.activeRegionsWithRunningCompute.length > 0
                         ? `${data.scanCoverage.activeRegionsWithRunningCompute.length} Region${data.scanCoverage.activeRegionsWithRunningCompute.length > 1 ? "s" : ""} Active`
@@ -2601,7 +2601,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       Billed Monthly Spend
                     </span>
                     <span className="text-[24px] font-black text-[#2E2B1A]">
-                      {data?.costs.totalCost !== null ? `$${data?.costs.totalCost.toLocaleString()}` : "--"}
+                      {data?.costs.totalCost !== null ? `$${data?.costs.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--"}
                     </span>
                     <span className="text-[11px] text-[#1F8A70] block mt-1 font-semibold">
                       Normalized via Cost Explorer
@@ -2613,7 +2613,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       Daily Run Rate
                     </span>
                     <span className="text-[24px] font-black text-[#2E2B1A]">
-                      {data?.costs.dailyBurnRate !== null ? `$${data?.costs.dailyBurnRate}` : "--"}
+                      {data?.costs.dailyBurnRate !== null ? `$${data?.costs.dailyBurnRate.toFixed(2)}` : "--"}
                     </span>
                     <span className="text-[11px] text-[#8D8975] block mt-1">
                       Estimated 30-day daily velocity
@@ -2652,7 +2652,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
                             <tr key={idx} className="hover:bg-[#FAF6E8]/40">
                               <td className="py-2.5 font-bold text-[#2E2B1A]">{item.service}</td>
                               <td className="py-2.5 text-[#686450]">Cloud Primitive</td>
-                              <td className="py-2.5 font-mono font-bold">${item.total.toLocaleString()}</td>
+                              <td className="py-2.5 font-mono font-bold">${item.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                               <td className="py-2.5 text-[#1F8A70] font-semibold">Available</td>
                             </tr>
                           ))
