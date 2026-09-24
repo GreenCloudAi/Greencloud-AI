@@ -432,7 +432,35 @@ export async function GET(request: Request) {
       isMultiRegionRunning,
     };
 
-    // 5. Recommendations for this tenant / account
+    // 5. Clean up stale recommendations to strictly match current resource lifecycle state
+    const stoppedEc2Ids = ec2List.filter((e) => e.lifecycleState === "stopped").map((e) => e.id);
+    const runningEc2Ids = ec2List.filter((e) => e.lifecycleState === "running").map((e) => e.id);
+
+    if (stoppedEc2Ids.length > 0) {
+      // Stopped instances cannot have idle compute burn or rightsizing recommendations
+      await prisma.recommendation.deleteMany({
+        where: {
+          resourceId: { in: stoppedEc2Ids },
+          id: {
+            in: stoppedEc2Ids.flatMap((id) => [`rec_ec2_idle_${id}`, `rec_ec2_rightsize_${id}`]),
+          },
+        },
+      });
+    }
+
+    if (runningEc2Ids.length > 0) {
+      // Running instances cannot have "Review Stopped" recommendations
+      await prisma.recommendation.deleteMany({
+        where: {
+          resourceId: { in: runningEc2Ids },
+          id: {
+            in: runningEc2Ids.map((id) => `rec_ec2_stopped_${id}`),
+          },
+        },
+      });
+    }
+
+    // Recommendations for this tenant / account
     const allRecs = await prisma.recommendation.findMany({
       where: { tenantId: tenant.id },
       include: { resource: true },

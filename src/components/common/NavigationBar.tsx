@@ -1,16 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowRight, Menu, X, Sparkles } from "lucide-react";
+import { ArrowRight, Menu, X, Sparkles, LayoutDashboard } from "lucide-react";
 
 export function NavigationBar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [hasAccount, setHasAccount] = useState<boolean>(false);
+  const [accountName, setAccountName] = useState<string>("");
   const pathname = usePathname();
+
+  useEffect(() => {
+    fetch("/api/cloud-accounts")
+      .then((res) => res.json())
+      .then((accounts) => {
+        if (Array.isArray(accounts) && accounts.length > 0) {
+          setHasAccount(true);
+          setAccountName(accounts[0].name || "AWS Workspace");
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const navLinks = [
     { label: "Product", href: "/" },
+    ...(hasAccount ? [{ label: "Dashboard", href: "/dashboard" }] : []),
     { label: "Why?", href: "/why" },
     { label: "How it works", href: "/how-it-works" },
     { label: "Cost & Carbon", href: "/#optimization" },
@@ -39,7 +54,7 @@ export function NavigationBar() {
           </div>
         </Link>
 
-        {/* Desktop Navigation Links (Properly Spaced & Clean) */}
+        {/* Desktop Navigation Links */}
         <nav className="hidden lg:flex items-center gap-4 xl:gap-5 text-[13.5px] font-medium text-[#686450]">
           {navLinks.map((link) => {
             const isActive = link.href === pathname;
@@ -64,20 +79,41 @@ export function NavigationBar() {
 
         {/* Right Action Buttons */}
         <div className="flex items-center gap-3 shrink-0">
-          <Link
-            href="/dashboard"
-            className="hidden md:inline-flex items-center justify-center px-4 py-1.5 rounded-full text-[13px] font-semibold text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8] transition-colors"
-          >
-            Live Demo
-          </Link>
+          {hasAccount ? (
+            <>
+              <Link
+                href="/onboarding"
+                className="hidden md:inline-flex items-center justify-center px-3 py-1.5 rounded-full text-[12.5px] font-semibold text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8] transition-colors"
+              >
+                + Connect Account
+              </Link>
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 rounded-full text-[12.5px] sm:text-[13px] font-bold bg-[#FFF76A] hover:bg-[#F5EC50] text-[#2E2B1A] border border-[#DFD6B5] shadow-sm hover:shadow-sunshine-glow transition-all whitespace-nowrap"
+              >
+                <LayoutDashboard className="w-3.5 h-3.5 text-[#1F8A70]" />
+                <span>Go to Dashboard</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/dashboard"
+                className="hidden md:inline-flex items-center justify-center px-4 py-1.5 rounded-full text-[13px] font-semibold text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8] transition-colors"
+              >
+                Live Demo
+              </Link>
 
-          <Link
-            href="/onboarding"
-            className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 rounded-full text-[12.5px] sm:text-[13px] font-bold bg-[#FFF76A] hover:bg-[#F5EC50] text-[#2E2B1A] border border-[#DFD6B5] shadow-sm hover:shadow-sunshine-glow transition-all whitespace-nowrap"
-          >
-            <span>Start setup</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+              <Link
+                href="/onboarding"
+                className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 rounded-full text-[12.5px] sm:text-[13px] font-bold bg-[#FFF76A] hover:bg-[#F5EC50] text-[#2E2B1A] border border-[#DFD6B5] shadow-sm hover:shadow-sunshine-glow transition-all whitespace-nowrap"
+              >
+                <span>Start setup</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </>
+          )}
 
           {/* Mobile Menu Toggle */}
           <button
@@ -100,30 +136,28 @@ export function NavigationBar() {
               key={link.label}
               href={link.href}
               onClick={() => setMobileMenuOpen(false)}
-              className="px-3.5 py-2.5 rounded-xl hover:bg-[#FAF6E8] flex items-center justify-between"
+              className="py-2 px-3 rounded-xl hover:bg-[#FAF6E8] transition-colors flex items-center justify-between"
             >
               <span>{link.label}</span>
               <ArrowRight className="w-4 h-4 text-[#8D8975]" />
             </Link>
           ))}
-          <div className="pt-3 mt-1 border-t border-[#ECE5CC] flex items-center justify-between text-xs font-semibold">
+          {hasAccount && (
             <Link
               href="/dashboard"
               onClick={() => setMobileMenuOpen(false)}
-              className="text-[#1F8A70] hover:underline"
+              className="mt-2 py-2.5 px-4 rounded-xl bg-[#FFF76A] font-bold text-[#2E2B1A] flex items-center justify-between"
             >
-              Explore Live Demo →
+              <div className="flex items-center gap-2">
+                <LayoutDashboard className="w-4 h-4 text-[#1F8A70]" />
+                <span>Go to Dashboard</span>
+              </div>
+              <ArrowRight className="w-4 h-4" />
             </Link>
-            <Link
-              href="/onboarding"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-[#9A6B00] hover:underline"
-            >
-              Start setup →
-            </Link>
-          </div>
+          )}
         </div>
       )}
     </header>
   );
 }
+

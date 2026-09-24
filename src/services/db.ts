@@ -42,6 +42,25 @@ export class TenantIsolatedDb {
   }
 
   async createAccount(data: { provider: string; externalAccountId: string; name: string; roleArn?: string; externalId?: string }) {
+    // Check if account with same externalAccountId already exists for this tenant
+    const existing = await prisma.cloudAccount.findFirst({
+      where: {
+        tenantId: this.tenantId,
+        externalAccountId: data.externalAccountId,
+      }
+    });
+
+    if (existing) {
+      return prisma.cloudAccount.update({
+        where: { id: existing.id },
+        data: {
+          name: data.name,
+          roleArn: data.roleArn,
+          externalId: data.externalId,
+        }
+      });
+    }
+
     return prisma.cloudAccount.create({
       data: {
         tenantId: this.tenantId,
@@ -52,7 +71,7 @@ export class TenantIsolatedDb {
         externalId: data.externalId,
         status: 'pending_validation'
       }
-    })
+    });
   }
 
   async updateAccountStatus(accountId: string, status: string, error?: string) {

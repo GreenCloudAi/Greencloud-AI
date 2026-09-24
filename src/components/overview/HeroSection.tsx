@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   Server,
@@ -32,7 +32,17 @@ interface ChartPoint {
 export function HeroSection() {
   const [timeRange, setTimeRange] = useState<"7D" | "30D" | "90D">("30D");
   const [hoveredPoint, setHoveredPoint] = useState<ChartPoint | null>(null);
+  const [hasAccount, setHasAccount] = useState<boolean>(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
+
+  useEffect(() => {
+    fetch("/api/cloud-accounts")
+      .then((r) => r.json())
+      .then((accs) => {
+        if (Array.isArray(accs) && accs.length > 0) setHasAccount(true);
+      })
+      .catch(() => {});
+  }, []);
 
   // Dynamic Date Generation based on current client date (Past -> Today in chronological order)
   const dynamicDates = useMemo(() => {
@@ -221,20 +231,41 @@ export function HeroSection() {
 
             {/* Action Buttons (Centered) */}
             <div className="flex flex-wrap items-center justify-center gap-3.5 mb-4">
-              <Link
-                href="/onboarding"
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[#2E2B1A] font-bold text-[14px] shadow-sm hover:shadow-sunshine-glow transition-all group"
-              >
-                <span>Start setup</span>
-                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-              <a
-                href="#optimization"
-                className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-full bg-white border border-[#ECE5CC] hover:bg-[#FAF6E8] text-[#2E2B1A] font-semibold text-[14px] transition-colors shadow-warm-sm"
-              >
-                <span>Explore Demo</span>
-                <ArrowRight className="w-3.5 h-3.5 text-[#8D8975]" />
-              </a>
+              {hasAccount ? (
+                <>
+                  <Link
+                    href="/dashboard"
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[#2E2B1A] font-bold text-[14px] shadow-sm hover:shadow-sunshine-glow transition-all group"
+                  >
+                    <span>Go to Dashboard</span>
+                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                  </Link>
+                  <Link
+                    href="/onboarding"
+                    className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-full bg-white border border-[#ECE5CC] hover:bg-[#FAF6E8] text-[#2E2B1A] font-semibold text-[14px] transition-colors shadow-warm-sm"
+                  >
+                    <span>Connect Account</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-[#8D8975]" />
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/onboarding"
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[#2E2B1A] font-bold text-[14px] shadow-sm hover:shadow-sunshine-glow transition-all group"
+                  >
+                    <span>Start setup</span>
+                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                  </Link>
+                  <a
+                    href="#optimization"
+                    className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-full bg-white border border-[#ECE5CC] hover:bg-[#FAF6E8] text-[#2E2B1A] font-semibold text-[14px] transition-colors shadow-warm-sm"
+                  >
+                    <span>Explore Demo</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-[#8D8975]" />
+                  </a>
+                </>
+              )}
             </div>
 
             {/* Clean Enterprise Trust Line (Centered) */}

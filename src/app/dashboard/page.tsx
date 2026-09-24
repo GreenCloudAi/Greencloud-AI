@@ -34,9 +34,12 @@ import {
   FileText,
   Tag,
   Sliders,
+  SlidersHorizontal,
   Printer,
   Target,
   Code,
+  Trash2,
+  Cloud,
 } from "lucide-react";
 
 interface CloudAccount {
@@ -259,6 +262,60 @@ export default function DashboardPage() {
   const [sciFunctionalUnit, setSciFunctionalUnit] = useState<number>(100000);
   const [copiedIaC, setCopiedIaC] = useState(false);
   const [copiedTicket, setCopiedTicket] = useState(false);
+
+  // Settings Modal State
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"accounts" | "sync" | "guardrails">("accounts");
+  const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
+  const [cleaningDuplicates, setCleaningDuplicates] = useState(false);
+  const [settingsToast, setSettingsToast] = useState<string | null>(null);
+
+  // Settings Configuration State
+  const [autoSyncFrequency, setAutoSyncFrequency] = useState<string>("6h");
+  const [multiRegionScanEnabled, setMultiRegionScanEnabled] = useState<boolean>(true);
+  const [budgetLimit, setBudgetLimit] = useState<number>(500);
+  const [idleCpuThresholdVal, setIdleCpuThresholdVal] = useState<number>(5);
+
+  const handleDeleteAccount = async (accountId: string) => {
+    if (!window.confirm("Are you sure you want to disconnect this cloud account? All associated resource telemetry will be removed.")) {
+      return;
+    }
+    try {
+      setDeletingAccountId(accountId);
+      const res = await fetch(`/api/cloud-accounts/${accountId}`, { method: "DELETE" });
+      const json = await res.json();
+      if (res.ok) {
+        setSettingsToast("Account disconnected successfully.");
+        await loadDashboard();
+      } else {
+        setSettingsToast(json.error?.message || "Failed to disconnect account.");
+      }
+    } catch (e: any) {
+      setSettingsToast(e.message || "Failed to disconnect account.");
+    } finally {
+      setDeletingAccountId(null);
+      setTimeout(() => setSettingsToast(null), 4000);
+    }
+  };
+
+  const handleCleanDuplicates = async () => {
+    try {
+      setCleaningDuplicates(true);
+      const res = await fetch("/api/cloud-accounts/cleanup-duplicates", { method: "POST" });
+      const json = await res.json();
+      if (res.ok) {
+        setSettingsToast(`Cleaned up ${json.deletedCount} duplicate/empty account(s).`);
+        await loadDashboard();
+      } else {
+        setSettingsToast(json.error?.message || "Failed to clean duplicate accounts.");
+      }
+    } catch (e: any) {
+      setSettingsToast(e.message || "Failed to clean duplicate accounts.");
+    } finally {
+      setCleaningDuplicates(false);
+      setTimeout(() => setSettingsToast(null), 4000);
+    }
+  };
 
   // Helper: Generate Terraform IaC snippet for a recommendation
   // Helper: Generate Terraform IaC snippet for a recommendation
@@ -990,11 +1047,11 @@ Apply the proposed Terraform configuration change or safely update the resource 
                 type="button"
                 onClick={() => {
                   setActiveNavItem("settings");
-                  setAccountDropdownOpen(true);
+                  setSettingsModalOpen(true);
                   setMobileSidebarOpen(false);
                 }}
                 className={`w-full flex items-center gap-3 px-3.5 py-2 text-[13px] font-bold transition-all cursor-pointer ${
-                  activeNavItem === "settings"
+                  activeNavItem === "settings" || settingsModalOpen
                     ? "bg-[#FAF6E8] text-[#2E2B1A] rounded-xl"
                     : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 rounded-xl"
                 }`}
@@ -2985,121 +3042,331 @@ Apply the proposed Terraform configuration change or safely update the resource 
           )}
 
           {/* TAB 4: INFRASTRUCTURE OVERVIEW */}
+          {/* TAB 4: INFRASTRUCTURE OVERVIEW */}
           {currentTab === "infrastructure" && activeAccount && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="bg-white rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-sm space-y-5">
+                {/* Infrastructure Sub-Navigation Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#ECE5CC]">
-                  <div>
-                    <h2 className="text-[18px] font-bold text-[#2E2B1A]">Cloud Resources Inventory</h2>
-                    <p className="text-[13px] text-[#686450]">
-                      Monitored virtual machines, block volumes, and network assets in {activeAccount.name}.
-                    </p>
-                  </div>
-
-                  {/* Filter Pills */}
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={infraRegionFilter}
-                      onChange={(e) => setInfraRegionFilter(e.target.value)}
-                      className="px-3 py-1.5 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8] text-[12px] font-bold text-[#2E2B1A]"
+                  <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC]">
+                    <button
+                      type="button"
+                      onClick={() => setActiveNavItem("infra-resources")}
+                      className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer ${
+                        activeNavItem === "infra-resources" || (activeNavItem !== "infra-accounts" && activeNavItem !== "infra-regions")
+                          ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                          : "text-[#686450] hover:text-[#2E2B1A]"
+                      }`}
                     >
-                      <option value="all">
-                        All Regions ({data?.resources.byRegion?.length || 0})
-                      </option>
-                      {data?.resources.byRegion?.map((r) => (
-                        <option key={r.region} value={r.region}>
-                          {r.region} — {r.regionName} ({r.resourcesCount})
+                      Resources ({filteredResources.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveNavItem("infra-accounts")}
+                      className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        activeNavItem === "infra-accounts"
+                          ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                          : "text-[#686450] hover:text-[#2E2B1A]"
+                      }`}
+                    >
+                      <Cloud className="w-3.5 h-3.5" />
+                      <span>Accounts ({accountsList.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveNavItem("infra-regions")}
+                      className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer ${
+                        activeNavItem === "infra-regions"
+                          ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                          : "text-[#686450] hover:text-[#2E2B1A]"
+                      }`}
+                    >
+                      Regions ({data?.resources.byRegion?.length || 0})
+                    </button>
+                  </div>
+
+                  {/* Actions according to subview */}
+                  <div className="flex items-center gap-2">
+                    {activeNavItem === "infra-accounts" ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleCleanDuplicates}
+                          disabled={cleaningDuplicates}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8] text-[11.5px] font-bold text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${cleaningDuplicates ? "animate-spin" : ""}`} />
+                          <span>Purge Duplicate Stubs</span>
+                        </button>
+                        <Link
+                          href="/onboarding"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] shadow-2xs transition-colors"
+                        >
+                          <PlusCircle className="w-3.5 h-3.5" />
+                          <span>Connect Account</span>
+                        </Link>
+                      </div>
+                    ) : (
+                      <select
+                        value={infraRegionFilter}
+                        onChange={(e) => setInfraRegionFilter(e.target.value)}
+                        className="px-3 py-1.5 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8] text-[12px] font-bold text-[#2E2B1A]"
+                      >
+                        <option value="all">
+                          All Regions ({data?.resources.byRegion?.length || 0})
                         </option>
-                      ))}
-                    </select>
+                        {data?.resources.byRegion?.map((r) => (
+                          <option key={r.region} value={r.region}>
+                            {r.region} — {r.regionName} ({r.resourcesCount})
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </div>
 
-                {/* Resource Inventory Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-[12.5px]">
-                    <thead>
-                      <tr className="border-b border-[#ECE5CC] font-mono text-[11px] text-[#8D8975] uppercase">
-                        <th className="py-2">Resource Name & ID</th>
-                        <th className="py-2">Type & Specs</th>
-                        <th className="py-2">AWS Region</th>
-                        <th className="py-2">Resource State</th>
-                        <th className="py-2">Estimated Cost</th>
-                        <th className="py-2">Carbon Footprint</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#ECE5CC]/50">
-                      {filteredResources.length ? (
-                        filteredResources.map((res) => (
-                          <tr key={res.id} className="hover:bg-[#FAF6E8]/40">
-                            <td className="py-2.5">
-                              <span className="font-bold text-[#2E2B1A] block">
-                                {res.instanceName || res.providerResourceId}
-                              </span>
-                              {res.instanceName && res.instanceName !== res.providerResourceId && (
-                                <span className="font-mono text-[10.5px] text-[#8D8975] block">
-                                  {res.providerResourceId}
-                                </span>
+                {/* SUB-VIEW 1: ACCOUNTS LIST */}
+                {activeNavItem === "infra-accounts" && (
+                  <div className="space-y-4 animate-in fade-in duration-150">
+                    <div>
+                      <h3 className="text-[16px] font-bold text-[#2E2B1A]">Connected Cloud Accounts</h3>
+                      <p className="text-[12.5px] text-[#686450]">
+                        Manage authenticated AWS cross-account IAM roles linked to GreenCloud AI.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      {accountsList.map((acc) => {
+                        const isActive = acc.id === activeAccount?.id;
+                        const isDeleting = deletingAccountId === acc.id;
+
+                        return (
+                          <div
+                            key={acc.id}
+                            className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                              isActive
+                                ? "bg-white border-[#1F8A70]/50 ring-1 ring-[#1F8A70]/20 shadow-warm-xs"
+                                : "bg-[#FAF6E8]/30 border-[#ECE5CC] hover:bg-white"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3.5 min-w-0">
+                              <div className="w-10 h-10 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A] shrink-0">
+                                <Cloud className="w-5 h-5 text-[#9A6B00]" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <strong className="text-[14px] text-[#2E2B1A] truncate">{acc.name}</strong>
+                                  {isActive ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD] flex items-center gap-1">
+                                      <Check className="w-3 h-3" />
+                                      <span>Active Account</span>
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-full text-[10.5px] font-mono text-[#8D8975] bg-[#FAF6E8] border border-[#ECE5CC]">
+                                      Connected
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-[12px] text-[#686450] mt-0.5 font-mono">
+                                  <span>AWS Account: {acc.externalAccountId}</span>
+                                  <span>•</span>
+                                  <span>Status: {acc.status || "active"}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
+                              {!isActive && (
+                                <button
+                                  type="button"
+                                  onClick={() => loadDashboard(acc.id)}
+                                  className="px-3.5 py-1.5 rounded-full bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] text-[12px] font-bold text-[#2E2B1A] transition-colors cursor-pointer"
+                                >
+                                  Switch to Account
+                                </button>
                               )}
-                            </td>
-                            <td className="py-2.5 text-[#686450]">
-                              <span className="font-mono font-bold text-[#2E2B1A] uppercase">
-                                {res.resourceType}
-                              </span>{" "}
-                              {res.instanceType ? (
-                                <span className="px-1.5 py-0.5 rounded bg-[#FAF6E8] text-[#2E2B1A] font-mono text-[11px] border border-[#ECE5CC]">
-                                  {res.instanceType}
-                                </span>
-                              ) : ""}
-                              {res.sizeGb ? (
-                                <span className="text-[#8D8975] ml-1">
-                                  {res.sizeGb} GB
-                                </span>
-                              ) : ""}
-                            </td>
-                            <td className="py-2.5">
-                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px] font-bold text-[#2E2B1A]">
-                                <span>{res.regionFlag || "🌐"}</span>
-                                <span className="font-mono">{res.region}</span>
-                              </span>
-                              {res.regionName && (
-                                <span className="text-[10.5px] text-[#8D8975] block mt-0.5">
-                                  {res.regionName}
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-2.5">
-                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase ${
-                                res.lifecycleState === "running" || res.lifecycleState === "in-use"
-                                  ? "bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]"
-                                  : "bg-[#FFF3D6] text-[#9A6B00] border border-[#ECE5CC]"
-                              }`}>
-                                {res.lifecycleState === "running" && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-[#1F8A70] animate-pulse"></span>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAccount(acc.id)}
+                                disabled={isDeleting}
+                                title="Disconnect account"
+                                className="p-2 rounded-xl text-[#8D8975] hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors cursor-pointer disabled:opacity-50"
+                              >
+                                {isDeleting ? (
+                                  <RefreshCw className="w-4 h-4 animate-spin text-red-600" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
                                 )}
-                                <span>{res.lifecycleState}</span>
-                              </span>
-                            </td>
-                            <td className="py-2.5 font-mono font-bold text-[#2E2B1A]">
-                              {res.monthlyCost !== null ? `$${res.monthlyCost.toFixed(2)}/mo` : "--"}
-                            </td>
-                            <td className="py-2.5 font-mono text-[11.5px] text-[#686450]">
-                              {res.carbonEmissions?.[0]
-                                ? `${res.carbonEmissions[0].operationalGco2e.toFixed(1)} gCO2e/day`
-                                : "--"}
-                            </td>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* SUB-VIEW 2: REGIONAL BREAKDOWN */}
+                {activeNavItem === "infra-regions" && (
+                  <div className="space-y-4 animate-in fade-in duration-150">
+                    <div>
+                      <h3 className="text-[16px] font-bold text-[#2E2B1A]">AWS Regional Breakdown</h3>
+                      <p className="text-[12.5px] text-[#686450]">
+                        Geographic spread, clean grid intensity, and monthly compute spend.
+                      </p>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-[12.5px]">
+                        <thead>
+                          <tr className="border-b border-[#ECE5CC] font-mono text-[11px] text-[#8D8975] uppercase">
+                            <th className="py-2">AWS Region</th>
+                            <th className="py-2">Location</th>
+                            <th className="py-2">Running EC2</th>
+                            <th className="py-2">Stopped EC2</th>
+                            <th className="py-2">Grid Carbon Intensity</th>
+                            <th className="py-2">Monthly Spend</th>
                           </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={6} className="py-6 text-center text-[#8D8975]">
-                            No resources found. Click "Sync Telemetry" to discover assets via AWS APIs.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                        </thead>
+                        <tbody className="divide-y divide-[#ECE5CC]/50">
+                          {data?.resources.byRegion && data.resources.byRegion.length > 0 ? (
+                            data.resources.byRegion.map((r) => (
+                              <tr key={r.region} className="hover:bg-[#FAF6E8]/40">
+                                <td className="py-2.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[16px]">{r.flag || "🌐"}</span>
+                                    <span className="font-mono font-bold text-[#2E2B1A]">{r.region}</span>
+                                  </div>
+                                </td>
+                                <td className="py-2.5 text-[#686450]">{r.regionName}</td>
+                                <td className="py-2.5">
+                                  <span className="font-mono font-bold text-[#1F8A70]">{r.runningEc2}</span>
+                                </td>
+                                <td className="py-2.5">
+                                  <span className="font-mono text-[#8D8975]">{r.stoppedEc2}</span>
+                                </td>
+                                <td className="py-2.5">
+                                  <span className="font-mono font-bold text-[#2E2B1A]">
+                                    {r.gridIntensity} gCO2e/kWh
+                                  </span>
+                                  <span className="text-[11px] text-[#8D8975] block">{r.mix}</span>
+                                </td>
+                                <td className="py-2.5 font-mono font-bold text-[#2E2B1A]">
+                                  ${r.monthlyCost.toFixed(2)}/mo
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={6} className="py-6 text-center text-[#8D8975]">
+                                No regional telemetry data available.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* SUB-VIEW 3: RESOURCES INVENTORY (DEFAULT) */}
+                {activeNavItem !== "infra-accounts" && activeNavItem !== "infra-regions" && (
+                  <div className="space-y-4 animate-in fade-in duration-150">
+                    <div>
+                      <h2 className="text-[16px] font-bold text-[#2E2B1A]">Cloud Resources Inventory</h2>
+                      <p className="text-[12.5px] text-[#686450]">
+                        Monitored virtual machines, block volumes, and network assets in {activeAccount.name}.
+                      </p>
+                    </div>
+
+                    {/* Resource Inventory Table */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-[12.5px]">
+                        <thead>
+                          <tr className="border-b border-[#ECE5CC] font-mono text-[11px] text-[#8D8975] uppercase">
+                            <th className="py-2">Resource Name & ID</th>
+                            <th className="py-2">Type & Specs</th>
+                            <th className="py-2">AWS Region</th>
+                            <th className="py-2">Resource State</th>
+                            <th className="py-2">Estimated Cost</th>
+                            <th className="py-2">Carbon Footprint</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#ECE5CC]/50">
+                          {filteredResources.length ? (
+                            filteredResources.map((res) => (
+                              <tr key={res.id} className="hover:bg-[#FAF6E8]/40">
+                                <td className="py-2.5">
+                                  <span className="font-bold text-[#2E2B1A] block">
+                                    {res.instanceName || res.providerResourceId}
+                                  </span>
+                                  {res.instanceName && res.instanceName !== res.providerResourceId && (
+                                    <span className="font-mono text-[10.5px] text-[#8D8975] block">
+                                      {res.providerResourceId}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 text-[#686450]">
+                                  <span className="font-mono font-bold text-[#2E2B1A] uppercase">
+                                    {res.resourceType}
+                                  </span>{" "}
+                                  {res.instanceType ? (
+                                    <span className="px-1.5 py-0.5 rounded bg-[#FAF6E8] text-[#2E2B1A] font-mono text-[11px] border border-[#ECE5CC]">
+                                      {res.instanceType}
+                                    </span>
+                                  ) : ""}
+                                  {res.sizeGb ? (
+                                    <span className="text-[#8D8975] ml-1">
+                                      {res.sizeGb} GB
+                                    </span>
+                                  ) : ""}
+                                </td>
+                                <td className="py-2.5">
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px] font-bold text-[#2E2B1A]">
+                                    <span>{res.regionFlag || "🌐"}</span>
+                                    <span className="font-mono">{res.region}</span>
+                                  </span>
+                                  {res.regionName && (
+                                    <span className="text-[10.5px] text-[#8D8975] block mt-0.5">
+                                      {res.regionName}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2.5">
+                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase ${
+                                    res.lifecycleState === "running" || res.lifecycleState === "in-use"
+                                      ? "bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]"
+                                      : "bg-[#FFF3D6] text-[#9A6B00] border border-[#ECE5CC]"
+                                  }`}>
+                                    {res.lifecycleState === "running" && (
+                                      <span className="w-1.5 h-1.5 rounded-full bg-[#1F8A70] animate-pulse"></span>
+                                    )}
+                                    <span>{res.lifecycleState}</span>
+                                  </span>
+                                </td>
+                                <td className="py-2.5 font-mono font-bold text-[#2E2B1A]">
+                                  {res.monthlyCost !== null ? `$${res.monthlyCost.toFixed(2)}/mo` : "--"}
+                                </td>
+                                <td className="py-2.5 font-mono text-[11.5px] text-[#686450]">
+                                  {res.carbonEmissions?.[0]
+                                    ? `${res.carbonEmissions[0].operationalGco2e.toFixed(1)} gCO2e/day`
+                                    : "--"}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={6} className="py-6 text-center text-[#8D8975]">
+                                No resources found. Click "Sync Telemetry" to discover assets via AWS APIs.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -3176,16 +3443,6 @@ Apply the proposed Terraform configuration change or safely update the resource 
                                 <span>Inspect & IaC</span>
                               </button>
 
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedRecommendation(rec)}
-                                className="px-3.5 py-1.5 rounded-full bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px] font-bold text-[#2E2B1A] transition-all cursor-pointer flex items-center gap-1.5"
-                              >
-                                <Code className="w-3.5 h-3.5 text-[#1F8A70]" />
-                                <span>Inspect & IaC</span>
-                              </button>
-
                               {rec.status === "active" ? (
                                 <button
                                   type="button"
@@ -3199,7 +3456,6 @@ Apply the proposed Terraform configuration change or safely update the resource 
                                   Approved
                                 </span>
                               )}
-                            </div>
                             </div>
                           </div>
                         </div>
@@ -3587,6 +3843,408 @@ Apply the proposed Terraform configuration change or safely update the resource 
                     className="px-4 py-1.5 rounded-full border border-[#ECE5CC] text-[12px] font-bold text-[#686450] hover:bg-[#FAF6E8]"
                   >
                     Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* SETTINGS & CLOUD GOVERNANCE MODAL                                         */}
+          {/* ========================================================================= */}
+          {settingsModalOpen && (
+            <div
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+              onClick={() => setSettingsModalOpen(false)}
+            >
+              <div
+                className="max-w-2xl w-full bg-[#FFFDF4] rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-lg space-y-5 animate-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div className="flex items-start justify-between pb-3 border-b border-[#ECE5CC]">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A]">
+                      <Settings className="w-5 h-5 text-[#8D8975]" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-[18px] text-[#2E2B1A] leading-tight">
+                        Settings & Cloud Governance
+                      </h3>
+                      <p className="text-[12px] text-[#686450]">
+                        Manage connected AWS accounts, auto-sync schedules, and FinOps guardrails.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsModalOpen(false)}
+                    className="p-1 rounded-lg text-[#8D8975] hover:text-[#2E2B1A] transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Toast Notification Banner */}
+                {settingsToast && (
+                  <div className="p-3 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] text-[12.5px] font-medium flex items-center justify-between animate-in fade-in">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span>{settingsToast}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsToast(null)}
+                      className="text-[#1F8A70] hover:text-[#135A49] cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Settings Tabs */}
+                <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC]">
+                  <button
+                    type="button"
+                    onClick={() => setSettingsTab("accounts")}
+                    className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      settingsTab === "accounts"
+                        ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                        : "text-[#686450] hover:text-[#2E2B1A]"
+                    }`}
+                  >
+                    <Cloud className="w-4 h-4" />
+                    <span>Cloud Accounts</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[10.5px] bg-[#FAF6E8] border border-[#ECE5CC] font-mono">
+                      {accountsList.length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSettingsTab("sync")}
+                    className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      settingsTab === "sync"
+                        ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                        : "text-[#686450] hover:text-[#2E2B1A]"
+                    }`}
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Sync & Discovery</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSettingsTab("guardrails")}
+                    className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      settingsTab === "guardrails"
+                        ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                        : "text-[#686450] hover:text-[#2E2B1A]"
+                    }`}
+                  >
+                    <Shield className="w-4 h-4" />
+                    <span>FinOps Guardrails</span>
+                  </button>
+                </div>
+
+                {/* Modal Body / Scrollable Content */}
+                <div className="overflow-y-auto space-y-4 pr-1 flex-1">
+                  {/* TAB 1: CLOUD ACCOUNTS */}
+                  {settingsTab === "accounts" && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                            Connected AWS Accounts ({accountsList.length})
+                          </h4>
+                          <p className="text-[11.5px] text-[#686450]">
+                            Active and configured AWS cross-account IAM integrations.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleCleanDuplicates}
+                          disabled={cleaningDuplicates}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[11.5px] font-bold text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${cleaningDuplicates ? "animate-spin" : ""}`} />
+                          <span>{cleaningDuplicates ? "Cleaning..." : "Purge Duplicate Stubs"}</span>
+                        </button>
+                      </div>
+
+                      {/* Accounts Cards List */}
+                      <div className="space-y-2.5">
+                        {accountsList.map((acc) => {
+                          const isActive = acc.id === activeAccount?.id;
+                          const isDeleting = deletingAccountId === acc.id;
+
+                          return (
+                            <div
+                              key={acc.id}
+                              className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                                isActive
+                                  ? "bg-white border-[#1F8A70]/40 shadow-warm-xs ring-1 ring-[#1F8A70]/15"
+                                  : "bg-white/80 border-[#ECE5CC] hover:bg-white"
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-10 h-10 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A] shrink-0">
+                                  <Cloud className="w-5 h-5 text-[#9A6B00]" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <strong className="text-[13.5px] text-[#2E2B1A] truncate">
+                                      {acc.name}
+                                    </strong>
+                                    {isActive && (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD] flex items-center gap-1">
+                                        <Check className="w-3 h-3" />
+                                        <span>Active</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 text-[11.5px] text-[#686450] mt-0.5 font-mono">
+                                    <span>Account ID: {acc.externalAccountId}</span>
+                                    <span>•</span>
+                                    <span className="uppercase">{acc.provider}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                {!isActive && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      loadDashboard(acc.id);
+                                      setSettingsToast(`Switched active context to ${acc.name}`);
+                                    }}
+                                    className="px-3 py-1.5 rounded-full bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px] font-bold text-[#2E2B1A] transition-colors cursor-pointer"
+                                  >
+                                    Switch Account
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAccount(acc.id)}
+                                  disabled={isDeleting}
+                                  title="Disconnect cloud account"
+                                  className="p-2 rounded-xl text-[#8D8975] hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors cursor-pointer disabled:opacity-50"
+                                >
+                                  {isDeleting ? (
+                                    <RefreshCw className="w-4 h-4 animate-spin text-red-600" />
+                                  ) : (
+                                    <Trash2 className="w-4 h-4" />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Connect New Account Action */}
+                      <div className="pt-2">
+                        <Link
+                          href="/onboarding"
+                          onClick={() => setSettingsModalOpen(false)}
+                          className="w-full py-3 rounded-2xl border border-dashed border-[#ECE5CC] hover:border-[#1F8A70] hover:bg-[#FAF6E8] text-[12.5px] font-bold text-[#2E2B1A] flex items-center justify-center gap-2 transition-all cursor-pointer group"
+                        >
+                          <PlusCircle className="w-4 h-4 text-[#8D8975] group-hover:text-[#1F8A70]" />
+                          <span>Connect Another Cloud Account</span>
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 2: SYNC & SCANNING */}
+                  {settingsTab === "sync" && (
+                    <div className="space-y-4">
+                      {/* Auto-Sync Frequency */}
+                      <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
+                        <div>
+                          <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                            Telemetry Ingestion Cadence
+                          </h4>
+                          <p className="text-[11.5px] text-[#686450]">
+                            How frequently GreenCloud AI queries AWS CloudWatch, Cost Explorer, and EC2 APIs.
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2.5">
+                          {[
+                            { id: "1h", label: "Hourly", desc: "High sensitivity" },
+                            { id: "6h", label: "Every 6 Hours", desc: "Recommended balance" },
+                            { id: "24h", label: "Daily (24h)", desc: "Standard FinOps" },
+                          ].map((freq) => (
+                            <button
+                              key={freq.id}
+                              type="button"
+                              onClick={() => {
+                                setAutoSyncFrequency(freq.id);
+                                setSettingsToast(`Sync cadence updated to ${freq.label}.`);
+                              }}
+                              className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                                autoSyncFrequency === freq.id
+                                  ? "bg-[#FAF6E8] border-[#9A6B00] ring-1 ring-[#9A6B00]/20"
+                                  : "bg-white border-[#ECE5CC] hover:bg-[#FAF6E8]/40"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <strong className="text-[12.5px] text-[#2E2B1A]">{freq.label}</strong>
+                                {autoSyncFrequency === freq.id && (
+                                  <div className="w-2 h-2 rounded-full bg-[#9A6B00]" />
+                                )}
+                              </div>
+                              <span className="text-[10.5px] text-[#8D8975] block mt-0.5">
+                                {freq.desc}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Multi-Region Scanning Toggle */}
+                      <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] flex items-center justify-between gap-4">
+                        <div className="space-y-0.5">
+                          <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                            Multi-Region Orphan Scanner
+                          </h4>
+                          <p className="text-[11.5px] text-[#686450] max-w-md">
+                            Actively scan all 17 AWS regions (us-east-1, eu-central-1, ap-south-1, etc.) to discover forgotten EC2 instances and unassociated Elastic IPs.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMultiRegionScanEnabled(!multiRegionScanEnabled);
+                            setSettingsToast(
+                              !multiRegionScanEnabled
+                                ? "Multi-Region scanning enabled (17 regions active)."
+                                : "Multi-Region scanning restricted to primary region."
+                            );
+                          }}
+                          className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer ${
+                            multiRegionScanEnabled ? "bg-[#1F8A70]" : "bg-[#ECE5CC]"
+                          }`}
+                        >
+                          <div
+                            className={`w-5 h-5 rounded-full bg-white transition-transform transform shadow-xs ${
+                              multiRegionScanEnabled ? "translate-x-6" : "translate-x-0.5"
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {/* Manual Sync Trigger */}
+                      <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] flex items-center justify-between gap-3">
+                        <div>
+                          <strong className="text-[13px] text-[#2E2B1A] block">Force Immediate Cloud Refresh</strong>
+                          <span className="text-[11.5px] text-[#686450]">
+                            Trigger real-time AWS API pull for instances, EBS volumes, and IP allocations.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleTriggerSync}
+                          disabled={syncing}
+                          className="px-4 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer shrink-0 disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+                          <span>{syncing ? "Syncing AWS..." : "Sync AWS Telemetry"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 3: FINOPS GUARDRAILS */}
+                  {settingsTab === "guardrails" && (
+                    <div className="space-y-4">
+                      {/* Budget Limit */}
+                      <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                              Monthly Spend Budget Target
+                            </h4>
+                            <p className="text-[11.5px] text-[#686450]">
+                              Alert FinOps team when projected burn-rate pace exceeds this monthly figure.
+                            </p>
+                          </div>
+                          <span className="font-mono font-bold text-[14px] text-[#1F8A70]">
+                            ${budgetLimit}/mo
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min="50"
+                            max="5000"
+                            step="50"
+                            value={budgetLimit}
+                            onChange={(e) => setBudgetLimit(Number(e.target.value))}
+                            className="w-full accent-[#1F8A70] cursor-pointer"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Idle CPU Threshold */}
+                      <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                              Idle Compute CPU Utilization Threshold
+                            </h4>
+                            <p className="text-[11.5px] text-[#686450]">
+                              Instances averaging below this threshold over 14 days will be flagged for automated stop or decommission.
+                            </p>
+                          </div>
+                          <span className="font-mono font-bold text-[14px] text-[#9A6B00]">
+                            {idleCpuThresholdVal}% CPU
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min="1"
+                            max="20"
+                            step="1"
+                            value={idleCpuThresholdVal}
+                            onChange={(e) => setIdleCpuThresholdVal(Number(e.target.value))}
+                            className="w-full accent-[#9A6B00] cursor-pointer"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Save Button */}
+                      <div className="pt-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSettingsToast("Governance guardrails saved and applied.");
+                            setTimeout(() => setSettingsToast(null), 3500);
+                          }}
+                          className="px-5 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12.5px] font-bold text-[#2E2B1A] shadow-xs cursor-pointer"
+                        >
+                          Save Guardrail Rules
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="pt-3 border-t border-[#ECE5CC] flex items-center justify-between">
+                  <span className="text-[11px] text-[#8D8975] font-mono">
+                    GreenCloud AI v2.4 • Tenant Scoped
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsModalOpen(false)}
+                    className="px-4 py-1.5 rounded-full border border-[#ECE5CC] text-[12px] font-bold text-[#686450] hover:bg-[#FAF6E8] cursor-pointer"
+                  >
+                    Done
                   </button>
                 </div>
               </div>

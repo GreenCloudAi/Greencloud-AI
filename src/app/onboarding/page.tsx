@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { NavigationBar } from "@/components/common/NavigationBar";
@@ -27,6 +27,20 @@ import {
 
 export default function OnboardingPage() {
   const router = useRouter();
+
+  // Existing Accounts State
+  const [existingAccounts, setExistingAccounts] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/cloud-accounts")
+      .then((r) => r.json())
+      .then((accs) => {
+        if (Array.isArray(accs) && accs.length > 0) {
+          setExistingAccounts(accs);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Wizard Step State (1 through 4)
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -211,6 +225,32 @@ export default function OnboardingPage() {
 
       {/* 2. MAIN WIZARD CONTAINER */}
       <main className="max-w-[1000px] mx-auto px-4 sm:px-6 w-full flex-grow pt-4 pb-16">
+        {/* Banner if cloud account is already connected */}
+        {existingAccounts.length > 0 && (
+          <div className="max-w-[620px] mx-auto mb-6 p-4 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-200">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-[#1F8A70] text-white flex items-center justify-center shrink-0">
+                <Check className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-bold text-[13.5px] text-[#1F8A70] block">
+                  Cloud Account Connected: {existingAccounts[0].name}
+                </span>
+                <span className="text-[11.5px] text-[#686450] font-mono">
+                  {existingAccounts[0].externalAccountId} · {existingAccounts.length} active account{existingAccounts.length > 1 ? "s" : ""}
+                </span>
+              </div>
+            </div>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1F8A70] hover:bg-[#186D58] text-white font-bold text-[12.5px] shadow-xs transition-colors shrink-0"
+            >
+              <span>Go to Dashboard</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        )}
+
         {/* COMPACT, PROPORTIONAL STEPPER BAR WITH CLEAN SEGMENTED TRACK */}
         <div className="max-w-[620px] mx-auto mb-8 bg-white rounded-2xl border border-[#ECE5CC] px-6 py-4 shadow-warm-xs">
           <div className="flex items-center justify-between">
