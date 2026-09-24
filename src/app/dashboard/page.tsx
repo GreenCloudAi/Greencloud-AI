@@ -487,16 +487,29 @@ Apply the proposed Terraform configuration change or safely update the resource 
     document.body.removeChild(link);
   };
 
+  // Dashboard Error State
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+
   // Fetch Dashboard Data
   const loadDashboard = async (accountId?: string) => {
     try {
       setLoading(true);
+      setDashboardError(null);
       const url = accountId ? `/api/dashboard?accountId=${accountId}` : `/api/dashboard`;
       const res = await fetch(url);
       const json = await res.json();
-      setData(json);
-    } catch (err) {
+      if (!res.ok || json.error) {
+        const errMsg = json.error?.message || "Failed to load dashboard data.";
+        setDashboardError(errMsg);
+        setSyncMessage(`Notice: ${errMsg}`);
+      } else {
+        setData(json);
+      }
+    } catch (err: any) {
       console.error("Failed to load dashboard:", err);
+      const errMsg = err.message || "Failed to fetch dashboard data.";
+      setDashboardError(errMsg);
+      setSyncMessage(`Error: ${errMsg}`);
     } finally {
       setLoading(false);
     }
@@ -505,6 +518,18 @@ Apply the proposed Terraform configuration change or safely update the resource 
   useEffect(() => {
     loadDashboard();
   }, []);
+
+  // Prevent background body scrolling when any modal is open
+  useEffect(() => {
+    if (selectedRecommendation || exportModalOpen || settingsModalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedRecommendation, exportModalOpen, settingsModalOpen]);
 
   // Trigger Account Sync via AWS API
   const handleTriggerSync = async () => {
@@ -556,25 +581,25 @@ Apply the proposed Terraform configuration change or safely update the resource 
   const accountsList = data?.allAccounts || [];
 
   // Compute live EC2 instances state breakdown accurately
-  const ec2Total = data?.resources.ec2.length || 0;
+  const ec2Total = data?.resources?.ec2?.length || 0;
   const ec2Running = useMemo(() => {
-    if (!data?.resources.ec2) return 0;
+    if (!data?.resources?.ec2) return 0;
     if (typeof data.resources.runningEc2Count === "number") return data.resources.runningEc2Count;
     return data.resources.ec2.filter((r) => r.lifecycleState === "running").length;
   }, [data]);
   const ec2Stopped = useMemo(() => {
-    if (!data?.resources.ec2) return 0;
+    if (!data?.resources?.ec2) return 0;
     if (typeof data.resources.stoppedEc2Count === "number") return data.resources.stoppedEc2Count;
     return data.resources.ec2.filter((r) => r.lifecycleState === "stopped").length;
   }, [data]);
 
   // Filtered Resources
   const filteredResources = useMemo(() => {
-    if (!data) return [];
+    if (!data?.resources) return [];
     let list = [
-      ...data.resources.ec2,
-      ...data.resources.ebs,
-      ...data.resources.eip,
+      ...(data.resources.ec2 || []),
+      ...(data.resources.ebs || []),
+      ...(data.resources.eip || []),
     ];
     if (infraTypeFilter !== "all") {
       list = list.filter((r) => r.resourceType === infraTypeFilter);
@@ -1266,6 +1291,22 @@ Apply the proposed Terraform configuration change or safely update the resource 
             <div className="mt-2 p-2.5 rounded-xl bg-[#E2F5EF] border border-[#BDEBDD] text-[12px] font-bold text-[#1F8A70] flex items-center gap-2 animate-in fade-in duration-150">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>{actionSuccess}</span>
+            </div>
+          )}
+
+          {dashboardError && (
+            <div className="mt-2 p-3 rounded-xl bg-red-50 border border-red-200 text-[12.5px] font-medium text-red-700 flex items-center justify-between animate-in fade-in duration-150">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{dashboardError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => loadDashboard()}
+                className="px-3 py-1 rounded-full bg-red-100 hover:bg-red-200 text-red-800 text-[11.5px] font-bold cursor-pointer"
+              >
+                Retry
+              </button>
             </div>
           )}
         </header>
@@ -3525,13 +3566,19 @@ Apply the proposed Terraform configuration change or safely update the resource 
               </div>
             </div>
           )}
+        </main>
+      </div>
 
-          {/* CENTERED RECOMMENDATION INSPECTION MODAL */}
-          {selectedRecommendation && (
-            <div
-              className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-150"
-              onClick={() => setSelectedRecommendation(null)}
-            >
+      {/* ========================================================================= */}
+      {/* ROOT-LEVEL MODALS (Full viewport overlay with z-[100])                    */}
+      {/* ========================================================================= */}
+
+      {/* CENTERED RECOMMENDATION INSPECTION MODAL */}
+      {selectedRecommendation && (
+        <div
+          className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-150"
+          onClick={() => setSelectedRecommendation(null)}
+        >
               <div
                 className="w-full max-w-2xl bg-[#FFFDF4] rounded-3xl shadow-2xl flex flex-col max-h-[90vh] border border-[#ECE5CC] overflow-hidden animate-in zoom-in-95 duration-200"
                 onClick={(e) => e.stopPropagation()}
@@ -3734,7 +3781,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
           {/* 1-CLICK EXPORT REPORT MODAL */}
           {exportModalOpen && (
             <div
-              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+              className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
               onClick={() => setExportModalOpen(false)}
             >
               <div
@@ -3854,7 +3901,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
           {/* ========================================================================= */}
           {settingsModalOpen && (
             <div
-              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+              className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
               onClick={() => setSettingsModalOpen(false)}
             >
               <div
@@ -4250,8 +4297,6 @@ Apply the proposed Terraform configuration change or safely update the resource 
               </div>
             </div>
           )}
-        </main>
-      </div>
     </div>
   );
 }

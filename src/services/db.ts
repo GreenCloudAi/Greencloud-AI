@@ -1,14 +1,83 @@
 import { PrismaClient } from '@prisma/client'
+import fs from 'fs'
+import path from 'path'
 
 declare global {
   // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined
 }
 
-export const prisma = global.prisma || new PrismaClient()
+function resolveDatabaseUrl(): string {
+  // 1. If explicit remote database URL is configured (Postgres, Neon, Supabase, Turso), use it
+  if (process.env.DATABASE_URL && !process.env.DATABASE_URL.startsWith('file:')) {
+    return process.env.DATABASE_URL;
+  }
+
+  // 2. Vercel Serverless / AWS Lambda environment detection:
+  // Root /var/task is read-only. SQLite requires a writable directory (/tmp) to create locks & journals.
+  const isServerless = Boolean(
+    process.env.VERCEL ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.LAMBDA_TASK_ROOT
+  );
+
+  if (isServerless) {
+    const tmpDbPath = '/tmp/dev.db';
+
+    if (!fs.existsSync(tmpDbPath)) {
+      const candidates = [
+        path.join(process.cwd(), 'prisma', 'dev.db'),
+        path.join('/var/task', 'prisma', 'dev.db'),
+        path.resolve(process.cwd(), 'prisma/dev.db'),
+        path.join(__dirname, '..', '..', 'prisma', 'dev.db'),
+        path.join(__dirname, '..', 'prisma', 'dev.db'),
+      ];
+
+      let copied = false;
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+          try {
+            fs.copyFileSync(candidate, tmpDbPath);
+            console.log(`[GreenCloud DB] Initialized serverless SQLite DB from ${candidate} to ${tmpDbPath}`);
+            copied = true;
+            break;
+          } catch (err) {
+            console.error(`[GreenCloud DB] Error copying SQLite from ${candidate}:`, err);
+          }
+        }
+      }
+
+      if (!copied) {
+        console.warn('[GreenCloud DB] No candidate dev.db found to copy into /tmp. Ensuring empty DB exists at:', tmpDbPath);
+      }
+    }
+
+    return `file:${tmpDbPath}`;
+  }
+
+  // 3. Local Development: Use absolute path to ensure consistency regardless of CWD
+  const localDb = path.resolve(process.cwd(), 'prisma', 'dev.db');
+  if (fs.existsSync(localDb)) {
+    return `file:${localDb}`;
+  }
+
+  return process.env.DATABASE_URL || 'file:./dev.db';
+}
+
+const activeDbUrl = resolveDatabaseUrl();
+
+export const prisma =
+  global.prisma ||
+  new PrismaClient({
+    datasources: {
+      db: {
+        url: activeDbUrl,
+      },
+    },
+  });
 
 if (process.env.NODE_ENV !== 'production') {
-  global.prisma = prisma
+  global.prisma = prisma;
 }
 
 /**
