@@ -58,6 +58,9 @@ export default function OnboardingPage() {
   const [accountId, setAccountId] = useState("");
   const [roleArn, setRoleArn] = useState("");
   const [externalId, setExternalId] = useState("");
+  const [showEncryptedCreds, setShowEncryptedCreds] = useState(false);
+  const [accessKeyId, setAccessKeyId] = useState("");
+  const [secretAccessKey, setSecretAccessKey] = useState("");
 
   // Loading & Submission State
   const [connecting, setConnecting] = useState(false);
@@ -195,6 +198,8 @@ export default function OnboardingPage() {
           name: accountName.trim(),
           roleArn: roleArn.trim(),
           externalId: externalId.trim() || undefined,
+          accessKeyId: accessKeyId.trim() || undefined,
+          secretAccessKey: secretAccessKey.trim() || undefined,
         }),
       });
 
@@ -844,6 +849,58 @@ export default function OnboardingPage() {
                         placeholder="e.g. greencloud-demo"
                         className="w-full px-3 py-2 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8]/30 focus:bg-white focus:outline-none focus:border-[#9A6B00] text-[12.5px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
                       />
+                    </div>
+
+                    {/* 🔒 Optional AES-256-GCM Encrypted Base Credentials for Live Cloud Sync */}
+                    <div className="pt-2 border-t border-[#ECE5CC]">
+                      <button
+                        type="button"
+                        onClick={() => setShowEncryptedCreds(!showEncryptedCreds)}
+                        className="flex items-center justify-between w-full text-left py-1 text-[12px] font-bold text-[#1F8A70] hover:underline cursor-pointer"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Optional: Enable Live Vercel Sync (AES-256 Encrypted)</span>
+                        </div>
+                        <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-[#E2F5EF] border border-[#BDEBDD] font-mono">
+                          {showEncryptedCreds ? "Hide" : "+ Add Keys"}
+                        </span>
+                      </button>
+
+                      {showEncryptedCreds && (
+                        <div className="mt-2.5 p-3.5 rounded-2xl bg-[#FAF6E8]/70 border border-[#ECE5CC] space-y-3 animate-in fade-in duration-150">
+                          <div className="flex items-start gap-2 text-[11px] text-[#686450] leading-snug">
+                            <Shield className="w-3.5 h-3.5 text-[#1F8A70] shrink-0 mt-0.5" />
+                            <span>
+                              Keys are <strong>encrypted at rest with AES-256-GCM</strong>. They are decrypted in-memory only during sync and never logged or exposed.
+                            </span>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-[#2E2B1A] mb-1">
+                              AWS Access Key ID
+                            </label>
+                            <input
+                              type="text"
+                              value={accessKeyId}
+                              onChange={(e) => setAccessKeyId(e.target.value)}
+                              placeholder="AKIA..."
+                              className="w-full px-3 py-1.5 rounded-xl border border-[#ECE5CC] bg-white text-[12px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-[#2E2B1A] mb-1">
+                              AWS Secret Access Key
+                            </label>
+                            <input
+                              type="password"
+                              value={secretAccessKey}
+                              onChange={(e) => setSecretAccessKey(e.target.value)}
+                              placeholder="••••••••••••••••••••••••••••••••"
+                              className="w-full px-3 py-1.5 rounded-xl border border-[#ECE5CC] bg-white text-[12px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Progress feedback */}

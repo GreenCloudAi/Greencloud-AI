@@ -3,6 +3,7 @@ import { AwsCloudConnector } from "./awsConnector";
 import { CarbonEngine } from "./carbonEngine";
 import { GreenCloudConfig } from "./config";
 import { Logger } from "./logger";
+import { decryptCredential } from "./encryption";
 
 /**
  * Resilient Retry Helper
@@ -78,10 +79,22 @@ export class IngestionService {
       data: { status: "syncing" },
     });
 
-    // Create real AWS connector with the stored Role ARN and ExternalId
+    // Check for encrypted credentials stored on the account
+    let baseCredentials: { accessKeyId: string; secretAccessKey: string } | undefined = undefined;
+    if (account.encryptedAccessKey && account.encryptedSecretKey) {
+      const decAccess = decryptCredential(account.encryptedAccessKey);
+      const decSecret = decryptCredential(account.encryptedSecretKey);
+      if (decAccess && decSecret) {
+        baseCredentials = { accessKeyId: decAccess, secretAccessKey: decSecret };
+        Logger.info("INGEST", "ENCRYPTED_CREDENTIALS_LOADED", "Decrypted in-memory credentials for secure live sync.");
+      }
+    }
+
+    // Create real AWS connector with the stored Role ARN, ExternalId, and optional decrypted base credentials
     const connector = new AwsCloudConnector(
       account.roleArn,
-      account.externalId || undefined
+      account.externalId || undefined,
+      baseCredentials
     );
     const syncTime = new Date();
     const syncedResourceIds: string[] = [];

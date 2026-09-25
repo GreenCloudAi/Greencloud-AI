@@ -27,6 +27,8 @@ model CloudAccount {
   status             String               // "pending_validation", "active", "sync_failed"
   roleArn            String?
   externalId         String?              // STS AssumeRole ExternalId for confused deputy protection
+  encryptedAccessKey String?              // AES-256-GCM encrypted
+  encryptedSecretKey String?              // AES-256-GCM encrypted
   syncFreshness      DateTime?
   syncError          String?
   resources          CloudResource[]

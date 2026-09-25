@@ -106,8 +106,13 @@ export class AwsCloudConnector {
   private roleArn: string;
   private externalId?: string;
   private regions: string[];
+  private baseCredentials?: { accessKeyId: string; secretAccessKey: string };
 
-  constructor(roleArn: string, externalId?: string) {
+  constructor(
+    roleArn: string,
+    externalId?: string,
+    baseCredentials?: { accessKeyId: string; secretAccessKey: string }
+  ) {
     if (!roleArn) {
       throw new Error(
         "AwsCloudConnector requires a valid IAM Role ARN. " +
@@ -117,6 +122,7 @@ export class AwsCloudConnector {
     this.roleArn = roleArn;
     this.externalId = externalId;
     this.regions = GreenCloudConfig.scanRegions;
+    this.baseCredentials = baseCredentials;
   }
 
   // ─── STS Credential Acquisition ──────────────────────────────────────────────
@@ -132,7 +138,17 @@ export class AwsCloudConnector {
       durationSeconds: GreenCloudConfig.stsSessionDurationSeconds,
     });
 
-    const stsClient = new STSClient({ region: GreenCloudConfig.defaultRegion });
+    const stsClient = new STSClient({
+      region: GreenCloudConfig.defaultRegion,
+      ...(this.baseCredentials?.accessKeyId && this.baseCredentials?.secretAccessKey
+        ? {
+            credentials: {
+              accessKeyId: this.baseCredentials.accessKeyId,
+              secretAccessKey: this.baseCredentials.secretAccessKey,
+            },
+          }
+        : {}),
+    });
 
     const params: any = {
       RoleArn: this.roleArn,

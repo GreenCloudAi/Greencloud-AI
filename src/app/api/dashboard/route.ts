@@ -32,8 +32,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const requestedAccountId = searchParams.get("accountId");
 
-    // 1. Fetch all cloud accounts for this tenant
-    const allAccounts = await db.listAccounts();
+    // 1. Fetch all cloud accounts for this tenant (sanitized to protect sensitive credentials)
+    const allAccounts = await db.listSanitizedAccounts();
 
     // Determine active account: requested account or first account
     const activeAccount = requestedAccountId
