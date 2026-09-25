@@ -18,6 +18,8 @@ tsconfig.tsbuildinfo
 *.db-journal
 *.sqlite
 *.sqlite3
+package-lock.json
+dev.db
 prisma/*.db-journal
 !prisma/dev.db
 
@@ -50,3 +52,4 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
