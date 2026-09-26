@@ -106,8 +106,13 @@ export class AwsCloudConnector {
   private roleArn: string;
   private externalId?: string;
   private regions: string[];
+  private baseCredentials?: { accessKeyId: string; secretAccessKey: string };
 
-  constructor(roleArn: string, externalId?: string) {
+  constructor(
+    roleArn: string,
+    externalId?: string,
+    baseCredentials?: { accessKeyId: string; secretAccessKey: string }
+  ) {
     if (!roleArn) {
       throw new Error(
         "AwsCloudConnector requires a valid IAM Role ARN. " +
@@ -117,6 +122,7 @@ export class AwsCloudConnector {
     this.roleArn = roleArn;
     this.externalId = externalId;
     this.regions = GreenCloudConfig.scanRegions;
+    this.baseCredentials = baseCredentials;
   }
 
   // ─── STS Credential Acquisition ──────────────────────────────────────────────
@@ -132,7 +138,17 @@ export class AwsCloudConnector {
       durationSeconds: GreenCloudConfig.stsSessionDurationSeconds,
     });
 
-    const stsClient = new STSClient({ region: GreenCloudConfig.defaultRegion });
+    const stsClient = new STSClient({
+      region: GreenCloudConfig.defaultRegion,
+      ...(this.baseCredentials?.accessKeyId && this.baseCredentials?.secretAccessKey
+        ? {
+            credentials: {
+              accessKeyId: this.baseCredentials.accessKeyId,
+              secretAccessKey: this.baseCredentials.secretAccessKey,
+            },
+          }
+        : {}),
+    });
 
     const params: any = {
       RoleArn: this.roleArn,
@@ -622,14 +638,36 @@ export class AwsCloudConnector {
         credentials,
       });
 
-      const command = new GetCostAndUsageCommand({
-        TimePeriod: { Start: startDate, End: endDate },
-        Granularity: "DAILY",
-        Metrics: ["UnblendedCost"],
-        GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
-      });
+      // Query Cost Explorer filtering out Credit and Refund record types
+      // so actual cloud resource spend matches AWS Console even when credits/free plan apply.
+      let response;
+      try {
+        const command = new GetCostAndUsageCommand({
+          TimePeriod: { Start: startDate, End: endDate },
+          Granularity: "DAILY",
+          Filter: {
+            Not: {
+              Dimensions: {
+                Key: "RECORD_TYPE",
+                Values: ["Credit", "Refund"],
+              },
+            },
+          },
+          Metrics: ["UnblendedCost"],
+          GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
+        });
+        response = await ceClient.send(command);
+      } catch (filterErr: any) {
+        Logger.warn("AWS", "COST_EXPLORER_FILTER_FALLBACK", `Filter query failed (${filterErr.message}), falling back to unfiltered GetCostAndUsage.`);
+        const fallbackCommand = new GetCostAndUsageCommand({
+          TimePeriod: { Start: startDate, End: endDate },
+          Granularity: "DAILY",
+          Metrics: ["UnblendedCost"],
+          GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
+        });
+        response = await ceClient.send(fallbackCommand);
+      }
 
-      const response = await ceClient.send(command);
       const rows: CostExplorerRow[] = [];
 
       for (const day of response.ResultsByTime || []) {
@@ -640,11 +678,11 @@ export class AwsCloudConnector {
           const cost = parseFloat(
             grp.Metrics?.UnblendedCost?.Amount || "0"
           );
-          if (cost > 0) {
+          if (cost > 0.000001) {
             rows.push({
               Date: date,
               Service: service,
-              Cost: parseFloat(cost.toFixed(4)),
+              Cost: parseFloat(cost.toFixed(6)),
             });
           }
         }

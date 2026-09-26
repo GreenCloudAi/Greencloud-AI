@@ -40,6 +40,10 @@ import {
   Code,
   Trash2,
   Cloud,
+  Key,
+  Lock,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 interface CloudAccount {
@@ -50,6 +54,8 @@ interface CloudAccount {
   status: string;
   syncFreshness: string | null;
   syncError: string | null;
+  hasEncryptedCredentials?: boolean;
+  maskedAccessKey?: string | null;
 }
 
 export interface RegionBreakdownItem {
@@ -262,6 +268,16 @@ export default function DashboardPage() {
   const [sciFunctionalUnit, setSciFunctionalUnit] = useState<number>(100000);
   const [copiedIaC, setCopiedIaC] = useState(false);
   const [copiedTicket, setCopiedTicket] = useState(false);
+
+  // Encrypted Credentials Modal State
+  const [credentialsModalOpen, setCredentialsModalOpen] = useState(false);
+  const [credAccessKeyId, setCredAccessKeyId] = useState("");
+  const [credSecretKey, setCredSecretKey] = useState("");
+  const [showSecretKey, setShowSecretKey] = useState(false);
+  const [savingCreds, setSavingCreds] = useState(false);
+  const [purgingCreds, setPurgingCreds] = useState(false);
+  const [credsError, setCredsError] = useState<string | null>(null);
+  const [credsSuccess, setCredsSuccess] = useState<string | null>(null);
 
   // Settings Modal State
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
@@ -521,7 +537,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
 
   // Prevent background body scrolling when any modal is open
   useEffect(() => {
-    if (selectedRecommendation || exportModalOpen || settingsModalOpen) {
+    if (selectedRecommendation || exportModalOpen || settingsModalOpen || credentialsModalOpen) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -529,7 +545,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
     return () => {
       document.body.style.overflow = "";
     };
-  }, [selectedRecommendation, exportModalOpen, settingsModalOpen]);
+  }, [selectedRecommendation, exportModalOpen, settingsModalOpen, credentialsModalOpen]);
 
   // Trigger Account Sync via AWS API
   const handleTriggerSync = async () => {
@@ -579,6 +595,71 @@ Apply the proposed Terraform configuration change or safely update the resource 
 
   const activeAccount = data?.account;
   const accountsList = data?.allAccounts || [];
+
+  // Encrypted Credentials Handlers
+  const handleSaveCredentials = async () => {
+    if (!activeAccount?.id) return;
+    if (!credAccessKeyId.trim() || !credSecretKey.trim()) {
+      setCredsError("Both AWS Access Key ID and Secret Access Key are required.");
+      return;
+    }
+    try {
+      setSavingCreds(true);
+      setCredsError(null);
+      const res = await fetch(`/api/cloud-accounts/${activeAccount.id}/credentials`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accessKeyId: credAccessKeyId.trim(),
+          secretAccessKey: credSecretKey.trim(),
+        }),
+      });
+      const resJson = await res.json();
+      if (!res.ok || resJson.error) {
+        throw new Error(resJson.error?.message || "Failed to save encrypted credentials.");
+      }
+      setCredsSuccess("Credentials encrypted with AES-256-GCM and saved successfully!");
+      setCredAccessKeyId("");
+      setCredSecretKey("");
+      await loadDashboard(activeAccount.id);
+      setTimeout(() => {
+        setCredentialsModalOpen(false);
+        setCredsSuccess(null);
+        handleTriggerSync();
+      }, 1200);
+    } catch (err: any) {
+      setCredsError(err.message || "Failed to save credentials.");
+    } finally {
+      setSavingCreds(false);
+    }
+  };
+
+  const handlePurgeCredentials = async () => {
+    if (!activeAccount?.id) return;
+    if (!window.confirm("Are you sure you want to purge encrypted credentials? Telemetry sync will revert to server environment variables.")) {
+      return;
+    }
+    try {
+      setPurgingCreds(true);
+      setCredsError(null);
+      const res = await fetch(`/api/cloud-accounts/${activeAccount.id}/credentials`, {
+        method: "DELETE",
+      });
+      const resJson = await res.json();
+      if (!res.ok || resJson.error) {
+        throw new Error(resJson.error?.message || "Failed to purge credentials.");
+      }
+      setCredsSuccess("Encrypted credentials completely purged from database.");
+      await loadDashboard(activeAccount.id);
+      setTimeout(() => {
+        setCredsSuccess(null);
+      }, 2500);
+    } catch (err: any) {
+      setCredsError(err.message || "Failed to purge credentials.");
+    } finally {
+      setPurgingCreds(false);
+    }
+  };
 
   // Compute live EC2 instances state breakdown accurately
   const ec2Total = data?.resources?.ec2?.length || 0;
@@ -648,7 +729,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
           <div className="p-4 border-b border-[#ECE5CC] flex items-center justify-between shrink-0">
             <Link href="/" className="flex items-center gap-2.5 group">
               <div className="w-8 h-8 rounded-xl bg-[#FFF76A] border border-[#DFD6B5] flex items-center justify-center text-[#2E2B1A] shadow-xs group-hover:scale-105 transition-transform">
-                <svg className="w-4 h-4 text-[#2E2B1A]" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <svg className="w-4 h-4 text-[#2E2B1A]" width="16" height="16" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
                   <path d="M24 4C25.7818 14.2173 33.7827 22.2182 44 24C33.7827 25.7818 25.7818 33.7827 24 44C22.2182 33.7827 14.2173 25.7818 4 24C14.2173 22.2182 22.2182 14.2173 24 4Z" fill="currentColor" />
                 </svg>
               </div>
@@ -1255,6 +1336,32 @@ Apply the proposed Terraform configuration change or safely update the resource 
                 </button>
               )}
 
+              {/* Encrypted Keys Button */}
+              {activeAccount && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCredAccessKeyId("");
+                    setCredSecretKey("");
+                    setCredsError(null);
+                    setCredentialsModalOpen(true);
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[12px] font-bold shadow-2xs transition-all cursor-pointer ${
+                    activeAccount.hasEncryptedCredentials
+                      ? "bg-[#E2F5EF] hover:bg-[#D4EFE7] border-[#BDEBDD] text-[#1F8A70]"
+                      : "bg-white hover:bg-[#FAF6E8] border-[#ECE5CC] text-[#2E2B1A]"
+                  }`}
+                  title={
+                    activeAccount.hasEncryptedCredentials
+                      ? `AES-256 encrypted keys active (${activeAccount.maskedAccessKey || "configured"})`
+                      : "Configure secure AES-256 encrypted AWS credentials for live syncing"
+                  }
+                >
+                  <Shield className="w-3.5 h-3.5 text-current" />
+                  <span>{activeAccount.hasEncryptedCredentials ? "Encrypted Keys Active" : "Encrypted Keys"}</span>
+                </button>
+              )}
+
               {/* Sync Telemetry Button */}
               {activeAccount && (
                 <button
@@ -1414,14 +1521,14 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       </span>
                     </div>
                     <div className="text-[28px] font-black text-[#2E2B1A] tracking-tight">
-                      {data?.costs.totalCost !== null ? `$${data?.costs.totalCost.toLocaleString()}` : "--"}
+                      {data?.costs.totalCost !== null ? `$${data?.costs.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--"}
                     </div>
                     <p className="text-[11.5px] text-[#686450] mt-1 font-medium truncate">
-                      Run rate: ${data?.costs.dailyBurnRate ? (data.costs.dailyBurnRate * 30).toFixed(2) : "18.22"}/mo across active regions
+                      Run rate: ${data?.costs?.dailyBurnRate != null ? (data.costs.dailyBurnRate * 30).toFixed(2) : (data?.costs?.totalCost != null ? data.costs.totalCost.toFixed(2) : "0.00")}/mo across active regions
                     </p>
                   </div>
                   <div className="mt-3 pt-2.5 border-t border-[#ECE5CC] text-[11.5px] text-[#8D8975] flex items-center justify-between">
-                    <span>Burn: {data?.costs.dailyBurnRate !== null ? `~$${data?.costs.dailyBurnRate}/day` : "--"}</span>
+                    <span>Burn: {data?.costs?.dailyBurnRate !== null && data?.costs?.dailyBurnRate !== undefined ? `~$${data.costs.dailyBurnRate.toFixed(2)}/day` : "--"}</span>
                     <span>
                       {data?.scanCoverage?.activeRegionsWithRunningCompute && data.scanCoverage.activeRegionsWithRunningCompute.length > 0
                         ? `${data.scanCoverage.activeRegionsWithRunningCompute.length} Region${data.scanCoverage.activeRegionsWithRunningCompute.length > 1 ? "s" : ""} Active`
@@ -2601,7 +2708,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       Billed Monthly Spend
                     </span>
                     <span className="text-[24px] font-black text-[#2E2B1A]">
-                      {data?.costs.totalCost !== null ? `$${data?.costs.totalCost.toLocaleString()}` : "--"}
+                      {data?.costs.totalCost !== null ? `$${data?.costs.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--"}
                     </span>
                     <span className="text-[11px] text-[#1F8A70] block mt-1 font-semibold">
                       Normalized via Cost Explorer
@@ -2613,7 +2720,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       Daily Run Rate
                     </span>
                     <span className="text-[24px] font-black text-[#2E2B1A]">
-                      {data?.costs.dailyBurnRate !== null ? `$${data?.costs.dailyBurnRate}` : "--"}
+                      {data?.costs.dailyBurnRate !== null ? `$${data?.costs.dailyBurnRate.toFixed(2)}` : "--"}
                     </span>
                     <span className="text-[11px] text-[#8D8975] block mt-1">
                       Estimated 30-day daily velocity
@@ -2652,7 +2759,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
                             <tr key={idx} className="hover:bg-[#FAF6E8]/40">
                               <td className="py-2.5 font-bold text-[#2E2B1A]">{item.service}</td>
                               <td className="py-2.5 text-[#686450]">Cloud Primitive</td>
-                              <td className="py-2.5 font-mono font-bold">${item.total.toLocaleString()}</td>
+                              <td className="py-2.5 font-mono font-bold">${item.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                               <td className="py-2.5 text-[#1F8A70] font-semibold">Available</td>
                             </tr>
                           ))
@@ -3778,6 +3885,184 @@ Apply the proposed Terraform configuration change or safely update the resource 
             </div>
           )}
 
+          {/* AES-256 ENCRYPTED CREDENTIALS MODAL */}
+          {credentialsModalOpen && (
+            <div
+              className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+              onClick={() => setCredentialsModalOpen(false)}
+            >
+              <div
+                className="max-w-lg w-full bg-[#FFFDF4] rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-lg space-y-5 animate-in zoom-in-95 duration-150"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] flex items-center justify-center text-[#1F8A70] shrink-0">
+                      <Shield className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-[18px] text-[#2E2B1A]">
+                        Encrypted AWS Credentials
+                      </h3>
+                      <p className="text-[12px] text-[#686450]">
+                        AES-256-GCM authenticated cipher with in-memory decryption
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCredentialsModalOpen(false)}
+                    className="p-1 rounded-lg text-[#8D8975] hover:text-[#2E2B1A] transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Security Guarantee Box */}
+                <div className="p-3.5 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] space-y-1.5">
+                  <div className="flex items-center gap-2 text-[12px] font-bold text-[#2E2B1A]">
+                    <Lock className="w-3.5 h-3.5 text-[#1F8A70]" />
+                    <span>Zero Plaintext Exposure Guarantee</span>
+                  </div>
+                  <p className="text-[11.5px] text-[#686450] leading-relaxed">
+                    Credentials are encrypted at rest using AES-256-GCM with a per-record initialization vector and authentication tag. Secret keys are never returned in API payloads, never committed to Git, and only decrypted in-memory (RAM) when performing live Cost Explorer & EC2 telemetry queries.
+                  </p>
+                </div>
+
+                {/* Current Status Box */}
+                <div className="p-3.5 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-bold text-[#686450]">Active Account</span>
+                    <span className="text-[12px] font-bold text-[#2E2B1A]">{activeAccount?.name || "None"}</span>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-[#ECE5CC]">
+                    <span className="text-[12px] text-[#686450]">Credentials Status</span>
+                    {activeAccount?.hasEncryptedCredentials ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>AES-256 Keys Configured</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#FAF6E8] text-[#8D8975] border border-[#ECE5CC]">
+                        Server Environment Fallback
+                      </span>
+                    )}
+                  </div>
+                  {activeAccount?.hasEncryptedCredentials && (
+                    <div className="flex items-center justify-between pt-2 border-t border-[#ECE5CC] text-[12px]">
+                      <span className="text-[#686450]">Masked Access Key</span>
+                      <code className="font-mono font-bold text-[#2E2B1A] bg-[#FAF6E8] px-2 py-0.5 rounded-lg border border-[#ECE5CC]">
+                        {activeAccount.maskedAccessKey || "AKIA••••••••"}
+                      </code>
+                    </div>
+                  )}
+                </div>
+
+                {/* Feedback Alerts */}
+                {credsError && (
+                  <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-[12px] flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{credsError}</span>
+                  </div>
+                )}
+                {credsSuccess && (
+                  <div className="p-3 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] text-[12px] flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{credsSuccess}</span>
+                  </div>
+                )}
+
+                {/* Form Fields */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
+                      AWS Access Key ID
+                    </label>
+                    <div className="relative">
+                      <Key className="w-4 h-4 text-[#8D8975] absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder={activeAccount?.hasEncryptedCredentials ? "Enter new Access Key ID to update" : "AKIAIOSFODNN7EXAMPLE"}
+                        value={credAccessKeyId}
+                        onChange={(e) => setCredAccessKeyId(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-[#ECE5CC] text-[13px] text-[#2E2B1A] placeholder:text-[#8D8975]/60 focus:outline-none focus:border-[#1F8A70] focus:ring-1 focus:ring-[#1F8A70]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
+                      AWS Secret Access Key
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-[#8D8975] absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type={showSecretKey ? "text" : "password"}
+                        placeholder={activeAccount?.hasEncryptedCredentials ? "Enter new Secret Key to update" : "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"}
+                        value={credSecretKey}
+                        onChange={(e) => setCredSecretKey(e.target.value)}
+                        className="w-full pl-9 pr-10 py-2 rounded-xl bg-white border border-[#ECE5CC] text-[13px] text-[#2E2B1A] placeholder:text-[#8D8975]/60 focus:outline-none focus:border-[#1F8A70] focus:ring-1 focus:ring-[#1F8A70]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSecretKey(!showSecretKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D8975] hover:text-[#2E2B1A] cursor-pointer"
+                      >
+                        {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="pt-2 flex items-center justify-between gap-3 border-t border-[#ECE5CC]">
+                  {activeAccount?.hasEncryptedCredentials ? (
+                    <button
+                      type="button"
+                      onClick={handlePurgeCredentials}
+                      disabled={purgingCreds || savingCreds}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 bg-white hover:bg-red-50 text-[12px] font-bold text-red-600 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{purgingCreds ? "Purging..." : "Purge Keys"}</span>
+                    </button>
+                  ) : (
+                    <div />
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCredentialsModalOpen(false)}
+                      className="px-4 py-2 rounded-xl border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[12px] font-bold text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveCredentials}
+                      disabled={savingCreds || purgingCreds || !credAccessKeyId.trim() || !credSecretKey.trim()}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      {savingCreds ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Encrypting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Encrypt & Sync</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 1-CLICK EXPORT REPORT MODAL */}
           {exportModalOpen && (
             <div
@@ -4054,11 +4339,35 @@ Apply the proposed Terraform configuration change or safely update the resource 
                                     <span>Account ID: {acc.externalAccountId}</span>
                                     <span>•</span>
                                     <span className="uppercase">{acc.provider}</span>
+                                    {acc.hasEncryptedCredentials && (
+                                      <>
+                                        <span>•</span>
+                                        <span className="text-[#1F8A70] font-sans font-bold flex items-center gap-1">
+                                          <Lock className="w-2.5 h-2.5" />
+                                          <span>AES-256 Keys</span>
+                                        </span>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!isActive) loadDashboard(acc.id);
+                                    setCredAccessKeyId("");
+                                    setCredSecretKey("");
+                                    setCredsError(null);
+                                    setCredentialsModalOpen(true);
+                                  }}
+                                  className="p-2 rounded-xl border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer"
+                                  title="Configure AES-256 encrypted credentials"
+                                >
+                                  <Key className="w-4 h-4 text-[#8D8975]" />
+                                </button>
+
                                 {!isActive && (
                                   <button
                                     type="button"

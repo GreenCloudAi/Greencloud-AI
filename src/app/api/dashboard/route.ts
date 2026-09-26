@@ -32,8 +32,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const requestedAccountId = searchParams.get("accountId");
 
-    // 1. Fetch all cloud accounts for this tenant
-    const allAccounts = await db.listAccounts();
+    // 1. Fetch all cloud accounts for this tenant (sanitized to protect sensitive credentials)
+    const allAccounts = await db.listSanitizedAccounts();
 
     // Determine active account: requested account or first account
     const activeAccount = requestedAccountId
@@ -177,19 +177,38 @@ export async function GET(request: Request) {
       }
     });
 
-    // 3. Fetch Cost Line Items for active account
-    const costTotals = await prisma.costLineItem.groupBy({
+    // 3. Fetch Cost Line Items for active account (Current Month Spend vs Historical Trend)
+    const now = new Date();
+    const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+    // Current month-to-date billed usage spend matching AWS Billing Console
+    const currentMonthTotals = await prisma.costLineItem.groupBy({
       by: ["providerService"],
-      where: { cloudAccountId: activeAccount.id },
+      where: {
+        cloudAccountId: activeAccount.id,
+        chargeDate: { gte: startOfMonth },
+      },
       _sum: { billedCost: true },
     });
 
-    const byServiceCosts = costTotals.map((c) => ({
-      service: c.providerService,
-      total: parseFloat((c._sum.billedCost || 0).toFixed(2)),
-    }));
+    // If no records in current month yet (e.g. before first sync of the month), fall back to all records
+    const costTotals = currentMonthTotals.length > 0
+      ? currentMonthTotals
+      : await prisma.costLineItem.groupBy({
+          by: ["providerService"],
+          where: { cloudAccountId: activeAccount.id },
+          _sum: { billedCost: true },
+        });
 
-    const rawTotalCost = byServiceCosts.reduce((sum, c) => sum + c.total, 0);
+    const byServiceCosts = costTotals
+      .map((c) => ({
+        service: c.providerService,
+        total: parseFloat((c._sum.billedCost || 0).toFixed(2)),
+      }))
+      .filter((c) => c.total > 0)
+      .sort((a, b) => b.total - a.total);
+
+    const rawTotalCost = costTotals.reduce((sum, c) => sum + (c._sum.billedCost || 0), 0);
     const totalCost = costTotals.length > 0 ? parseFloat(rawTotalCost.toFixed(2)) : null;
 
     // Daily cost trend (last 30 days)
@@ -618,7 +637,7 @@ export async function GET(request: Request) {
       multiRegionAlert,
       costs: {
         totalCost,
-        dailyBurnRate: totalCost !== null ? parseFloat((totalCost / 30).toFixed(2)) : null,
+        dailyBurnRate: totalCost !== null ? parseFloat((totalCost / Math.max(1, now.getUTCDate())).toFixed(2)) : null,
         priorMonthCost: totalCost !== null ? parseFloat((totalCost * 0.94).toFixed(2)) : null,
         byService: byServiceCosts,
         dailyTrend,

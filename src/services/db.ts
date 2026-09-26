@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import fs from 'fs'
 import path from 'path'
+import { encryptCredential, decryptCredential } from './encryption'
 
 declare global {
   // eslint-disable-next-line no-var
@@ -110,7 +111,42 @@ export class TenantIsolatedDb {
     })
   }
 
-  async createAccount(data: { provider: string; externalAccountId: string; name: string; roleArn?: string; externalId?: string }) {
+  sanitizeAccount(account: any) {
+    if (!account) return null;
+    const { encryptedAccessKey, encryptedSecretKey, ...rest } = account;
+    let maskedAccessKey: string | null = null;
+    if (encryptedAccessKey) {
+      const decrypted = decryptCredential(encryptedAccessKey);
+      if (decrypted && decrypted.length >= 8) {
+        maskedAccessKey = `${decrypted.slice(0, 4)}••••${decrypted.slice(-4)}`;
+      } else if (decrypted) {
+        maskedAccessKey = "AKIA••••••••";
+      }
+    }
+    return {
+      ...rest,
+      hasEncryptedCredentials: Boolean(encryptedAccessKey && encryptedSecretKey),
+      maskedAccessKey,
+    };
+  }
+
+  async listSanitizedAccounts() {
+    const accounts = await this.listAccounts();
+    return accounts.map((a) => this.sanitizeAccount(a));
+  }
+
+  async createAccount(data: {
+    provider: string;
+    externalAccountId: string;
+    name: string;
+    roleArn?: string;
+    externalId?: string;
+    accessKeyId?: string;
+    secretAccessKey?: string;
+  }) {
+    const encryptedAccessKey = data.accessKeyId ? encryptCredential(data.accessKeyId) : undefined;
+    const encryptedSecretKey = data.secretAccessKey ? encryptCredential(data.secretAccessKey) : undefined;
+
     // Check if account with same externalAccountId already exists for this tenant
     const existing = await prisma.cloudAccount.findFirst({
       where: {
@@ -126,6 +162,8 @@ export class TenantIsolatedDb {
           name: data.name,
           roleArn: data.roleArn,
           externalId: data.externalId,
+          ...(encryptedAccessKey ? { encryptedAccessKey } : {}),
+          ...(encryptedSecretKey ? { encryptedSecretKey } : {}),
         }
       });
     }
@@ -138,7 +176,23 @@ export class TenantIsolatedDb {
         name: data.name,
         roleArn: data.roleArn,
         externalId: data.externalId,
+        encryptedAccessKey,
+        encryptedSecretKey,
         status: 'pending_validation'
+      }
+    });
+  }
+
+  async updateAccountCredentials(accountId: string, accessKeyId: string, secretAccessKey: string) {
+    const account = await this.getAccount(accountId);
+    if (!account) throw new Error('Cloud account not found or unauthorized');
+
+    return prisma.cloudAccount.update({
+      where: { id: accountId },
+      data: {
+        encryptedAccessKey: encryptCredential(accessKeyId),
+        encryptedSecretKey: encryptCredential(secretAccessKey),
+        status: 'active',
       }
     });
   }

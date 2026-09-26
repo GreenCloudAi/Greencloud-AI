@@ -3,6 +3,7 @@ import { AwsCloudConnector } from "./awsConnector";
 import { CarbonEngine } from "./carbonEngine";
 import { GreenCloudConfig } from "./config";
 import { Logger } from "./logger";
+import { decryptCredential } from "./encryption";
 
 /**
  * Resilient Retry Helper
@@ -78,10 +79,22 @@ export class IngestionService {
       data: { status: "syncing" },
     });
 
-    // Create real AWS connector with the stored Role ARN and ExternalId
+    // Check for encrypted credentials stored on the account
+    let baseCredentials: { accessKeyId: string; secretAccessKey: string } | undefined = undefined;
+    if (account.encryptedAccessKey && account.encryptedSecretKey) {
+      const decAccess = decryptCredential(account.encryptedAccessKey);
+      const decSecret = decryptCredential(account.encryptedSecretKey);
+      if (decAccess && decSecret) {
+        baseCredentials = { accessKeyId: decAccess, secretAccessKey: decSecret };
+        Logger.info("INGEST", "ENCRYPTED_CREDENTIALS_LOADED", "Decrypted in-memory credentials for secure live sync.");
+      }
+    }
+
+    // Create real AWS connector with the stored Role ARN, ExternalId, and optional decrypted base credentials
     const connector = new AwsCloudConnector(
       account.roleArn,
-      account.externalId || undefined
+      account.externalId || undefined,
+      baseCredentials
     );
     const syncTime = new Date();
     const syncedResourceIds: string[] = [];
@@ -269,27 +282,23 @@ export class IngestionService {
     // --- Sub-scan 4: Billing (Cost Explorer → FOCUS Normalization) ---
     try {
       Logger.info("INGEST", "BILLING_INGEST_START", "Starting Cost Explorer 30-day billing scan...");
-      const todayStr = syncTime.toISOString().slice(0, 10);
       const thirtyDaysAgo = new Date(
         syncTime.getTime() - 30 * 24 * 3600 * 1000
       );
       const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().slice(0, 10);
+      // Cost Explorer End date is exclusive in UTC, so tomorrow ensures today's spend is included
+      const tomorrow = new Date(syncTime.getTime() + 24 * 3600 * 1000);
+      const tomorrowStr = tomorrow.toISOString().slice(0, 10);
 
       const billRows = await withRetry(
-        () => connector.fetchBillingSummary(thirtyDaysAgoStr, todayStr),
+        () => connector.fetchBillingSummary(thirtyDaysAgoStr, tomorrowStr),
         "Cost Explorer Ingestion"
       );
       Logger.success("INGEST", "BILLING_INGEST_FETCHED", `Retrieved ${billRows.length} FOCUS-normalized cost records.`);
 
       // Clean up previous cost records for re-sync safety
       await prisma.costLineItem.deleteMany({
-        where: {
-          cloudAccountId: this.accountId,
-          chargeDate: {
-            gte: thirtyDaysAgo,
-            lte: syncTime,
-          },
-        },
+        where: { cloudAccountId: this.accountId },
       });
 
       for (const row of billRows) {
