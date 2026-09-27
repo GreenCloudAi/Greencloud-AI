@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma, TenantIsolatedDb } from "@/services/db";
 import { seedDefaultTenant } from "@/services/seed";
+import { ForecastingEngine } from "@/services/forecastingEngine";
 
 const REGION_METADATA: Record<
   string,
@@ -603,10 +604,43 @@ export async function GET(request: Request) {
       cost: parseFloat(data.cost.toFixed(2)),
     }));
 
-    // 8. Budget & Anomaly Intelligence
+    // 8. Budget & Forecasting / Anomaly Intelligence
     const targetBudget = 50.0;
     const spentBudget = totalCost !== null ? totalCost : 0.0;
     const budgetPace = Math.min(100, Math.round((spentBudget / targetBudget) * 100));
+
+    // Initialize statistical forecasting engine (Holt's linear trend + Z-score anomaly detection)
+    const forecastingEngine = new ForecastingEngine({
+      forecastHorizonDays: 30,
+      targetMonthlyBudget: targetBudget,
+      zScoreThreshold: 2.5,
+    });
+
+    const dailyHistory = dailyTrend.map((d) => ({
+      date: d.date,
+      cost: d.cost,
+      carbonGco2e: totalOperationalCarbon ? parseFloat(((d.cost / Math.max(0.01, totalCost || 1)) * totalOperationalCarbon).toFixed(1)) : 0,
+    }));
+
+    const forecastResult = forecastingEngine.analyze(dailyHistory, targetBudget);
+
+    // Merge multi-region active alert into anomaly list if present
+    const combinedAnomalies = [
+      ...(isMultiRegionRunning ? [{
+        id: "anomaly-multi-region-0",
+        date: new Date().toISOString().split("T")[0],
+        dimension: "region" as const,
+        entityName: `Multi-Region Fleet (${activeRegionsWithRunningCompute.join(", ")})`,
+        actualCost: multiRegionAlert?.monthlyBurnEstimate || 0,
+        expectedBaseline: 0,
+        deviationPercent: 100,
+        zScore: 2.8,
+        severity: "warning" as const,
+        rootCauseHint: "Simultaneous active instances running in multiple independent AWS regions.",
+        recommendedAction: "Consolidate idle instances into a primary deployment region.",
+      }] : []),
+      ...forecastResult.anomalies.items,
+    ];
 
     // 9. Latest Audit Logs
     const auditLogs = await prisma.auditLog.findMany({
@@ -653,15 +687,32 @@ export async function GET(request: Request) {
         target: targetBudget,
         spent: spentBudget,
         pacePercentage: budgetPace,
-        projectedMonthEnd: totalCost !== null ? parseFloat((totalCost * 1.05).toFixed(2)) : 0.0,
+        projectedMonthEnd: forecastResult.monthEndProjectedCost > 0 ? forecastResult.monthEndProjectedCost : (totalCost !== null ? parseFloat((totalCost * 1.05).toFixed(2)) : 0.0),
         status: spentBudget > targetBudget ? "exceeded" : spentBudget > targetBudget * 0.8 ? "warning" : "healthy",
+        riskLevel: forecastResult.budgetRisk,
+        next30DaysProjected: forecastResult.next30DaysProjectedCost,
+        trendVelocity: forecastResult.trendVelocity,
+      },
+      forecast: {
+        trajectory: forecastResult.trajectory,
+        forecastDaysCount: forecastResult.forecastDaysCount,
+        monthEndProjectedCost: forecastResult.monthEndProjectedCost,
+        monthEndProjectedCarbon: forecastResult.monthEndProjectedCarbon,
+        next30DaysProjectedCost: forecastResult.next30DaysProjectedCost,
+        trendVelocity: forecastResult.trendVelocity,
+        budgetRisk: forecastResult.budgetRisk,
       },
       anomalies: {
-        hasAnomalies: isMultiRegionRunning,
-        detectedCount: isMultiRegionRunning ? 1 : 0,
-        message: isMultiRegionRunning
-          ? `Active compute running across ${activeRegionsWithRunningCompute.length} AWS regions (${activeRegionsWithRunningCompute.join(", ")}).`
-          : "Spend and carbon telemetry within nominal bounds (0 anomalies detected).",
+        hasAnomalies: combinedAnomalies.length > 0,
+        detectedCount: combinedAnomalies.length,
+        criticalCount: combinedAnomalies.filter((a) => a.severity === "critical").length,
+        warningCount: combinedAnomalies.filter((a) => a.severity === "warning").length,
+        message: forecastResult.anomalies.hasAnomalies
+          ? forecastResult.anomalies.message
+          : (isMultiRegionRunning
+            ? `Active compute running across ${activeRegionsWithRunningCompute.length} AWS regions (${activeRegionsWithRunningCompute.join(", ")}).`
+            : "Spend and carbon telemetry within nominal bounds (0 anomalies detected)."),
+        items: combinedAnomalies,
       },
       carbon: {
         totalOperationalCarbon,

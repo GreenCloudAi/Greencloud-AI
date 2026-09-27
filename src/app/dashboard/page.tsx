@@ -44,6 +44,7 @@ import {
   Lock,
   Eye,
   EyeOff,
+  LineChart,
 } from "lucide-react";
 
 interface CloudAccount {
@@ -221,11 +222,45 @@ interface DashboardData {
     pacePercentage: number;
     projectedMonthEnd: number;
     status: string;
+    riskLevel?: "low" | "medium" | "high";
+    next30DaysProjected?: number;
+    trendVelocity?: "accelerating" | "stable" | "decelerating";
+  };
+  forecast?: {
+    trajectory: Array<{
+      date: string;
+      predictedCost: number;
+      lowerBoundCost: number;
+      upperBoundCost: number;
+      predictedCarbonGco2e: number;
+      isForecast: boolean;
+    }>;
+    forecastDaysCount: number;
+    monthEndProjectedCost: number;
+    monthEndProjectedCarbon: number;
+    next30DaysProjectedCost: number;
+    trendVelocity: "accelerating" | "stable" | "decelerating";
+    budgetRisk: "low" | "medium" | "high";
   };
   anomalies?: {
     hasAnomalies: boolean;
     detectedCount: number;
+    criticalCount?: number;
+    warningCount?: number;
     message: string;
+    items?: Array<{
+      id: string;
+      date: string;
+      dimension: string;
+      entityName: string;
+      actualCost: number;
+      expectedBaseline: number;
+      deviationPercent: number;
+      zScore: number;
+      severity: "critical" | "warning" | "info";
+      rootCauseHint: string;
+      recommendedAction: string;
+    }>;
   };
   auditLogs: AuditLog[];
 }
@@ -1515,10 +1550,42 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       <span className="text-[11px] font-mono font-bold uppercase text-[#8D8975] tracking-wider">
                         Total Cloud Spend
                       </span>
-                      <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-[#1F8A70] bg-[#E2F5EF] px-1.5 py-0.5 rounded">
-                        <TrendingUp className="w-3 h-3" />
-                        {data?.costs.totalCost && data.costs.totalCost > 0 ? "+6.2%" : "0.0% MoM"}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        {data?.forecast?.trendVelocity && (
+                          <span className={`inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full border ${
+                            data.forecast.trendVelocity === "accelerating"
+                              ? "bg-[#FDE8E8] text-[#C84B31] border-[#F8B4B4]"
+                              : data.forecast.trendVelocity === "decelerating"
+                              ? "bg-[#E2F5EF] text-[#1F8A70] border-[#BDEBDD]"
+                              : "bg-[#FAF6E8] text-[#9A6B00] border-[#ECE5CC]"
+                          }`}>
+                            {data.forecast.trendVelocity === "accelerating" ? (
+                              <>
+                                <TrendingUp className="w-3 h-3" />
+                                <span>Accelerating</span>
+                              </>
+                            ) : data.forecast.trendVelocity === "decelerating" ? (
+                              <>
+                                <TrendingDown className="w-3 h-3" />
+                                <span>Decelerating</span>
+                              </>
+                            ) : (
+                              <span>Stable Trend</span>
+                            )}
+                          </span>
+                        )}
+                        {data?.forecast?.budgetRisk && (
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            data.forecast.budgetRisk === "high"
+                              ? "bg-[#FDE8E8] text-[#C84B31] border-[#F8B4B4]"
+                              : data.forecast.budgetRisk === "medium"
+                              ? "bg-[#FEF3D6] text-[#9A6B00] border-[#F6DC9B]"
+                              : "bg-[#E2F5EF] text-[#1F8A70] border-[#BDEBDD]"
+                          }`}>
+                            {data.forecast.budgetRisk.toUpperCase()} RISK
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="text-[28px] font-black text-[#2E2B1A] tracking-tight">
                       {data?.costs.totalCost !== null ? `$${data?.costs.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--"}
@@ -2816,18 +2883,35 @@ Apply the proposed Terraform configuration change or safely update the resource 
                         ${data?.budget?.projectedMonthEnd !== undefined ? data.budget.projectedMonthEnd.toFixed(2) : "0.00"}
                       </strong>
                     </div>
+
+                    {data?.budget?.next30DaysProjected !== undefined && (
+                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[#ECE5CC]">
+                        <span className="text-[#8D8975]">30-Day Forward Forecast:</span>
+                        <span className="font-mono font-bold text-[#2E2B1A]">${data.budget.next30DaysProjected.toFixed(2)}</span>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Anomaly Outlier Detector */}
+                  {/* Anomaly Outlier Detector (Powered by ForecastingEngine) */}
                   <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] space-y-3 flex flex-col justify-between">
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-[#9A6B00]" />
+                          <AlertTriangle className={`w-4 h-4 ${data?.anomalies?.hasAnomalies ? "text-[#C84B31]" : "text-[#9A6B00]"}`} />
                           <span className="font-bold text-[13px] text-[#2E2B1A]">Cost Anomaly Detector</span>
                         </div>
-                        <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]">
-                          P99 Outlier Engine
+                        <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold border ${
+                          data?.anomalies?.criticalCount && data.anomalies.criticalCount > 0
+                            ? "bg-[#FDE8E8] text-[#C84B31] border-[#F8B4B4]"
+                            : data?.anomalies?.hasAnomalies
+                            ? "bg-[#FEF3D6] text-[#9A6B00] border-[#F6DC9B]"
+                            : "bg-[#E2F5EF] text-[#1F8A70] border-[#BDEBDD]"
+                        }`}>
+                          {data?.anomalies?.criticalCount && data.anomalies.criticalCount > 0
+                            ? "Critical Spike Detected"
+                            : data?.anomalies?.hasAnomalies
+                            ? "Spike Warning"
+                            : "Nominal (P99 / Z-Score)"}
                         </span>
                       </div>
                       <p className="text-[12px] text-[#686450] leading-snug">
@@ -2835,9 +2919,300 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       </p>
                     </div>
 
-                    <div className="p-2.5 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-between text-[11.5px]">
-                      <span className="text-[#686450]">Trailing 30-Day Outliers:</span>
-                      <span className="font-mono font-bold text-[#1F8A70]">0 Spikes</span>
+                    <div className="space-y-2">
+                      <div className="p-2.5 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-between text-[11.5px]">
+                        <span className="text-[#686450]">Trailing Outliers Detected:</span>
+                        <span className={`font-mono font-bold ${
+                          (data?.anomalies?.detectedCount || 0) > 0 ? "text-[#C84B31]" : "text-[#1F8A70]"
+                        }`}>
+                          {data?.anomalies?.detectedCount || 0} Spike{(data?.anomalies?.detectedCount || 0) === 1 ? "" : "s"}
+                        </span>
+                      </div>
+
+                      {/* Render individual detected anomaly pills if present */}
+                      {data?.anomalies?.items && data.anomalies.items.length > 0 && (
+                        <div className="space-y-1.5 pt-1">
+                          {data.anomalies.items.slice(0, 2).map((item) => (
+                            <div key={item.id} className="p-2 rounded-lg bg-white/80 border border-[#ECE5CC] text-[11px] space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-[#2E2B1A]">{item.entityName}</span>
+                                <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                  item.severity === "critical"
+                                    ? "bg-[#FDE8E8] text-[#C84B31]"
+                                    : "bg-[#FEF3D6] text-[#9A6B00]"
+                                }`}>
+                                  +{item.deviationPercent}% (Z: {item.zScore})
+                                </span>
+                              </div>
+                              <p className="text-[10.5px] text-[#8D8975] leading-tight">{item.rootCauseHint}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2.5 Predictive Forecasting Studio (Holt's Linear Trend + 95% Confidence Bounds) */}
+                <div className="pt-4 border-t border-[#ECE5CC] space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <LineChart className="w-4 h-4 text-[#1F8A70]" />
+                        <h3 className="font-bold text-[15px] text-[#2E2B1A]">
+                          30-Day Predictive Forecasting & Trend Velocity Studio
+                        </h3>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]">
+                          Holt's Double Smoothing
+                        </span>
+                      </div>
+                      <p className="text-[12px] text-[#686450] mt-0.5">
+                        Statistically models future cloud run-rate and emissions with 95% confidence intervals and Z-Score outlier detection.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px]">
+                        <span className="text-[#8D8975]">Trend Velocity:</span>
+                        <span className={`font-bold capitalize ${
+                          data?.forecast?.trendVelocity === "accelerating"
+                            ? "text-[#C84B31]"
+                            : data?.forecast?.trendVelocity === "decelerating"
+                            ? "text-[#1F8A70]"
+                            : "text-[#9A6B00]"
+                        }`}>
+                          {data?.forecast?.trendVelocity || "Stable"}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px]">
+                        <span className="text-[#8D8975]">Budget Risk:</span>
+                        <span className={`font-bold uppercase ${
+                          data?.forecast?.budgetRisk === "high"
+                            ? "text-[#C84B31]"
+                            : data?.forecast?.budgetRisk === "medium"
+                            ? "text-[#9A6B00]"
+                            : "text-[#1F8A70]"
+                        }`}>
+                          {data?.forecast?.budgetRisk || "Low"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 4 Forecast Metric Highlights */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="p-3.5 rounded-xl bg-[#FAF6E8]/30 border border-[#ECE5CC]">
+                      <span className="text-[10.5px] font-mono font-bold text-[#8D8975] uppercase block">
+                        Projected Month-End Spend
+                      </span>
+                      <span className="text-[20px] font-black text-[#2E2B1A] block mt-0.5 font-mono">
+                        ${data?.forecast?.monthEndProjectedCost !== undefined ? data.forecast.monthEndProjectedCost.toFixed(2) : (data?.budget?.projectedMonthEnd !== undefined ? data.budget.projectedMonthEnd.toFixed(2) : "0.00")}
+                      </span>
+                      <span className="text-[11px] text-[#686450] block mt-0.5">
+                        Run-rate through {new Date().toLocaleString("default", { month: "short" })} 30
+                      </span>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-[#FAF6E8]/30 border border-[#ECE5CC]">
+                      <span className="text-[10.5px] font-mono font-bold text-[#8D8975] uppercase block">
+                        30-Day Forward Forecast
+                      </span>
+                      <span className="text-[20px] font-black text-[#1F8A70] block mt-0.5 font-mono">
+                        ${data?.forecast?.next30DaysProjectedCost !== undefined ? data.forecast.next30DaysProjectedCost.toFixed(2) : "0.00"}
+                      </span>
+                      <span className="text-[11px] text-[#686450] block mt-0.5">
+                        Forward 30 calendar days
+                      </span>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-[#FAF6E8]/30 border border-[#ECE5CC]">
+                      <span className="text-[10.5px] font-mono font-bold text-[#8D8975] uppercase block">
+                        Projected Month-End Carbon
+                      </span>
+                      <span className="text-[20px] font-black text-[#2E2B1A] block mt-0.5 font-mono">
+                        {data?.forecast?.monthEndProjectedCarbon !== undefined ? `${data.forecast.monthEndProjectedCarbon} g` : "--"}
+                      </span>
+                      <span className="text-[11px] text-[#686450] block mt-0.5">
+                        Embodied + Operational footprint
+                      </span>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-[#FAF6E8]/30 border border-[#ECE5CC]">
+                      <span className="text-[10.5px] font-mono font-bold text-[#8D8975] uppercase block">
+                        Confidence Interval Band
+                      </span>
+                      <span className="text-[20px] font-black text-[#9A6B00] block mt-0.5 font-mono">
+                        95% Bounds
+                      </span>
+                      <span className="text-[11px] text-[#686450] block mt-0.5">
+                        Residual standard error modeling
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* SVG Forecast Trajectory Visualization */}
+                  <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
+                    <div className="flex items-center justify-between text-[11.5px] flex-wrap gap-2">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-3 h-0.5 bg-[#1F8A70] rounded-full inline-block" />
+                          <span className="font-bold text-[#2E2B1A]">Historical Spend (Actual)</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-3 h-0.5 border-t-2 border-dashed border-[#9A6B00] inline-block" />
+                          <span className="font-bold text-[#9A6B00]">Holt's Forecast Trend</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-3 h-2 bg-[#FFF76A]/40 border border-[#ECE5CC] rounded-xs inline-block" />
+                          <span className="text-[#8D8975]">95% Confidence Band</span>
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-mono text-[#8D8975]">
+                        {data?.forecast?.trajectory ? `${data.forecast.trajectory.length} Timeline Data Points` : "30-Day Model"}
+                      </span>
+                    </div>
+
+                    {/* Interactive SVG Chart */}
+                    <div className="w-full h-44 relative bg-[#FAF6E8]/20 rounded-xl border border-[#ECE5CC]/60 p-2 overflow-hidden flex flex-col justify-end">
+                      {data?.forecast?.trajectory && data.forecast.trajectory.length > 0 ? (
+                        (() => {
+                          const points = data.forecast.trajectory;
+                          const rawMax = Math.max(
+                            ...points.map((p) => Math.max(p.predictedCost, p.upperBoundCost)),
+                            0.35
+                          );
+                          const maxVal = parseFloat((rawMax * 1.15).toFixed(2));
+                          const chartW = 800;
+                          const chartH = 140;
+                          const padding = 15;
+                          const axisLeft = 45;
+
+                          const getX = (idx: number) =>
+                            padding + axisLeft + (idx / Math.max(1, points.length - 1)) * (chartW - padding * 2 - axisLeft);
+                          const getY = (val: number) =>
+                            chartH - padding - (val / maxVal) * (chartH - padding * 2);
+
+                          // Split historical and forecast
+                          const histPoints = points.filter((p) => !p.isForecast);
+                          const forePoints = points.filter((p) => p.isForecast);
+
+                          // Build paths
+                          const histPath = histPoints
+                            .map((p, i) => `${i === 0 ? "M" : "L"} ${getX(i)} ${getY(p.predictedCost)}`)
+                            .join(" ");
+
+                          const foreStartIndex = Math.max(0, histPoints.length - 1);
+                          const allForePoints = [
+                            ...(histPoints.length > 0 ? [histPoints[histPoints.length - 1]] : []),
+                            ...forePoints,
+                          ];
+                          const forePath = allForePoints
+                            .map((p, i) => `${i === 0 ? "M" : "L"} ${getX(foreStartIndex + i)} ${getY(p.predictedCost)}`)
+                            .join(" ");
+
+                          // Confidence Band Area Path
+                          let bandPath = "";
+                          if (allForePoints.length > 1) {
+                            const upperPath = allForePoints
+                              .map((p, i) => `${i === 0 ? "M" : "L"} ${getX(foreStartIndex + i)} ${getY(p.upperBoundCost)}`)
+                              .join(" ");
+                            const lowerPath = [...allForePoints]
+                              .reverse()
+                              .map((p, i) => `L ${getX(foreStartIndex + allForePoints.length - 1 - i)} ${getY(p.lowerBoundCost)}`)
+                              .join(" ");
+                            bandPath = `${upperPath} ${lowerPath} Z`;
+                          }
+
+                          return (
+                            <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-full overflow-visible">
+                              <defs>
+                                <linearGradient id="confidenceBandGrad" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#FFF76A" stopOpacity="0.4" />
+                                  <stop offset="100%" stopColor="#FFF76A" stopOpacity="0.05" />
+                                </linearGradient>
+                              </defs>
+
+                              {/* Horizontal Gridlines & Y-Axis Scale Labels */}
+                              {[0.25, 0.5, 0.75, 1.0].map((ratio) => {
+                                const yPos = getY(maxVal * ratio);
+                                return (
+                                  <g key={ratio}>
+                                    <line
+                                      x1={padding + axisLeft}
+                                      y1={yPos}
+                                      x2={chartW - padding}
+                                      y2={yPos}
+                                      stroke="#ECE5CC"
+                                      strokeDasharray="3 3"
+                                      strokeWidth="1"
+                                    />
+                                    <text
+                                      x={padding + axisLeft - 6}
+                                      y={yPos + 3}
+                                      textAnchor="end"
+                                      fontSize="8.5"
+                                      fill="#8D8975"
+                                      fontFamily="monospace"
+                                    >
+                                      ${(maxVal * ratio).toFixed(2)}
+                                    </text>
+                                  </g>
+                                );
+                              })}
+
+                              {/* 95% Confidence Band Polygon */}
+                              {bandPath && (
+                                <path d={bandPath} fill="url(#confidenceBandGrad)" stroke="#E5B542" strokeWidth="0.5" strokeOpacity="0.5" />
+                              )}
+
+                              {/* Historical Line */}
+                              {histPath && (
+                                <path d={histPath} fill="none" stroke="#1F8A70" strokeWidth="2.5" strokeLinecap="round" />
+                              )}
+
+                              {/* Forecast Line */}
+                              {forePath && (
+                                <path d={forePath} fill="none" stroke="#9A6B00" strokeWidth="2.5" strokeDasharray="5 4" strokeLinecap="round" />
+                              )}
+
+                              {/* Historical Points */}
+                              {histPoints.map((p, i) => (
+                                <circle
+                                  key={`hist-${i}`}
+                                  cx={getX(i)}
+                                  cy={getY(p.predictedCost)}
+                                  r="3.5"
+                                  fill="#1F8A70"
+                                  stroke="#FFFFFF"
+                                  strokeWidth="1.5"
+                                >
+                                  <title>{`${p.date}: $${p.predictedCost.toFixed(2)}`}</title>
+                                </circle>
+                              ))}
+
+                              {/* Forecast Points */}
+                              {forePoints.map((p, i) => (
+                                <circle
+                                  key={`fore-${i}`}
+                                  cx={getX(histPoints.length + i)}
+                                  cy={getY(p.predictedCost)}
+                                  r="3"
+                                  fill="#FFFFFF"
+                                  stroke="#9A6B00"
+                                  strokeWidth="1.5"
+                                >
+                                  <title>{`Forecast ${p.date}: $${p.predictedCost.toFixed(2)} (95% CI: $${p.lowerBoundCost.toFixed(2)} - $${p.upperBoundCost.toFixed(2)})`}</title>
+                                </circle>
+                              ))}
+                            </svg>
+                          );
+                        })()
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[12px] text-[#8D8975]">
+                          Insufficient historical timeline to plot forecast. Click "Sync Telemetry" to pull recent AWS billing records.
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
