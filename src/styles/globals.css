@@ -97,3 +97,61 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #9A6B00;
 }
+
+/* ========================================================
+   PRINT MEDIA RULES (Strict 1-2 Page PDF Document Styling)
+   ======================================================== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm;
+  }
+
+  body {
+    background: #FFFFFF !important;
+    color: #111827 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide screen-only interactive chrome */
+  .no-print,
+  aside,
+  nav,
+  header,
+  button,
+  .backdrop-blur-md,
+  .backdrop-blur-sm,
+  [data-no-print="true"] {
+    display: none !important;
+  }
+
+  /* Make PDF report root expand to full printable page */
+  .pdf-report-root {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    display: block !important;
+  }
+
+  .pdf-page {
+    min-height: auto !important;
+    padding: 0 !important;
+    border: none !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .page-break {
+    page-break-before: always !important;
+    break-before: page !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    visibility: hidden !important;
+    display: block !important;
+  }
+}

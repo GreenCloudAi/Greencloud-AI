@@ -59,6 +59,9 @@ import { RegionalGridMatrixView } from "@/components/sustainability/RegionalGrid
 import { SciTunerGovernanceView } from "@/components/sustainability/SciTunerGovernanceView";
 import { RecommendationsView } from "@/components/optimization/RecommendationsView";
 import { OpportunitiesView } from "@/components/optimization/OpportunitiesView";
+import { generateExecutiveBrief } from "@/services/executiveAgent";
+import { ReportPreviewModal } from "@/components/reports/ReportPreviewModal";
+import { ExecutivePdfReport } from "@/components/reports/ExecutivePdfReport";
 
 interface CloudAccount {
   id: string;
@@ -313,9 +316,16 @@ export default function DashboardPage() {
   // Modal & Drawer States
   const [selectedRecommendation, setSelectedRecommendation] = useState<Recommendation | null>(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [sciFunctionalUnit, setSciFunctionalUnit] = useState<number>(100000);
   const [copiedIaC, setCopiedIaC] = useState(false);
   const [copiedTicket, setCopiedTicket] = useState(false);
+
+  // Memoized Agentic Executive Brief Synthesis
+  const executiveBriefSummary = useMemo(() => {
+    return generateExecutiveBrief(data);
+  }, [data]);
 
   // Encrypted Credentials Modal State
   const [credentialsModalOpen, setCredentialsModalOpen] = useState(false);
@@ -485,25 +495,62 @@ ${cleanEvidence}
 Apply the proposed Terraform configuration change or safely update the resource state via the cloud console to eliminate waste.`;
   };
 
-  // Helper: Export Billing & Resource Inventory CSV
+  // Helper: Enriched Export Billing & Resource Inventory CSV
   const handleExportCsv = () => {
     if (!data) return;
-    let csv = "Category,Identifier,Type/Service,Region/State,Monthly Cost (USD),Carbon (gCO2e)\n";
-    [...data.resources.ec2, ...data.resources.ebs, ...data.resources.eip].forEach((r) => {
-      csv += `Resource,"${r.providerResourceId}","${r.resourceType}","${r.region} (${r.lifecycleState})",${r.monthlyCost ?? 0},${r.carbonEmissions?.[0]?.operationalGco2e ?? 0}\n`;
+    let csv = "Classification,Resource ID,Resource Name,Service Type,Specs/Size,Region,Lifecycle State,Monthly Spend (USD),Daily Operational Carbon (gCO2e/day),Embodied Carbon (gCO2e),Inactivity/Evidence,Recommended Action\n";
+
+    // 1. EC2 Compute Resources
+    (data.resources.ec2 || []).forEach((r) => {
+      const name = r.instanceName || r.tags || "Unnamed EC2";
+      const specs = r.instanceType || "t3.micro";
+      const opCarbon = r.carbonEmissions?.[0]?.operationalGco2e ?? 0;
+      const embCarbon = r.carbonEmissions?.[0]?.embodiedGco2e ?? 0;
+      const rec = data.recommendations.items.find((item) => item.resource?.id === r.id || item.resource?.providerResourceId === r.providerResourceId);
+      const action = rec ? rec.title.replace(/"/g, '""') : (r.lifecycleState === "stopped" ? "Decommission or review instance" : "Active workload monitoring");
+      csv += `Compute,"${r.providerResourceId}","${name.replace(/"/g, '""')}","AWS::EC2::Instance","${specs}","${r.region}","${r.lifecycleState}",${(r.monthlyCost ?? 0).toFixed(2)},${opCarbon.toFixed(1)},${embCarbon.toFixed(1)},"P99 CPU & network telemetry","${action}"\n`;
     });
-    data.costs.byService.forEach((s) => {
-      csv += `Service,"${s.service}","AWS Billing","-",${s.total},-\n`;
+
+    // 2. EBS Storage Volumes
+    (data.resources.ebs || []).forEach((r) => {
+      const name = r.tags || "EBS Volume";
+      const specs = r.sizeGb ? `${r.sizeGb} GB gp2/gp3` : "General Purpose";
+      const opCarbon = r.carbonEmissions?.[0]?.operationalGco2e ?? 0;
+      const embCarbon = r.carbonEmissions?.[0]?.embodiedGco2e ?? 0;
+      const rec = data.recommendations.items.find((item) => item.resource?.id === r.id || item.resource?.providerResourceId === r.providerResourceId);
+      const action = rec ? rec.title.replace(/"/g, '""') : (r.lifecycleState === "available" ? "Snapshot backup and delete unattached volume" : "Attached storage in use");
+      csv += `Storage,"${r.providerResourceId}","${name.replace(/"/g, '""')}","AWS::EC2::Volume","${specs}","${r.region}","${r.lifecycleState}",${(r.monthlyCost ?? 0).toFixed(2)},${opCarbon.toFixed(1)},${embCarbon.toFixed(1)},"Unattached volume audit","${action}"\n`;
     });
-    data.recommendations.items.forEach((rec) => {
-      csv += `Recommendation,"${rec.title}","${rec.category}","${rec.status}",-${rec.estimatedMonthlySavings},-${rec.estimatedGco2eSavings}\n`;
+
+    // 3. Elastic IPs
+    (data.resources.eip || []).forEach((r) => {
+      const rec = data.recommendations.items.find((item) => item.resource?.id === r.id || item.resource?.providerResourceId === r.providerResourceId);
+      const action = rec ? rec.title.replace(/"/g, '""') : "Release unassociated IP address";
+      csv += `Networking,"${r.providerResourceId}","Public IPv4","AWS::EC2::EIP","1 IPv4","${r.region}","${r.lifecycleState}",${(r.monthlyCost ?? 0).toFixed(2)},0.0,0.0,"Unattached IP penalty ($0.005/hr)","${action}"\n`;
     });
+
+    // 4. Invoiced AWS Services
+    (data.costs.byService || []).forEach((s) => {
+      csv += `Billing Service,"${s.service}","AWS Invoiced Service","Billing Line Item","-","-","Invoiced",${s.total.toFixed(2)},-,-,"Aggregated AWS Cost Explorer billing","Ongoing FinOps monitoring"\n`;
+    });
+
+    // 5. Active Remediation Recommendations
+    (data.recommendations.items || []).forEach((rec) => {
+      csv += `Remediation,"${rec.id}","${rec.title.replace(/"/g, '""')}","${rec.category}","-","-","${rec.status}",-${rec.estimatedMonthlySavings.toFixed(2)},-${rec.estimatedGco2eSavings.toFixed(1)},-,"Risk score: ${rec.riskScore}% | Confidence: ${Math.round(rec.confidence * 100)}%","Execute approved remediation"\n`;
+    });
+
+    // 6. Summary Footer Row
+    const totalResources = (data.resources.ec2?.length || 0) + (data.resources.ebs?.length || 0) + (data.resources.eip?.length || 0);
+    const totalCost = data.costs.totalCost ?? 0;
+    const totalSavings = data.recommendations.totalSavings ?? 0;
+    const totalDailyCarbon = data.carbon.totalOperationalCarbon ?? 0;
+    csv += `TOTALS,"Summary (${totalResources} resources monitored)","GreenCloud FinOps Ledger","Aggregate Scope","-","-","Verified",${totalCost.toFixed(2)},${totalDailyCarbon.toFixed(1)},-,"Potential recoverable waste: $${totalSavings.toFixed(2)}/mo","GreenCloud AI Autonomous Ledger"\n`;
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `greencloud-finops-report-${new Date().toISOString().split("T")[0]}.csv`);
+    link.setAttribute("download", `greencloud-inventory-ledger-${new Date().toISOString().split("T")[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -537,15 +584,46 @@ Apply the proposed Terraform configuration change or safely update the resource 
     }
   };
 
-  // Helper: Export Telemetry JSON
+  // Helper: Enriched Export Telemetry JSON
   const handleExportJson = () => {
     if (!data) return;
-    const jsonStr = JSON.stringify(data, null, 2);
+    const brief = generateExecutiveBrief(data);
+    const exportPayload = {
+      schemaVersion: "2.1",
+      exportMetadata: {
+        exportedAt: new Date().toISOString(),
+        generator: "GreenCloud AI Agentic Engine",
+        environment: "production",
+        complianceStandards: ["GHG Protocol", "FinOps Open Cost Schema", "ISO 14064"],
+      },
+      executiveSummary: {
+        narrative: brief.narrative,
+        scorecard: brief.scorecard,
+        complianceAudit: brief.compliance,
+        prioritizedRemediations: brief.prioritizedActions,
+        strategicModernization: brief.modernizationLevers,
+      },
+      cloudAccount: data.account,
+      monitoredScope: {
+        regionsCount: brief.scorecard.monitoredRegionsCount,
+        regions: data.scanCoverage?.allMonitoredRegions || [brief.account.primaryRegion],
+        activeWasteRegions: data.scanCoverage?.activeRegionsWithResources || [],
+      },
+      telemetry: {
+        financials: data.costs,
+        carbonAndEmissions: data.carbon,
+        resources: data.resources,
+        recommendations: data.recommendations,
+        cpuDistribution: data.cpuDistribution,
+      },
+    };
+
+    const jsonStr = JSON.stringify(exportPayload, null, 2);
     const blob = new Blob([jsonStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `greencloud-telemetry-${new Date().toISOString().split("T")[0]}.json`);
+    link.setAttribute("download", `greencloud-telemetry-audit-${new Date().toISOString().split("T")[0]}.json`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -580,12 +658,13 @@ Apply the proposed Terraform configuration change or safely update the resource 
   };
 
   useEffect(() => {
+    setMounted(true);
     loadDashboard();
   }, []);
 
   // Prevent background body scrolling when any modal is open
   useEffect(() => {
-    if (selectedRecommendation || exportModalOpen || settingsModalOpen || credentialsModalOpen) {
+    if (selectedRecommendation || exportModalOpen || previewModalOpen || settingsModalOpen || credentialsModalOpen) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -593,7 +672,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
     return () => {
       document.body.style.overflow = "";
     };
-  }, [selectedRecommendation, exportModalOpen, settingsModalOpen, credentialsModalOpen]);
+  }, [selectedRecommendation, exportModalOpen, previewModalOpen, settingsModalOpen, credentialsModalOpen]);
 
   // Trigger Account Sync via AWS API
   const handleTriggerSync = async () => {
@@ -763,7 +842,8 @@ Apply the proposed Terraform configuration change or safely update the resource 
   };
 
   return (
-    <div className="min-h-screen bg-[#FFFDF4] text-[#2E2B1A] flex flex-col lg:flex-row selection:bg-[#FFF76A] selection:text-[#2E2B1A]">
+    <>
+      <div className="min-h-screen bg-[#FFFDF4] text-[#2E2B1A] flex flex-col lg:flex-row selection:bg-[#FFF76A] selection:text-[#2E2B1A] print:hidden">
       {/* ========================================================================= */}
       {/* 1. LEFT SIDEBAR NAVIGATION                                                */}
       {/* ========================================================================= */}
@@ -3177,7 +3257,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
                 type="button"
                 onClick={() => {
                   setExportModalOpen(false);
-                  setTimeout(() => window.print(), 200);
+                  setPreviewModalOpen(true);
                 }}
                 className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-between transition-all cursor-pointer group"
               >
@@ -3186,9 +3266,14 @@ Apply the proposed Terraform configuration change or safely update the resource 
                     <Printer className="w-4 h-4" />
                   </div>
                   <div>
-                    <strong className="block text-[13px] text-[#2E2B1A]">
-                      Print Executive & ESG Brief
-                    </strong>
+                    <div className="flex items-center gap-2">
+                      <strong className="block text-[13px] text-[#2E2B1A]">
+                        Print Executive & ESG Brief
+                      </strong>
+                      <span className="text-[10px] font-bold text-[#1F8A70] bg-[#E2F5EF] px-1.5 py-0.5 rounded-full">
+                        1-2 Pages
+                      </span>
+                    </div>
                     <span className="text-[11px] text-[#686450]">
                       Print-ready PDF overview for stakeholders
                     </span>
@@ -3209,6 +3294,17 @@ Apply the proposed Terraform configuration change or safely update the resource 
             </div>
           </div>
         </div>
+      )}
+
+      {/* EXECUTIVE REPORT PREVIEW MODAL */}
+      {mounted && (
+        <ReportPreviewModal
+          isOpen={previewModalOpen}
+          onClose={() => setPreviewModalOpen(false)}
+          summary={executiveBriefSummary}
+          onDownloadCsv={handleExportCsv}
+          onDownloadJson={handleExportJson}
+        />
       )}
 
       {/* ========================================================================= */}
@@ -3630,5 +3726,14 @@ Apply the proposed Terraform configuration change or safely update the resource 
         </div>
       )}
     </div>
+
+    {/* DEDICATED PRINT DOM CONTAINER (Visible ONLY during window.print()) */}
+    {mounted && (
+      <div className="hidden print:block">
+        <ExecutivePdfReport summary={executiveBriefSummary} />
+      </div>
+    )}
+  </>
   );
 }
+
