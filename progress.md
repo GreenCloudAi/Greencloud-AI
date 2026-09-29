@@ -40,6 +40,7 @@
 - [x] **Enterprise Dashboard Command Center (`/dashboard`)**: Multi-region instance breakdown, real-time CloudWatch charts, cost reconciliation, and recommendation action center.
 - [x] **Audit Log Explorer (`/audit-history`)**: Full chronological audit trail of tenant actions and approval events.
 - [x] **Multi-Tenant AES-256-GCM Credential Encryption (`src/services/encryption.ts`)**: Secure credential storage at rest for multi-tenant deployments (e.g. Vercel).
+- [x] **Cost & Usage Dedicated Sub-Pages Suite (`src/components/cost/*`)**: Modularized Cost Intelligence into 6 specialized views: Cost Overview, Cost Explorer (search, filter, CSV export), Cost Allocation (showback & untagged resource remediation), Budgets (pacing & threshold rules), Anomalies (Z-Score outlier feed), and Forecast (Holt's linear trend studio). Streamlined Overview page into an executive cockpit.
 
 ---
 

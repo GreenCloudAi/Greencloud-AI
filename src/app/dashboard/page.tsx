@@ -46,6 +46,17 @@ import {
   EyeOff,
   LineChart,
 } from "lucide-react";
+import { CostOverviewView } from "@/components/cost/CostOverviewView";
+import { CostExplorerView } from "@/components/cost/CostExplorerView";
+import { CostAllocationView } from "@/components/cost/CostAllocationView";
+import { CostBudgetsView } from "@/components/cost/CostBudgetsView";
+import { CostAnomaliesView } from "@/components/cost/CostAnomaliesView";
+import { CostForecastView } from "@/components/cost/CostForecastView";
+import { SustainabilityOverviewView } from "@/components/sustainability/SustainabilityOverviewView";
+import { CarbonAccountingView } from "@/components/sustainability/CarbonAccountingView";
+import { ResourceCarbonView } from "@/components/sustainability/ResourceCarbonView";
+import { RegionalGridMatrixView } from "@/components/sustainability/RegionalGridMatrixView";
+import { SciTunerGovernanceView } from "@/components/sustainability/SciTunerGovernanceView";
 
 interface CloudAccount {
   id: string;
@@ -1251,8 +1262,21 @@ Apply the proposed Terraform configuration change or safely update the resource 
                 <div className="flex items-center gap-2">
                   <h1 className="text-[18px] sm:text-[20px] font-black text-[#2E2B1A] tracking-tight">
                     {currentTab === "overview" && "Cloud Overview"}
-                    {currentTab === "cost" && "Cost Intelligence"}
-                    {currentTab === "carbon" && "Carbon Intelligence"}
+                    {currentTab === "cost" && (
+                      activeNavItem === "cost-explorer" ? "Costs & Usage / Cost Explorer" :
+                      activeNavItem === "cost-allocation" ? "Costs & Usage / Cost Allocation & Tags" :
+                      activeNavItem === "cost-budgets" ? "Costs & Usage / Budgets & Governance" :
+                      activeNavItem === "cost-anomalies" ? "Costs & Usage / Cost Anomalies" :
+                      activeNavItem === "cost-forecast" ? "Costs & Usage / Predictive Forecast Studio" :
+                      "Costs & Usage / Overview"
+                    )}
+                    {currentTab === "carbon" && (
+                      activeNavItem === "sustainability-carbon" ? "Sustainability / Scope 2 & 3 Accounting" :
+                      activeNavItem === "sustainability-resources" ? "Sustainability / Resource Carbon Ledger" :
+                      activeNavItem === "sustainability-regions" ? "Sustainability / Regional Grid Matrix" :
+                      activeNavItem === "sustainability-sci" ? "Sustainability / GSF-SCI Tuner Studio" :
+                      "Sustainability / Overview"
+                    )}
                     {currentTab === "infrastructure" && "Infrastructure Overview"}
                     {currentTab === "recommendations" && "Recommendations Summary"}
                     {currentTab === "audit" && "Audit History"}
@@ -1908,699 +1932,121 @@ Apply the proposed Terraform configuration change or safely update the resource 
                 </div>
               </div>
 
-              {/* Multi-Region Footprint & Credit Burn Guard */}
+              {/* Executive Quick Actions & Deep-Dive Hub */}
               <div className="bg-white rounded-3xl border border-[#ECE5CC] p-5 sm:p-6 shadow-warm-sm space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#ECE5CC] gap-2">
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="font-bold text-[16px] text-[#2E2B1A]">
-                        Multi-Region Footprint & Credit Burn Guard
-                      </h2>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]">
-                        17 Regions Monitored
-                      </span>
-                      {data?.scanCoverage?.isMultiRegionRunning && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#FFF3D6] text-[#9A6B00] border border-[#ECE5CC]">
-                          Cross-Region Compute Active
-                        </span>
-                      )}
-                    </div>
+                    <h2 className="font-bold text-[16px] text-[#2E2B1A]">
+                      Executive Cloud Cockpit &amp; Deep-Dive Hub
+                    </h2>
                     <p className="text-[12px] text-[#686450]">
-                      Real-time cross-region resource discovery to prevent unmonitored compute from draining AWS credits in background regions.
+                      Direct entry points to specialized FinOps, GreenOps, and Infrastructure telemetry modules.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentTab("infrastructure")}
-                    className="text-[12px] font-bold text-[#1F8A70] hover:underline flex items-center gap-1 cursor-pointer self-start sm:self-auto"
-                  >
-                    <span>View All Resources</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {data?.resources.byRegion && data.resources.byRegion.length > 0 ? (
-                    data.resources.byRegion.map((reg) => (
-                      <div
-                        key={reg.region}
-                        className={`p-4 rounded-2xl border transition-all ${
-                          reg.runningEc2 > 0
-                            ? "bg-[#FFFDF4] border-[#DFD6B5] shadow-warm-xs"
-                            : "bg-[#FAF6E8]/30 border-[#ECE5CC]"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70] shrink-0">
-                              <Server className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <span className="font-bold text-[13.5px] text-[#2E2B1A] block leading-tight">
-                                {reg.regionName}
-                              </span>
-                              <span className="font-mono text-[11px] text-[#8D8975]">
-                                {reg.region} · {reg.country}
-                              </span>
-                            </div>
-                          </div>
-                          {reg.runningEc2 > 0 ? (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#1F8A70] animate-pulse"></span>
-                              <span>RUNNING</span>
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FAF6E8] text-[#8D8975] border border-[#ECE5CC]">
-                              STOPPED
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Region specs */}
-                        <div className="space-y-1.5 text-[12px] pt-2 border-t border-[#ECE5CC]/60">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[#686450]">EC2 Compute:</span>
-                            <span className="font-bold text-[#2E2B1A]">
-                              {reg.runningEc2 > 0 ? (
-                                <span className="text-[#1F8A70]">
-                                  {reg.runningEc2} Running
-                                </span>
-                              ) : (
-                                `${reg.stoppedEc2} Stopped`
-                              )}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[#686450]">EBS Volumes:</span>
-                            <span className="font-mono font-semibold text-[#2E2B1A]">
-                              {reg.totalEbs} attached
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[#686450]">Est. Spend:</span>
-                            <span className="font-mono font-bold text-[#2E2B1A]">
-                              ${reg.monthlyCost.toFixed(2)}/mo
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[#686450]">Grid Factor:</span>
-                            <span className={`text-[11px] font-bold px-1.5 py-0.2 rounded ${
-                              reg.carbonStatus === "Clean" || reg.carbonStatus === "Ultra Clean"
-                                ? "bg-[#E2F5EF] text-[#1F8A70]"
-                                : "bg-[#FFF3D6] text-[#9A6B00]"
-                            }`}>
-                              {reg.gridIntensity} gCO2/kWh
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Running instance names if any */}
-                        {reg.runningInstanceNames && reg.runningInstanceNames.length > 0 && (
-                          <div className="mt-3 pt-2 border-t border-[#ECE5CC]/60 text-[11px]">
-                            <span className="text-[#8D8975] block mb-1">Active instances:</span>
-                            <div className="space-y-1">
-                              {reg.runningInstanceNames.map((name, i) => (
-                                <div key={i} className="font-mono font-bold text-[#2E2B1A] bg-white px-2 py-0.5 rounded border border-[#ECE5CC] truncate">
-                                  {name}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  ) : null}
-
-                  {/* Clean Regions summary card */}
-                  <div className="p-4 rounded-2xl border border-dashed border-[#DFD6B5] bg-[#FAF6E8]/20 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle2 className="w-4 h-4 text-[#1F8A70]" />
-                        <span className="font-bold text-[13.5px] text-[#2E2B1A]">
-                          15 Other AWS Regions
-                        </span>
-                      </div>
-                      <p className="text-[11.5px] text-[#686450] leading-snug">
-                        Monitored continuously via GreenCloud dynamic scanner. No active compute or orphaned storage detected.
-                      </p>
-                      <div className="flex flex-wrap gap-1 mt-3">
-                        {["us-east-2", "us-west-1", "us-west-2", "eu-central-1", "eu-west-1", "ap-southeast-1"].map((r) => (
-                          <span key={r} className="text-[10px] font-mono text-[#8D8975] bg-white px-1.5 py-0.5 rounded border border-[#ECE5CC]">
-                            {r}
-                          </span>
-                        ))}
-                        <span className="text-[10px] font-mono text-[#8D8975] px-1 py-0.5">+9 more</span>
-                      </div>
-                    </div>
-                    <div className="pt-3 mt-3 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px]">
-                      <span className="text-[#1F8A70] font-bold">✓ 0 Credit Waste</span>
-                      <span className="text-[#8D8975] font-mono">$0.00/mo</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Daily Cloud Spend Velocity & Top Cost Drivers */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-                {/* Left: Daily Spend Velocity & Trajectory (7 cols) */}
-                <div className="lg:col-span-7 bg-white rounded-3xl border border-[#ECE5CC] p-5 sm:p-6 shadow-warm-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between pb-3 border-b border-[#ECE5CC] mb-4">
-                      <div>
-                        <h3 className="font-bold text-[15px] text-[#2E2B1A]">Daily Spend Velocity & Trajectory</h3>
-                        <p className="text-[11.5px] text-[#686450]">Continuous rolling spend comparison across 30 active billing cycles.</p>
-                      </div>
-                      <span className="px-2.5 py-1 rounded-lg bg-[#FAF6E8] text-[11px] font-bold text-[#8D8975] border border-[#ECE5CC]">
-                        30d Rolling
-                      </span>
-                    </div>
-
-                    <div className="mb-4">
-                      <span className="text-[26px] font-black text-[#2E2B1A]">
-                        {data?.costs.totalCost !== null ? `$${data?.costs.totalCost.toLocaleString()}` : "--"}
-                      </span>
-                      <span className="text-[12px] text-[#8D8975] ml-2">Current period</span>
-                    </div>
-
-                    {/* Spend Velocity SVG Area Graph */}
-                    <div className="h-44 w-full bg-[#FAF6E8]/30 rounded-2xl p-3 border border-[#ECE5CC]/60 flex flex-col justify-between relative overflow-hidden">
-                      <svg className="w-full h-full" viewBox="0 0 500 120" preserveAspectRatio="none">
-                        <defs>
-                          <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#FFF76A" stopOpacity="0.5" />
-                            <stop offset="100%" stopColor="#FFF76A" stopOpacity="0.0" />
-                          </linearGradient>
-                        </defs>
-                        {data?.costs.totalCost && data.costs.totalCost > 0 ? (
-                          <>
-                            {/* Area fill */}
-                            <path d="M 0,90 Q 120,80 250,55 T 500,25 L 500,120 L 0,120 Z" fill="url(#spendGrad)" />
-                            {/* Stroke line */}
-                            <path d="M 0,90 Q 120,80 250,55 T 500,25" fill="transparent" stroke="#1F8A70" strokeWidth="2.5" />
-                          </>
-                        ) : (
-                          <>
-                            {/* Flatline baseline at 0 */}
-                            <line x1="0" y1="110" x2="500" y2="110" stroke="#1F8A70" strokeWidth="2" strokeDasharray="4 4" />
-                          </>
-                        )}
-                      </svg>
-
-                      {/* Tooltip on graph */}
-                      <div className="absolute top-4 right-6 bg-[#2E2B1A] text-white px-2.5 py-1 rounded-md text-[10.5px] font-bold font-mono shadow-md">
-                        {data?.costs.totalCost && data.costs.totalCost > 0
-                          ? `Total Spend: $${data.costs.totalCost.toLocaleString()}`
-                          : "Daily Run Rate: $0.00/day"}
-                      </div>
-
-                      <div className="flex items-center justify-between text-[10.5px] font-mono text-[#8D8975] pt-1 border-t border-[#ECE5CC]/40">
-                        <span>Day 1</span>
-                        <span>Day 7</span>
-                        <span>Day 14</span>
-                        <span>Day 21</span>
-                        <span>Day 30 (Today)</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-[#ECE5CC] flex items-center justify-between text-[11.5px] text-[#8D8975]">
-                    <span>● Real-time AWS CUR ingestion with automated outlier detection</span>
-                    <button
-                      type="button"
-                      onClick={() => setCurrentTab("cost")}
-                      className="font-bold text-[#1F8A70] hover:underline cursor-pointer"
-                    >
-                      Cost Breakdown →
-                    </button>
-                  </div>
-                </div>
-
-                {/* Right: Top Cost Drivers by Service (5 cols) (100% Data-Driven) */}
-                <div className="lg:col-span-5 bg-white rounded-3xl border border-[#ECE5CC] p-5 sm:p-6 shadow-warm-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between pb-3 border-b border-[#ECE5CC] mb-4">
-                      <div>
-                        <h3 className="font-bold text-[15px] text-[#2E2B1A]">Top Cost Drivers</h3>
-                        <p className="text-[11.5px] text-[#686450]">By AWS Infrastructure Service</p>
-                      </div>
-                      <span className="px-2 py-0.5 rounded bg-[#FAF6E8] text-[10.5px] font-bold text-[#8D8975] border border-[#ECE5CC]">
-                        Invoice Share
-                      </span>
-                    </div>
-
-                    <div className="space-y-3">
-                      {data?.costs.byService && data.costs.byService.length > 0 ? (
-                        data.costs.byService.map((item, idx) => {
-                          const total = data.costs.totalCost || 0;
-                          const pct = total > 0 ? Math.round((item.total / total) * 100) : 0;
-                          const colors = ["bg-[#1F8A70]", "bg-[#9A6B00]", "bg-[#2E2B1A]", "bg-[#8D8975]"];
-                          return (
-                            <div key={idx}>
-                              <div className="flex items-center justify-between text-[12px] font-bold text-[#2E2B1A] mb-1">
-                                <span className="truncate max-w-[200px]">{item.service}</span>
-                                <span>${item.total.toFixed(2)} ({pct}%)</span>
-                              </div>
-                              <div className="w-full h-2 rounded-full bg-[#FAF6E8] overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full ${colors[idx % colors.length]}`}
-                                  style={{ width: `${Math.max(pct, total === 0 ? 0 : 5)}%` }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div className="p-4 rounded-xl bg-[#FAF6E8]/40 border border-[#ECE5CC] text-center text-[12px] text-[#8D8975]">
-                          No billable line items incurred in active cycle.
-                        </div>
-                      )}
-
-                      {/* Informative Note for $0 Accounts */}
-                      {(!data?.costs.totalCost || data.costs.totalCost === 0) && (
-                        <div className="p-2.5 rounded-xl bg-[#FAF6E8]/60 border border-[#ECE5CC] text-[11px] text-[#686450] flex items-center gap-1.5 mt-2">
-                          <Info className="w-3.5 h-3.5 text-[#9A6B00] shrink-0" />
-                          <span>Within AWS Free Tier or stopped instance state. No billable charges incurred.</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-[#ECE5CC] text-right">
-                    <button
-                      type="button"
-                      onClick={() => setCurrentTab("cost")}
-                      className="text-[11.5px] font-bold text-[#1F8A70] hover:underline cursor-pointer"
-                    >
-                      Inspect granular billing breakdown →
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* ========================================================================= */}
-              {/* 4. COMPUTE UTILIZATION DISTRIBUTION (P99 CPU BINS & RIGHTSIGHTING BANNER) */}
-              {/* ========================================================================= */}
-              <div className="bg-white rounded-3xl border border-[#ECE5CC] p-5 sm:p-6 shadow-warm-sm space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#ECE5CC]">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="font-bold text-[16px] text-[#2E2B1A]">
-                        Compute Utilization Distribution
-                      </h2>
-                      <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]">
-                        Optimal band: 40%–75%
-                      </span>
-                    </div>
-                    <p className="text-[12px] text-[#686450]">
-                      Average CPU utilization distribution across all {ec2Total} EC2 instances over the last 14 days.
-                    </p>
-                  </div>
-                  <span className="text-[11px] font-mono font-bold text-[#8D8975] whitespace-nowrap">
-                    P99 Aggregation · 15m intervals
+                  <span className="text-[11px] font-mono font-bold text-[#8D8975]">
+                    17 AWS Regions Monitored
                   </span>
                 </div>
 
-                {/* 4 CPU Utilization Range Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* Band 1: 0% - 20% CPU (Review) */}
-                  <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] flex flex-col justify-between space-y-3">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-mono text-[11.5px] font-bold text-[#2E2B1A]">
-                          0% – 20% CPU
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-[#FFF76A] border border-[#DFD6B5] text-[#2E2B1A]">
-                          Review
-                        </span>
-                      </div>
-                      <div className="text-[22px] font-black text-[#2E2B1A] mb-1">
-                        {data?.cpuDistribution?.band0_20 ?? (ec2Stopped > 0 ? ec2Stopped : 0)} nodes{" "}
-                        <span className="text-[13px] font-normal text-[#8D8975]">
-                          ({ec2Total > 0 ? Math.round(((data?.cpuDistribution?.band0_20 ?? (ec2Stopped > 0 ? ec2Stopped : 0)) / ec2Total) * 100) : 0}%)
-                        </span>
-                      </div>
-                      <p className="text-[11.5px] text-[#686450] leading-snug">
-                        Severely underutilized capacity. Workload candidates for Graviton or downscale.
-                      </p>
-                    </div>
-                    <div className="w-full h-1.5 rounded-full bg-[#FAF6E8] overflow-hidden">
-                      <div
-                        className="h-full bg-[#9A6B00] rounded-full"
-                        style={{
-                          width: `${ec2Total > 0 ? Math.round(((data?.cpuDistribution?.band0_20 ?? (ec2Stopped > 0 ? ec2Stopped : 0)) / ec2Total) * 100) : 0}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Band 2: 20% - 50% CPU (Moderate) */}
-                  <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] flex flex-col justify-between space-y-3">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-mono text-[11.5px] font-bold text-[#2E2B1A]">
-                          20% – 50% CPU
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-[#FAF6E8] border border-[#ECE5CC] text-[#686450]">
-                          Moderate
-                        </span>
-                      </div>
-                      <div className="text-[22px] font-black text-[#2E2B1A] mb-1">
-                        {data?.cpuDistribution?.band20_50 || 0} nodes{" "}
-                        <span className="text-[13px] font-normal text-[#8D8975]">
-                          ({ec2Total > 0 ? Math.round(((data?.cpuDistribution?.band20_50 || 0) / ec2Total) * 100) : 0}%)
-                        </span>
-                      </div>
-                      <p className="text-[11.5px] text-[#686450] leading-snug">
-                        Balanced workpool, background tasks, and scheduled batch runners.
-                      </p>
-                    </div>
-                    <div className="w-full h-1.5 rounded-full bg-[#FAF6E8] overflow-hidden">
-                      <div
-                        className="h-full bg-[#1F8A70]/60 rounded-full"
-                        style={{
-                          width: `${ec2Total > 0 ? Math.round(((data?.cpuDistribution?.band20_50 || 0) / ec2Total) * 100) : 0}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Band 3: 50% - 80% CPU (Optimal) */}
-                  <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] flex flex-col justify-between space-y-3">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-mono text-[11.5px] font-bold text-[#2E2B1A]">
-                          50% – 80% CPU
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70]">
-                          Optimal
-                        </span>
-                      </div>
-                      <div className="text-[22px] font-black text-[#2E2B1A] mb-1">
-                        {data?.cpuDistribution?.band50_80 || 0} nodes{" "}
-                        <span className="text-[13px] font-normal text-[#8D8975]">
-                          ({ec2Total > 0 ? Math.round(((data?.cpuDistribution?.band50_80 || 0) / ec2Total) * 100) : 0}%)
-                        </span>
-                      </div>
-                      <p className="text-[11.5px] text-[#686450] leading-snug">
-                        Target enterprise efficiency ratio with ample headroom for unpredictable bursts.
-                      </p>
-                    </div>
-                    <div className="w-full h-1.5 rounded-full bg-[#FAF6E8] overflow-hidden">
-                      <div
-                        className="h-full bg-[#1F8A70] rounded-full"
-                        style={{
-                          width: `${ec2Total > 0 ? Math.round(((data?.cpuDistribution?.band50_80 || 0) / ec2Total) * 100) : 0}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Band 4: 80%+ CPU (Peak) */}
-                  <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] flex flex-col justify-between space-y-3">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-mono text-[11.5px] font-bold text-[#2E2B1A]">
-                          80%+ CPU
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-[#FFE8E8] border border-[#FFCCCC] text-[#D32F2F]">
-                          Peak
-                        </span>
-                      </div>
-                      <div className="text-[22px] font-black text-[#2E2B1A] mb-1">
-                        {data?.cpuDistribution?.band80_plus || 0} nodes{" "}
-                        <span className="text-[13px] font-normal text-[#8D8975]">
-                          ({ec2Total > 0 ? Math.round(((data?.cpuDistribution?.band80_plus || 0) / ec2Total) * 100) : 0}%)
-                        </span>
-                      </div>
-                      <p className="text-[11.5px] text-[#686450] leading-snug">
-                        Close to throttling boundary during daytime business hours. Autoscale advised.
-                      </p>
-                    </div>
-                    <div className="w-full h-1.5 rounded-full bg-[#FAF6E8] overflow-hidden">
-                      <div
-                        className="h-full bg-[#D32F2F] rounded-full"
-                        style={{
-                          width: `${ec2Total > 0 ? Math.round(((data?.cpuDistribution?.band80_plus || 0) / ec2Total) * 100) : 0}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Highlight Rightsizing Banner */}
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-[#FFF76A] border border-[#DFD6B5] flex items-center justify-center text-[#2E2B1A] shrink-0">
-                      <Sparkles className="w-4 h-4 text-[#9A6B00]" />
-                    </div>
-                    <p className="text-[12.5px] text-[#2E2B1A] font-medium leading-relaxed">
-                      {data?.cpuDistribution?.oversizedCount && data.cpuDistribution.oversizedCount > 0 ? (
-                        <>
-                          <strong className="font-bold">
-                            {data.cpuDistribution.oversizedCount} Instance{data.cpuDistribution.oversizedCount > 1 ? "s" : ""}
-                          </strong>{" "}
-                          appear significantly oversized based on multi-week P99 CPU metrics. Downsizing could yield approx{" "}
-                          <strong className="font-bold text-[#1F8A70]">
-                            ~${data.cpuDistribution.potentialRightsizingSavings.toFixed(0)}/month
-                          </strong>{" "}
-                          in immediate run-rate savings.
-                        </>
-                      ) : (
-                        "All active compute instances are currently operating within nominal capacity bands."
-                      )}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentTab("infrastructure")}
-                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white border border-[#ECE5CC] hover:bg-[#FAF6E8] text-[12px] font-bold text-[#2E2B1A] transition-colors shrink-0 shadow-2xs cursor-pointer"
+                  {/* Jump 1: Cost Explorer */}
+                  <div
+                    onClick={() => {
+                      setCurrentTab("cost");
+                      setActiveNavItem("cost-explorer");
+                    }}
+                    className="p-4 rounded-2xl bg-[#FAF6E8]/30 hover:bg-[#FAF6E8]/60 border border-[#ECE5CC] transition-all cursor-pointer group flex flex-col justify-between"
                   >
-                    <span>View resources</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* ========================================================================= */}
-              {/* 5. SIDE-BY-SIDE: OPTIMIZATION OPPORTUNITIES & INFRASTRUCTURE               */}
-              {/* ========================================================================= */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-                {/* Left: Optimization Opportunities (7 cols) */}
-                <div className="lg:col-span-7 bg-white rounded-3xl border border-[#ECE5CC] p-5 sm:p-6 shadow-warm-sm flex flex-col justify-between space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between pb-3 border-b border-[#ECE5CC] mb-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <Sparkles className="w-4 h-4 text-[#9A6B00]" />
-                          <h3 className="font-bold text-[16px] text-[#2E2B1A]">
-                            Optimization Opportunities
-                          </h3>
-                        </div>
-                        <p className="text-[12px] text-[#686450]">
-                          High-confidence automated FinOps actions with quantified cost impact.
-                        </p>
+                    <div>
+                      <div className="w-8 h-8 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70] mb-2.5 shadow-2xs">
+                        <DollarSign className="w-4 h-4" />
                       </div>
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70]">
-                        {data?.recommendations.totalSavings && data.recommendations.totalSavings > 0
-                          ? `+$${data.recommendations.totalSavings.toLocaleString()}/mo potential`
-                          : "Audit Active"}
-                      </span>
+                      <h3 className="font-bold text-[13.5px] text-[#2E2B1A] group-hover:text-[#1F8A70] transition-colors">
+                        Cost Explorer
+                      </h3>
+                      <p className="text-[11.5px] text-[#686450] mt-1 leading-snug">
+                        Inspect service spend ledger, usage breakdown, and daily CUR trends.
+                      </p>
                     </div>
-
-                    {/* Real Dynamic Opportunity Cards */}
-                    <div className="space-y-2.5">
-                      {data?.recommendations.items && data.recommendations.items.length > 0 ? (
-                        data.recommendations.items.slice(0, 4).map((rec) => {
-                          const isEip = rec.title.toLowerCase().includes("elastic ip") || rec.category === "eip_cleanup";
-                          const isEbs = rec.title.toLowerCase().includes("ebs") || rec.title.toLowerCase().includes("volume");
-                          const isHistory = rec.title.toLowerCase().includes("stopped");
-
-                          const IconComp = isEip ? Network : isEbs ? HardDrive : isHistory ? History : Server;
-
-                          let detailReason = rec.title;
-                          try {
-                            if (rec.evidence) {
-                              const parsed = JSON.parse(rec.evidence);
-                              detailReason = parsed.reason || parsed.calculation || rec.title;
-                            }
-                          } catch {
-                            if (rec.evidence) detailReason = rec.evidence;
-                          }
-
-                          return (
-                            <div
-                              key={rec.id}
-                              className="p-3.5 rounded-2xl bg-[#FAF6E8]/30 hover:bg-[#FAF6E8]/60 border border-[#ECE5CC] transition-all flex items-center justify-between gap-3"
-                            >
-                              <div className="flex items-start gap-3 min-w-0">
-                                <div className="w-8 h-8 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#9A6B00] shrink-0 mt-0.5">
-                                  <IconComp className="w-4 h-4" />
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <h4 className="font-bold text-[13px] text-[#2E2B1A] truncate max-w-sm">
-                                      {rec.title}
-                                    </h4>
-                                    <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-[#FAF6E8] text-[#8D8975] border border-[#ECE5CC] uppercase">
-                                      {rec.resource?.region || "Active"}
-                                    </span>
-                                  </div>
-                                  <p className="text-[11.5px] text-[#686450] leading-snug truncate max-w-md">
-                                    {detailReason}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-3 shrink-0">
-                                <span className="font-bold text-[13px] text-[#1F8A70]">
-                                  {rec.estimatedMonthlySavings > 0 ? `+$${rec.estimatedMonthlySavings.toFixed(2)}/mo` : "$0/mo"}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedRecommendation(rec)}
-                                  className="px-3 py-1 rounded-full bg-white border border-[#ECE5CC] hover:bg-[#FAF6E8] text-[11px] font-bold text-[#2E2B1A] transition-colors cursor-pointer shadow-2xs"
-                                >
-                                  Review
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div className="p-6 rounded-2xl bg-[#FAF6E8]/30 border border-[#ECE5CC] text-center">
-                          <CheckCircle2 className="w-6 h-6 text-[#1F8A70] mx-auto mb-2" />
-                          <p className="text-[13px] font-bold text-[#2E2B1A]">All Connected Resources Within Operational Limits</p>
-                          <p className="text-[11.5px] text-[#686450] mt-0.5">Continuous telemetry shows zero idle or unattached resource waste.</p>
-                        </div>
-                      )}
+                    <div className="mt-3 pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] font-bold text-[#1F8A70]">
+                      <span>Open Ledger</span>
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-[#ECE5CC] flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => setCurrentTab("recommendations")}
-                      className="text-[12px] font-bold text-[#1F8A70] hover:underline cursor-pointer flex items-center gap-1.5"
-                    >
-                      <span>View all {data?.recommendations.items.length || 0} recommendations and auto-remediation scripts</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Right: Infrastructure Live Inventory (5 cols) */}
-                <div className="lg:col-span-5 bg-white rounded-3xl border border-[#ECE5CC] p-5 sm:p-6 shadow-warm-sm flex flex-col justify-between space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between pb-3 border-b border-[#ECE5CC] mb-4">
-                      <div>
-                        <h3 className="font-bold text-[16px] text-[#2E2B1A]">
-                          Infrastructure
-                        </h3>
-                        <p className="text-[12px] text-[#686450]">
-                          Live inventory across active cloud regions.
-                        </p>
+                  {/* Jump 2: Cost Allocation */}
+                  <div
+                    onClick={() => {
+                      setCurrentTab("cost");
+                      setActiveNavItem("cost-allocation");
+                    }}
+                    className="p-4 rounded-2xl bg-[#FAF6E8]/30 hover:bg-[#FAF6E8]/60 border border-[#ECE5CC] transition-all cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="w-8 h-8 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-center text-[#9A6B00] mb-2.5 shadow-2xs">
+                        <Tag className="w-4 h-4" />
                       </div>
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FAF6E8] border border-[#ECE5CC] text-[#9A6B00]">
-                        {data?.inventory?.activeRegions.length || 1} Regions
-                      </span>
+                      <h3 className="font-bold text-[13.5px] text-[#2E2B1A] group-hover:text-[#9A6B00] transition-colors">
+                        Tag Showback
+                      </h3>
+                      <p className="text-[11.5px] text-[#686450] mt-1 leading-snug">
+                        Environment allocation ({data?.tagAllocation?.hygieneScore || 0}% compliant) &amp; untagged assets.
+                      </p>
                     </div>
-
-                    {/* 4 Stat Boxes (2x2) */}
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      {/* EC2 INSTANCES */}
-                      <div className="p-3.5 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC]">
-                        <span className="text-[10.5px] font-mono font-bold uppercase text-[#8D8975] block mb-1">
-                          EC2 INSTANCES
-                        </span>
-                        <div className="text-[24px] font-black text-[#2E2B1A] leading-tight">
-                          {ec2Total}
-                        </div>
-                        <span className="text-[11px] text-[#686450] block mt-0.5">
-                          {ec2Running} healthy · {ec2Stopped} review
-                        </span>
-                      </div>
-
-                      {/* EBS VOLUMES */}
-                      <div className="p-3.5 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC]">
-                        <span className="text-[10.5px] font-mono font-bold uppercase text-[#8D8975] block mb-1">
-                          EBS VOLUMES
-                        </span>
-                        <div className="text-[24px] font-black text-[#2E2B1A] leading-tight">
-                          {data?.resources.ebs.length || 0}
-                        </div>
-                        <span className="text-[11px] text-[#686450] block mt-0.5">
-                          {data?.inventory?.ebsAttached ?? (data?.resources.ebs.length || 0)} attached · {data?.inventory?.ebsIdle || 0} idle
-                        </span>
-                      </div>
-
-                      {/* ELASTIC IPS */}
-                      <div className="p-3.5 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC]">
-                        <span className="text-[10.5px] font-mono font-bold uppercase text-[#8D8975] block mb-1">
-                          ELASTIC IPS
-                        </span>
-                        <div className="text-[24px] font-black text-[#2E2B1A] leading-tight">
-                          {data?.resources.eip.length || 0}
-                        </div>
-                        <span className="text-[11px] text-[#686450] block mt-0.5">
-                          {data?.inventory?.eipAssociated || 0} associated · {data?.inventory?.eipUnused || 0} unused
-                        </span>
-                      </div>
-
-                      {/* ACTIVE REGIONS */}
-                      <div className="p-3.5 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC]">
-                        <span className="text-[10.5px] font-mono font-bold uppercase text-[#8D8975] block mb-1">
-                          ACTIVE REGIONS
-                        </span>
-                        <div className="text-[24px] font-black text-[#2E2B1A] leading-tight">
-                          {data?.inventory?.activeRegions.length || 1}
-                        </div>
-                        <span className="text-[11px] text-[#686450] block mt-0.5">
-                          Multi-AZ resilient
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Regional Grid Carbon Intensity Box */}
-                    <div className="p-3.5 rounded-2xl bg-[#FAF6E8]/60 border border-[#ECE5CC] space-y-2">
-                      <div className="flex items-center justify-between pb-1.5 border-b border-[#ECE5CC]/60">
-                        <span className="text-[11px] font-bold text-[#2E2B1A]">
-                          Regional Grid Carbon Intensity
-                        </span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FAF6E8] text-[#9A6B00] border border-[#ECE5CC]">
-                          {data?.resources.byRegion?.length || 1} Monitored
-                        </span>
-                      </div>
-                      <div className="space-y-1.5 text-[11px] font-mono text-[#686450]">
-                        {data?.resources.byRegion && data.resources.byRegion.length > 0 ? (
-                          data.resources.byRegion.map((r) => (
-                            <div key={r.region} className="flex items-center justify-between">
-                              <span className="truncate pr-2 font-medium text-[#2E2B1A]">{r.regionName} ({r.region})</span>
-                              <span className="font-bold shrink-0 text-[#2E2B1A]">
-                                {r.totalEc2} instance{r.totalEc2 === 1 ? "" : "s"} ({r.runningEc2} running) ·{" "}
-                                <span className={r.gridIntensity > 500 ? "text-[#9A6B00]" : "text-[#1F8A70]"}>
-                                  {r.gridIntensity} g/kWh
-                                </span>
-                              </span>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="flex items-center justify-between">
-                            <span>us-east-1 (N. Virginia)</span>
-                            <span className="font-bold text-[#2E2B1A]">{ec2Total} instances · 420 g/kWh</span>
-                          </div>
-                        )}
-                      </div>
+                    <div className="mt-3 pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] font-bold text-[#9A6B00]">
+                      <span>Review Tags</span>
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-[#ECE5CC] flex items-center justify-between text-[11.5px]">
-                    <span className="text-[#8D8975]">Auto-discovery: enabled</span>
-                    <button
-                      type="button"
-                      onClick={() => setCurrentTab("infrastructure")}
-                      className="font-bold text-[#1F8A70] hover:underline cursor-pointer"
-                    >
-                      Manage assets & topology →
-                    </button>
+                  {/* Jump 3: Budgets */}
+                  <div
+                    onClick={() => {
+                      setCurrentTab("cost");
+                      setActiveNavItem("cost-budgets");
+                    }}
+                    className="p-4 rounded-2xl bg-[#FAF6E8]/30 hover:bg-[#FAF6E8]/60 border border-[#ECE5CC] transition-all cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="w-8 h-8 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70] mb-2.5 shadow-2xs">
+                        <Target className="w-4 h-4" />
+                      </div>
+                      <h3 className="font-bold text-[13.5px] text-[#2E2B1A] group-hover:text-[#1F8A70] transition-colors">
+                        Budgets &amp; Pacing
+                      </h3>
+                      <p className="text-[11.5px] text-[#686450] mt-1 leading-snug">
+                        ${data?.budget?.spent !== undefined ? data.budget.spent.toFixed(2) : "0.00"} spent of ${data?.budget?.target || 50}.00 target.
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] font-bold text-[#1F8A70]">
+                      <span>Check Pacing</span>
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+
+                  {/* Jump 4: Predictive Forecast */}
+                  <div
+                    onClick={() => {
+                      setCurrentTab("cost");
+                      setActiveNavItem("cost-forecast");
+                    }}
+                    className="p-4 rounded-2xl bg-[#FAF6E8]/30 hover:bg-[#FAF6E8]/60 border border-[#ECE5CC] transition-all cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="w-8 h-8 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70] mb-2.5 shadow-2xs">
+                        <LineChart className="w-4 h-4" />
+                      </div>
+                      <h3 className="font-bold text-[13.5px] text-[#2E2B1A] group-hover:text-[#1F8A70] transition-colors">
+                        30-Day Forecast
+                      </h3>
+                      <p className="text-[11.5px] text-[#686450] mt-1 leading-snug">
+                        Holt&apos;s double smoothing model with 95% confidence interval bounds.
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] font-bold text-[#1F8A70]">
+                      <span>Launch Studio</span>
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2752,815 +2198,86 @@ Apply the proposed Terraform configuration change or safely update the resource 
             </div>
           )}
 
-          {/* TAB 2: COST INTELLIGENCE */}
+          {/* TAB 2: COST INTELLIGENCE (DEDICATED SUB-PAGES) */}
           {currentTab === "cost" && activeAccount && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-sm space-y-5">
-                <div className="flex items-center justify-between pb-4 border-b border-[#ECE5CC]">
-                  <div>
-                    <h2 className="text-[18px] font-bold text-[#2E2B1A]">Cloud Cost Intelligence</h2>
-                    <p className="text-[13px] text-[#686450]">
-                      Normalized AWS billing and resource spend analytics.
-                    </p>
-                  </div>
-                  <span className="px-3 py-1 rounded-full bg-[#E2F5EF] text-[11.5px] font-bold text-[#1F8A70] border border-[#BDEBDD]">
-                    Cost Explorer Synced
-                  </span>
-                </div>
-
-                {/* 3 Metric Summary Boxes */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC]">
-                    <span className="text-[11px] font-mono text-[#8D8975] uppercase font-bold block mb-1">
-                      Billed Monthly Spend
-                    </span>
-                    <span className="text-[24px] font-black text-[#2E2B1A]">
-                      {data?.costs.totalCost !== null ? `$${data?.costs.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--"}
-                    </span>
-                    <span className="text-[11px] text-[#1F8A70] block mt-1 font-semibold">
-                      Normalized via Cost Explorer
-                    </span>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC]">
-                    <span className="text-[11px] font-mono text-[#8D8975] uppercase font-bold block mb-1">
-                      Daily Run Rate
-                    </span>
-                    <span className="text-[24px] font-black text-[#2E2B1A]">
-                      {data?.costs.dailyBurnRate !== null ? `$${data?.costs.dailyBurnRate.toFixed(2)}` : "--"}
-                    </span>
-                    <span className="text-[11px] text-[#8D8975] block mt-1">
-                      Estimated 30-day daily velocity
-                    </span>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC]">
-                    <span className="text-[11px] font-mono text-[#8D8975] uppercase font-bold block mb-1">
-                      Optimization Savings
-                    </span>
-                    <span className="text-[24px] font-black text-[#1F8A70]">
-                      {data?.recommendations.totalSavings !== null ? `$${data?.recommendations.totalSavings.toLocaleString()}/mo` : "--"}
-                    </span>
-                    <span className="text-[11px] text-[#9A6B00] block mt-1 font-semibold">
-                      {data?.recommendations.activeCount || 0} Identified actions
-                    </span>
-                  </div>
-                </div>
-
-                {/* By Service Breakdown Table */}
-                <div className="pt-2">
-                  <h3 className="font-bold text-[14px] text-[#2E2B1A] mb-3">Service Spend Ledger</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-[12.5px]">
-                      <thead>
-                        <tr className="border-b border-[#ECE5CC] font-mono text-[11px] text-[#8D8975] uppercase">
-                          <th className="py-2">Service Name</th>
-                          <th className="py-2">Category</th>
-                          <th className="py-2">Billed Amount</th>
-                          <th className="py-2">Actionable Waste</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#ECE5CC]/50">
-                        {data?.costs.byService.length ? (
-                          data.costs.byService.map((item, idx) => (
-                            <tr key={idx} className="hover:bg-[#FAF6E8]/40">
-                              <td className="py-2.5 font-bold text-[#2E2B1A]">{item.service}</td>
-                              <td className="py-2.5 text-[#686450]">Cloud Primitive</td>
-                              <td className="py-2.5 font-mono font-bold">${item.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                              <td className="py-2.5 text-[#1F8A70] font-semibold">Available</td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan={4} className="py-4 text-center text-[#8D8975]">
-                              No billing line items synced yet. Click "Sync Telemetry" to pull AWS Cost Explorer data.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* 2. Budget Tracking & Anomaly Intelligence */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-[#ECE5CC]">
-                  {/* Monthly Budget vs Actual Pace */}
-                  <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Target className="w-4 h-4 text-[#9A6B00]" />
-                        <span className="font-bold text-[13px] text-[#2E2B1A]">Monthly Budget Governance</span>
-                      </div>
-                      <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]">
-                        {data?.budget?.status === "healthy" ? "Within Safe Pace" : "Exceeded"}
-                      </span>
-                    </div>
-
-                    <div className="flex items-baseline justify-between">
-                      <div>
-                        <span className="text-[20px] font-black text-[#2E2B1A]">
-                          ${data?.budget?.spent !== undefined ? data.budget.spent.toFixed(2) : "0.00"}
-                        </span>
-                        <span className="text-[12px] text-[#8D8975] ml-1">
-                          / ${data?.budget?.target || 50}.00 Target
-                        </span>
-                      </div>
-                      <span className="font-mono text-[11px] font-bold text-[#8D8975]">
-                        {data?.budget?.pacePercentage || 0}% used
-                      </span>
-                    </div>
-
-                    <div className="w-full h-2 rounded-full bg-[#ECE5CC] overflow-hidden">
-                      <div
-                        className="h-full bg-[#1F8A70] rounded-full transition-all"
-                        style={{ width: `${Math.max(data?.budget?.pacePercentage || 0, 2)}%` }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between text-[11px] text-[#686450]">
-                      <span>Projected Month-End:</span>
-                      <strong className="text-[#2E2B1A] font-mono">
-                        ${data?.budget?.projectedMonthEnd !== undefined ? data.budget.projectedMonthEnd.toFixed(2) : "0.00"}
-                      </strong>
-                    </div>
-
-                    {data?.budget?.next30DaysProjected !== undefined && (
-                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[#ECE5CC]">
-                        <span className="text-[#8D8975]">30-Day Forward Forecast:</span>
-                        <span className="font-mono font-bold text-[#2E2B1A]">${data.budget.next30DaysProjected.toFixed(2)}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Anomaly Outlier Detector (Powered by ForecastingEngine) */}
-                  <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] space-y-3 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className={`w-4 h-4 ${data?.anomalies?.hasAnomalies ? "text-[#C84B31]" : "text-[#9A6B00]"}`} />
-                          <span className="font-bold text-[13px] text-[#2E2B1A]">Cost Anomaly Detector</span>
-                        </div>
-                        <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold border ${
-                          data?.anomalies?.criticalCount && data.anomalies.criticalCount > 0
-                            ? "bg-[#FDE8E8] text-[#C84B31] border-[#F8B4B4]"
-                            : data?.anomalies?.hasAnomalies
-                            ? "bg-[#FEF3D6] text-[#9A6B00] border-[#F6DC9B]"
-                            : "bg-[#E2F5EF] text-[#1F8A70] border-[#BDEBDD]"
-                        }`}>
-                          {data?.anomalies?.criticalCount && data.anomalies.criticalCount > 0
-                            ? "Critical Spike Detected"
-                            : data?.anomalies?.hasAnomalies
-                            ? "Spike Warning"
-                            : "Nominal (P99 / Z-Score)"}
-                        </span>
-                      </div>
-                      <p className="text-[12px] text-[#686450] leading-snug">
-                        {data?.anomalies?.message || "Spend and carbon telemetry within nominal bounds (0 anomalies detected)."}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="p-2.5 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-between text-[11.5px]">
-                        <span className="text-[#686450]">Trailing Outliers Detected:</span>
-                        <span className={`font-mono font-bold ${
-                          (data?.anomalies?.detectedCount || 0) > 0 ? "text-[#C84B31]" : "text-[#1F8A70]"
-                        }`}>
-                          {data?.anomalies?.detectedCount || 0} Spike{(data?.anomalies?.detectedCount || 0) === 1 ? "" : "s"}
-                        </span>
-                      </div>
-
-                      {/* Render individual detected anomaly pills if present */}
-                      {data?.anomalies?.items && data.anomalies.items.length > 0 && (
-                        <div className="space-y-1.5 pt-1">
-                          {data.anomalies.items.slice(0, 2).map((item) => (
-                            <div key={item.id} className="p-2 rounded-lg bg-white/80 border border-[#ECE5CC] text-[11px] space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="font-bold text-[#2E2B1A]">{item.entityName}</span>
-                                <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
-                                  item.severity === "critical"
-                                    ? "bg-[#FDE8E8] text-[#C84B31]"
-                                    : "bg-[#FEF3D6] text-[#9A6B00]"
-                                }`}>
-                                  +{item.deviationPercent}% (Z: {item.zScore})
-                                </span>
-                              </div>
-                              <p className="text-[10.5px] text-[#8D8975] leading-tight">{item.rootCauseHint}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2.5 Predictive Forecasting Studio (Holt's Linear Trend + 95% Confidence Bounds) */}
-                <div className="pt-4 border-t border-[#ECE5CC] space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <LineChart className="w-4 h-4 text-[#1F8A70]" />
-                        <h3 className="font-bold text-[15px] text-[#2E2B1A]">
-                          30-Day Predictive Forecasting & Trend Velocity Studio
-                        </h3>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]">
-                          Holt's Double Smoothing
-                        </span>
-                      </div>
-                      <p className="text-[12px] text-[#686450] mt-0.5">
-                        Statistically models future cloud run-rate and emissions with 95% confidence intervals and Z-Score outlier detection.
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px]">
-                        <span className="text-[#8D8975]">Trend Velocity:</span>
-                        <span className={`font-bold capitalize ${
-                          data?.forecast?.trendVelocity === "accelerating"
-                            ? "text-[#C84B31]"
-                            : data?.forecast?.trendVelocity === "decelerating"
-                            ? "text-[#1F8A70]"
-                            : "text-[#9A6B00]"
-                        }`}>
-                          {data?.forecast?.trendVelocity || "Stable"}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px]">
-                        <span className="text-[#8D8975]">Budget Risk:</span>
-                        <span className={`font-bold uppercase ${
-                          data?.forecast?.budgetRisk === "high"
-                            ? "text-[#C84B31]"
-                            : data?.forecast?.budgetRisk === "medium"
-                            ? "text-[#9A6B00]"
-                            : "text-[#1F8A70]"
-                        }`}>
-                          {data?.forecast?.budgetRisk || "Low"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 4 Forecast Metric Highlights */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div className="p-3.5 rounded-xl bg-[#FAF6E8]/30 border border-[#ECE5CC]">
-                      <span className="text-[10.5px] font-mono font-bold text-[#8D8975] uppercase block">
-                        Projected Month-End Spend
-                      </span>
-                      <span className="text-[20px] font-black text-[#2E2B1A] block mt-0.5 font-mono">
-                        ${data?.forecast?.monthEndProjectedCost !== undefined ? data.forecast.monthEndProjectedCost.toFixed(2) : (data?.budget?.projectedMonthEnd !== undefined ? data.budget.projectedMonthEnd.toFixed(2) : "0.00")}
-                      </span>
-                      <span className="text-[11px] text-[#686450] block mt-0.5">
-                        Run-rate through {new Date().toLocaleString("default", { month: "short" })} 30
-                      </span>
-                    </div>
-
-                    <div className="p-3.5 rounded-xl bg-[#FAF6E8]/30 border border-[#ECE5CC]">
-                      <span className="text-[10.5px] font-mono font-bold text-[#8D8975] uppercase block">
-                        30-Day Forward Forecast
-                      </span>
-                      <span className="text-[20px] font-black text-[#1F8A70] block mt-0.5 font-mono">
-                        ${data?.forecast?.next30DaysProjectedCost !== undefined ? data.forecast.next30DaysProjectedCost.toFixed(2) : "0.00"}
-                      </span>
-                      <span className="text-[11px] text-[#686450] block mt-0.5">
-                        Forward 30 calendar days
-                      </span>
-                    </div>
-
-                    <div className="p-3.5 rounded-xl bg-[#FAF6E8]/30 border border-[#ECE5CC]">
-                      <span className="text-[10.5px] font-mono font-bold text-[#8D8975] uppercase block">
-                        Projected Month-End Carbon
-                      </span>
-                      <span className="text-[20px] font-black text-[#2E2B1A] block mt-0.5 font-mono">
-                        {data?.forecast?.monthEndProjectedCarbon !== undefined ? `${data.forecast.monthEndProjectedCarbon} g` : "--"}
-                      </span>
-                      <span className="text-[11px] text-[#686450] block mt-0.5">
-                        Embodied + Operational footprint
-                      </span>
-                    </div>
-
-                    <div className="p-3.5 rounded-xl bg-[#FAF6E8]/30 border border-[#ECE5CC]">
-                      <span className="text-[10.5px] font-mono font-bold text-[#8D8975] uppercase block">
-                        Confidence Interval Band
-                      </span>
-                      <span className="text-[20px] font-black text-[#9A6B00] block mt-0.5 font-mono">
-                        95% Bounds
-                      </span>
-                      <span className="text-[11px] text-[#686450] block mt-0.5">
-                        Residual standard error modeling
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* SVG Forecast Trajectory Visualization */}
-                  <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
-                    <div className="flex items-center justify-between text-[11.5px] flex-wrap gap-2">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-3 h-0.5 bg-[#1F8A70] rounded-full inline-block" />
-                          <span className="font-bold text-[#2E2B1A]">Historical Spend (Actual)</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-3 h-0.5 border-t-2 border-dashed border-[#9A6B00] inline-block" />
-                          <span className="font-bold text-[#9A6B00]">Holt's Forecast Trend</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-3 h-2 bg-[#FFF76A]/40 border border-[#ECE5CC] rounded-xs inline-block" />
-                          <span className="text-[#8D8975]">95% Confidence Band</span>
-                        </div>
-                      </div>
-                      <span className="text-[11px] font-mono text-[#8D8975]">
-                        {data?.forecast?.trajectory ? `${data.forecast.trajectory.length} Timeline Data Points` : "30-Day Model"}
-                      </span>
-                    </div>
-
-                    {/* Interactive SVG Chart */}
-                    <div className="w-full h-44 relative bg-[#FAF6E8]/20 rounded-xl border border-[#ECE5CC]/60 p-2 overflow-hidden flex flex-col justify-end">
-                      {data?.forecast?.trajectory && data.forecast.trajectory.length > 0 ? (
-                        (() => {
-                          const points = data.forecast.trajectory;
-                          const rawMax = Math.max(
-                            ...points.map((p) => Math.max(p.predictedCost, p.upperBoundCost)),
-                            0.35
-                          );
-                          const maxVal = parseFloat((rawMax * 1.15).toFixed(2));
-                          const chartW = 800;
-                          const chartH = 140;
-                          const padding = 15;
-                          const axisLeft = 45;
-
-                          const getX = (idx: number) =>
-                            padding + axisLeft + (idx / Math.max(1, points.length - 1)) * (chartW - padding * 2 - axisLeft);
-                          const getY = (val: number) =>
-                            chartH - padding - (val / maxVal) * (chartH - padding * 2);
-
-                          // Split historical and forecast
-                          const histPoints = points.filter((p) => !p.isForecast);
-                          const forePoints = points.filter((p) => p.isForecast);
-
-                          // Build paths
-                          const histPath = histPoints
-                            .map((p, i) => `${i === 0 ? "M" : "L"} ${getX(i)} ${getY(p.predictedCost)}`)
-                            .join(" ");
-
-                          const foreStartIndex = Math.max(0, histPoints.length - 1);
-                          const allForePoints = [
-                            ...(histPoints.length > 0 ? [histPoints[histPoints.length - 1]] : []),
-                            ...forePoints,
-                          ];
-                          const forePath = allForePoints
-                            .map((p, i) => `${i === 0 ? "M" : "L"} ${getX(foreStartIndex + i)} ${getY(p.predictedCost)}`)
-                            .join(" ");
-
-                          // Confidence Band Area Path
-                          let bandPath = "";
-                          if (allForePoints.length > 1) {
-                            const upperPath = allForePoints
-                              .map((p, i) => `${i === 0 ? "M" : "L"} ${getX(foreStartIndex + i)} ${getY(p.upperBoundCost)}`)
-                              .join(" ");
-                            const lowerPath = [...allForePoints]
-                              .reverse()
-                              .map((p, i) => `L ${getX(foreStartIndex + allForePoints.length - 1 - i)} ${getY(p.lowerBoundCost)}`)
-                              .join(" ");
-                            bandPath = `${upperPath} ${lowerPath} Z`;
-                          }
-
-                          return (
-                            <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-full overflow-visible">
-                              <defs>
-                                <linearGradient id="confidenceBandGrad" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="0%" stopColor="#FFF76A" stopOpacity="0.4" />
-                                  <stop offset="100%" stopColor="#FFF76A" stopOpacity="0.05" />
-                                </linearGradient>
-                              </defs>
-
-                              {/* Horizontal Gridlines & Y-Axis Scale Labels */}
-                              {[0.25, 0.5, 0.75, 1.0].map((ratio) => {
-                                const yPos = getY(maxVal * ratio);
-                                return (
-                                  <g key={ratio}>
-                                    <line
-                                      x1={padding + axisLeft}
-                                      y1={yPos}
-                                      x2={chartW - padding}
-                                      y2={yPos}
-                                      stroke="#ECE5CC"
-                                      strokeDasharray="3 3"
-                                      strokeWidth="1"
-                                    />
-                                    <text
-                                      x={padding + axisLeft - 6}
-                                      y={yPos + 3}
-                                      textAnchor="end"
-                                      fontSize="8.5"
-                                      fill="#8D8975"
-                                      fontFamily="monospace"
-                                    >
-                                      ${(maxVal * ratio).toFixed(2)}
-                                    </text>
-                                  </g>
-                                );
-                              })}
-
-                              {/* 95% Confidence Band Polygon */}
-                              {bandPath && (
-                                <path d={bandPath} fill="url(#confidenceBandGrad)" stroke="#E5B542" strokeWidth="0.5" strokeOpacity="0.5" />
-                              )}
-
-                              {/* Historical Line */}
-                              {histPath && (
-                                <path d={histPath} fill="none" stroke="#1F8A70" strokeWidth="2.5" strokeLinecap="round" />
-                              )}
-
-                              {/* Forecast Line */}
-                              {forePath && (
-                                <path d={forePath} fill="none" stroke="#9A6B00" strokeWidth="2.5" strokeDasharray="5 4" strokeLinecap="round" />
-                              )}
-
-                              {/* Historical Points */}
-                              {histPoints.map((p, i) => (
-                                <circle
-                                  key={`hist-${i}`}
-                                  cx={getX(i)}
-                                  cy={getY(p.predictedCost)}
-                                  r="3.5"
-                                  fill="#1F8A70"
-                                  stroke="#FFFFFF"
-                                  strokeWidth="1.5"
-                                >
-                                  <title>{`${p.date}: $${p.predictedCost.toFixed(2)}`}</title>
-                                </circle>
-                              ))}
-
-                              {/* Forecast Points */}
-                              {forePoints.map((p, i) => (
-                                <circle
-                                  key={`fore-${i}`}
-                                  cx={getX(histPoints.length + i)}
-                                  cy={getY(p.predictedCost)}
-                                  r="3"
-                                  fill="#FFFFFF"
-                                  stroke="#9A6B00"
-                                  strokeWidth="1.5"
-                                >
-                                  <title>{`Forecast ${p.date}: $${p.predictedCost.toFixed(2)} (95% CI: $${p.lowerBoundCost.toFixed(2)} - $${p.upperBoundCost.toFixed(2)})`}</title>
-                                </circle>
-                              ))}
-                            </svg>
-                          );
-                        })()
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[12px] text-[#8D8975]">
-                          Insufficient historical timeline to plot forecast. Click "Sync Telemetry" to pull recent AWS billing records.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. Tag-Based Cost Allocation (Showback) & FinOps Hygiene */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-3 border-t border-[#ECE5CC]">
-                  {/* Left: Environment Showback (7 cols) */}
-                  <div className="lg:col-span-7 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-bold text-[14px] text-[#2E2B1A]">Tag Allocation & Showback</h4>
-                        <p className="text-[11.5px] text-[#686450]">
-                          Spend allocated across business environments derived from AWS resource tags.
-                        </p>
-                      </div>
-                      <span className="text-[11px] font-mono text-[#8D8975] font-bold">
-                        Environment Dimension
-                      </span>
-                    </div>
-
-                    <div className="space-y-2.5">
-                      {data?.tagAllocation?.byEnvironment && data.tagAllocation.byEnvironment.length > 0 ? (
-                        data.tagAllocation.byEnvironment.map((env, i) => (
-                          <div key={env.name || i} className="p-3 rounded-2xl bg-[#FAF6E8]/30 border border-[#ECE5CC] space-y-1.5">
-                            <div className="flex items-center justify-between text-[12px]">
-                              <div className="flex items-center gap-2">
-                                <span className={`w-2 h-2 rounded-full ${
-                                  env.name === "Production"
-                                    ? "bg-[#1F8A70]"
-                                    : env.name === "Staging"
-                                    ? "bg-[#9A6B00]"
-                                    : env.name === "Development"
-                                    ? "bg-[#3B82F6]"
-                                    : "bg-[#8D8975]"
-                                }`} />
-                                <span className="font-bold text-[#2E2B1A]">{env.name}</span>
-                                <span className="text-[11px] text-[#8D8975]">({env.count} resources)</span>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className="font-mono font-bold text-[#2E2B1A]">
-                                  ${env.cost.toFixed(2)}/mo
-                                </span>
-                                <span className="text-[11px] font-mono text-[#8D8975]">
-                                  {env.percentage}%
-                                </span>
-                              </div>
-                            </div>
-                            <div className="w-full h-1.5 rounded-full bg-[#ECE5CC] overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${
-                                  env.name === "Production"
-                                    ? "bg-[#1F8A70]"
-                                    : env.name === "Staging"
-                                    ? "bg-[#9A6B00]"
-                                    : env.name === "Development"
-                                    ? "bg-[#3B82F6]"
-                                    : "bg-[#8D8975]"
-                                }`}
-                                style={{ width: `${Math.max(env.percentage, env.count > 0 ? 5 : 0)}%` }}
-                              />
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="p-4 rounded-xl bg-[#FAF6E8]/40 border border-[#ECE5CC] text-center text-[12px] text-[#8D8975]">
-                          No tagged resources discovered.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Right: Tag Hygiene Score (5 cols) */}
-                  <div className="lg:col-span-5 p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] flex flex-col justify-between space-y-3">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-bold text-[13px] text-[#2E2B1A]">FinOps Tag Hygiene</span>
-                        <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold ${
-                          (data?.tagAllocation?.hygieneScore || 0) >= 80
-                            ? "bg-[#E2F5EF] text-[#1F8A70]"
-                            : "bg-[#FFF76A] text-[#2E2B1A] border border-[#DFD6B5]"
-                        }`}>
-                          {data?.tagAllocation?.hygieneScore || 0}% Compliant
-                        </span>
-                      </div>
-                      <p className="text-[11.5px] text-[#686450] leading-snug">
-                        FinOps best practices require mandatory <code className="font-mono text-[#2E2B1A]">Environment</code> and <code className="font-mono text-[#2E2B1A]">Owner</code> tags on all infrastructure assets to automate showback and prevent orphaned spend.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2 pt-2 border-t border-[#ECE5CC]/80">
-                      <div className="flex items-center justify-between text-[11.5px]">
-                        <span className="text-[#686450]">Tagged Resources:</span>
-                        <strong className="text-[#1F8A70] font-mono">
-                          {data?.tagAllocation?.taggedCount || 0} Assets
-                        </strong>
-                      </div>
-                      <div className="flex items-center justify-between text-[11.5px]">
-                        <span className="text-[#686450]">Untagged (Unallocated):</span>
-                        <strong className="text-[#9A6B00] font-mono">
-                          {data?.tagAllocation?.untaggedCount || 0} Assets
-                        </strong>
-                      </div>
-                    </div>
-
-                    {(data?.tagAllocation?.untaggedCount || 0) > 0 && (
-                      <div className="p-2.5 rounded-xl bg-white border border-[#ECE5CC] text-[11px] text-[#686450] flex items-start gap-2">
-                        <Info className="w-3.5 h-3.5 text-[#9A6B00] shrink-0 mt-0.5" />
-                        <span>
-                          Notice: <strong>{data?.tagAllocation?.untaggedCount} resources</strong> lack an Environment tag. Tag them in AWS Console to automate allocation.
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 4. Commitment Coverage & Savings Plan Simulator */}
-                <div className="p-4 rounded-2xl bg-[#FAF6E8]/30 border border-[#ECE5CC] flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]">
-                        Savings Plan Simulator
-                      </span>
-                      <span className="text-[11px] font-mono text-[#8D8975]">
-                        Compute Coverage: 100% On-Demand
-                      </span>
-                    </div>
-                    <h4 className="font-bold text-[13.5px] text-[#2E2B1A]">
-                      1-Year Compute Savings Plan Simulation
-                    </h4>
-                    <p className="text-[12px] text-[#686450] max-w-xl">
-                      Committing to steady-state EC2 compute utilization reduces on-demand rates by up to <strong>28% - 35%</strong> across all regions.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <div className="text-right">
-                      <span className="text-[15px] font-black text-[#1F8A70] block">
-                        Up to 35% Off
-                      </span>
-                      <span className="text-[10.5px] text-[#8D8975]">
-                        Zero upfront option
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {activeNavItem === "cost-explorer" && (
+                <CostExplorerView
+                  data={data}
+                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                />
+              )}
+              {activeNavItem === "cost-allocation" && (
+                <CostAllocationView
+                  data={data}
+                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                />
+              )}
+              {activeNavItem === "cost-budgets" && (
+                <CostBudgetsView
+                  data={data}
+                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                />
+              )}
+              {activeNavItem === "cost-anomalies" && (
+                <CostAnomaliesView
+                  data={data}
+                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                />
+              )}
+              {activeNavItem === "cost-forecast" && (
+                <CostForecastView
+                  data={data}
+                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                />
+              )}
+              {(activeNavItem === "cost-overview" ||
+                !["cost-explorer", "cost-allocation", "cost-budgets", "cost-anomalies", "cost-forecast"].includes(activeNavItem)) && (
+                <CostOverviewView
+                  data={data}
+                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                />
+              )}
             </div>
           )}
 
           {/* TAB 3: CARBON INTELLIGENCE (GREENOPS) */}
           {currentTab === "carbon" && activeAccount && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-sm space-y-5">
-                <div className="flex items-center justify-between pb-4 border-b border-[#ECE5CC]">
-                  <div>
-                    <h2 className="text-[18px] font-bold text-[#2E2B1A]">GreenOps Carbon Intelligence</h2>
-                    <p className="text-[13px] text-[#686450]">
-                      Software Carbon Intensity (SCI) accounting and regional grid emission modeling.
-                    </p>
-                  </div>
-                  <span className="px-3 py-1 rounded-full bg-[#E2F5EF] text-[11.5px] font-bold text-[#1F8A70] border border-[#BDEBDD]">
-                    GSF SCI Standard
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC]">
-                    <span className="text-[11px] font-mono text-[#8D8975] uppercase font-bold block mb-1">
-                      Operational Carbon
-                    </span>
-                    <span className="text-[24px] font-black text-[#2E2B1A]">
-                      {data?.carbon.totalOperationalCarbon !== null ? `${data?.carbon.totalOperationalCarbon} gCO2e` : "--"}
-                    </span>
-                    <span className="text-[11px] text-[#686450] block mt-1">
-                      Direct server electricity consumption
-                    </span>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC]">
-                    <span className="text-[11px] font-mono text-[#8D8975] uppercase font-bold block mb-1">
-                      SCI Score per Functional Unit
-                    </span>
-                    <span className="text-[24px] font-black text-[#1F8A70]">
-                      {data?.carbon.totalOperationalCarbon !== null && data?.carbon.totalEmbodiedCarbon !== null
-                        ? `${(((data.carbon.totalOperationalCarbon + data.carbon.totalEmbodiedCarbon) / sciFunctionalUnit)).toFixed(5)} g/unit`
-                        : "--"}
-                    </span>
-                    <span className="text-[11px] text-[#1F8A70] block mt-1 font-semibold">
-                      Normalized for {sciFunctionalUnit.toLocaleString()} units
-                    </span>
-                  </div>
-                </div>
-
-                {/* 2. Interactive SCI Functional Unit Tuner & Emissions Breakdown */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-3 border-t border-[#ECE5CC]">
-                  {/* Left: SCI Tuner (7 cols) */}
-                  <div className="lg:col-span-7 p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Sliders className="w-4 h-4 text-[#1F8A70]" />
-                        <h4 className="font-bold text-[13.5px] text-[#2E2B1A]">
-                          GSF-SCI Functional Unit Tuner
-                        </h4>
-                      </div>
-                      <span className="font-mono text-[10.5px] bg-[#E2F5EF] text-[#1F8A70] px-2 py-0.5 rounded font-bold">
-                        SCI = (O + M) / R
-                      </span>
-                    </div>
-
-                    <p className="text-[12px] text-[#686450] leading-snug">
-                      The Green Software Foundation standard normalizes carbon output against your actual business throughput (e.g. API requests, active users, or daily transactions).
-                    </p>
-
-                    <div className="pt-1">
-                      <span className="text-[11px] font-mono font-bold text-[#8D8975] block mb-2 uppercase">
-                        Select Functional Unit Horizon:
-                      </span>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {[
-                          { label: "10,000 Requests", val: 10000 },
-                          { label: "50,000 Requests", val: 50000 },
-                          { label: "100,000 Requests (Default)", val: 100000 },
-                          { label: "1,000,000 Requests", val: 1000000 },
-                        ].map((preset) => (
-                          <button
-                            key={preset.val}
-                            type="button"
-                            onClick={() => setSciFunctionalUnit(preset.val)}
-                            className={`px-3 py-1.5 rounded-xl text-[11.5px] font-bold transition-all cursor-pointer ${
-                              sciFunctionalUnit === preset.val
-                                ? "bg-[#FFF76A] text-[#2E2B1A] border border-[#DFD6B5] shadow-2xs"
-                                : "bg-white hover:bg-[#FAF6E8] text-[#686450] border border-[#ECE5CC]"
-                            }`}
-                          >
-                            {preset.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right: Direct vs Embodied Emissions Ratio (5 cols) */}
-                  <div className="lg:col-span-5 p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] flex flex-col justify-between space-y-3">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-bold text-[13px] text-[#2E2B1A]">Carbon Emissions Breakdown</span>
-                        <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#E2F5EF] text-[#1F8A70]">
-                          Direct & Embodied
-                        </span>
-                      </div>
-                      <p className="text-[11.5px] text-[#686450] leading-snug">
-                        Server electricity measures dynamic energy consumed by running compute. Embodied carbon amortizes physical hardware manufacturing and supply chain footprint.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2 pt-2 border-t border-[#ECE5CC]/80">
-                      <div>
-                        <div className="flex justify-between text-[11.5px] font-mono mb-1">
-                          <span className="text-[#686450]">Server Electricity (Operational):</span>
-                          <strong className="text-[#2E2B1A]">
-                            {data?.carbon.totalOperationalCarbon !== null ? `${data?.carbon.totalOperationalCarbon} gCO2e` : "--"}
-                          </strong>
-                        </div>
-                        <div className="w-full h-1.5 rounded-full bg-[#ECE5CC] overflow-hidden">
-                          <div className="h-full bg-[#1F8A70] rounded-full" style={{ width: "65%" }} />
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between text-[11.5px] font-mono mb-1">
-                          <span className="text-[#686450]">Hardware Manufacturing (Embodied):</span>
-                          <strong className="text-[#2E2B1A]">
-                            {data?.carbon.totalEmbodiedCarbon !== null ? `${data?.carbon.totalEmbodiedCarbon} gCO2e` : "--"}
-                          </strong>
-                        </div>
-                        <div className="w-full h-1.5 rounded-full bg-[#ECE5CC] overflow-hidden">
-                          <div className="h-full bg-[#9A6B00] rounded-full" style={{ width: "35%" }} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. Clean Grid Migration Simulator */}
-                <div className="p-4 rounded-2xl bg-[#E2F5EF]/40 border border-[#BDEBDD] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#1F8A70] text-white">
-                        Carbon-Aware Shifting
-                      </span>
-                      <span className="text-[11px] font-mono text-[#1F8A70] font-bold">
-                        us-east-1 → us-west-2
-                      </span>
-                    </div>
-                    <h4 className="font-bold text-[14px] text-[#2E2B1A]">
-                      Clean Grid Migration Simulation
-                    </h4>
-                    <p className="text-[12px] text-[#686450] max-w-xl">
-                      Relocating non-latency-sensitive workloads from Northern Virginia (312 gCO2e/kWh) to Oregon (198 gCO2e/kWh - Hydro) eliminates <strong>~36.5%</strong> of direct grid emissions without code changes.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <div className="text-right">
-                      <span className="text-[16px] font-black text-[#1F8A70] block">
-                        -36.5% gCO2e
-                      </span>
-                      <span className="text-[10.5px] text-[#8D8975]">
-                        Zero performance penalty
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Regional Grid Factor Table */}
-                <div className="pt-2">
-                  <h3 className="font-bold text-[14px] text-[#2E2B1A] mb-3">Regional Electricity Grid Carbon Intensity</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-[12.5px]">
-                      <thead>
-                        <tr className="border-b border-[#ECE5CC] font-mono text-[11px] text-[#8D8975] uppercase">
-                          <th className="py-2">AWS Region</th>
-                          <th className="py-2">Location</th>
-                          <th className="py-2">Grid Carbon Intensity</th>
-                          <th className="py-2">Energy Mix</th>
-                          <th className="py-2">Rating</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#ECE5CC]/50">
-                        {data?.carbon.regionalGrid.map((grid, idx) => (
-                          <tr key={idx} className="hover:bg-[#FAF6E8]/40">
-                            <td className="py-2.5 font-mono font-bold text-[#2E2B1A]">{grid.region}</td>
-                            <td className="py-2.5 text-[#686450]">{grid.location}</td>
-                            <td className="py-2.5 font-mono font-bold">{grid.gridIntensity} gCO2e/kWh</td>
-                            <td className="py-2.5 text-[#686450]">{grid.mix}</td>
-                            <td className="py-2.5">
-                              <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${grid.status === "Clean"
-                                  ? "bg-[#E2F5EF] text-[#1F8A70]"
-                                  : "bg-[#FFF3D6] text-[#9A6B00]"
-                                }`}>
-                                {grid.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
+              {activeNavItem === "sustainability-carbon" && (
+                <CarbonAccountingView
+                  data={data}
+                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                />
+              )}
+              {activeNavItem === "sustainability-resources" && (
+                <ResourceCarbonView
+                  data={data}
+                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                />
+              )}
+              {activeNavItem === "sustainability-regions" && (
+                <RegionalGridMatrixView
+                  data={data}
+                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                />
+              )}
+              {activeNavItem === "sustainability-sci" && (
+                <SciTunerGovernanceView
+                  data={data}
+                  sciFunctionalUnit={sciFunctionalUnit}
+                  setSciFunctionalUnit={setSciFunctionalUnit}
+                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                />
+              )}
+              {(activeNavItem === "sustainability-overview" ||
+                !["sustainability-carbon", "sustainability-resources", "sustainability-regions", "sustainability-sci"].includes(activeNavItem)) && (
+                <SustainabilityOverviewView
+                  data={data}
+                  sciFunctionalUnit={sciFunctionalUnit}
+                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                />
+              )}
             </div>
           )}
 
