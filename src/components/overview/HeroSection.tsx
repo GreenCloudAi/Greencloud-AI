@@ -41,7 +41,7 @@ export function HeroSection() {
       .then((accs) => {
         if (Array.isArray(accs) && accs.length > 0) setHasAccount(true);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Dynamic Date Generation based on current client date (Past -> Today in chronological order)
@@ -442,11 +442,10 @@ export function HeroSection() {
                         setTimeRange(r);
                         setHoveredPoint(null);
                       }}
-                      className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all ${
-                        timeRange === r
+                      className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all ${timeRange === r
                           ? "bg-[#FFF76A] text-[#2E2B1A] shadow-sm"
                           : "text-[#8D8975] hover:text-[#2E2B1A]"
-                      }`}
+                        }`}
                     >
                       {r}
                     </button>

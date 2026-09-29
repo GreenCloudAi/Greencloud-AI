@@ -13,6 +13,7 @@ import {
   Layers,
   Activity,
   HardDrive,
+  Sparkles,
 } from "lucide-react";
 
 interface SustainabilityOverviewViewProps {
@@ -143,7 +144,7 @@ export function SustainabilityOverviewView({
       {/* Deep-Dive Sub-Section Quick Jump Cards */}
       <div>
         <h3 className="text-[14px] font-bold text-[#2E2B1A] mb-3">Specialized Sustainability Modules</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Card 1: Carbon Accounting */}
           <div
             onClick={() => onNavigateSubTab("sustainability-carbon")}
@@ -228,6 +229,50 @@ export function SustainabilityOverviewView({
             </div>
             <div className="mt-4 pt-3 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11.5px] font-bold text-[#1F8A70]">
               <span>Tune Formula</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+
+          {/* Card 5: Carbon Recommendations */}
+          <div
+            onClick={() => onNavigateSubTab("sustainability-recommendations")}
+            className="p-5 rounded-2xl bg-white border border-[#ECE5CC] hover:border-[#9A6B00] hover:shadow-warm-xs transition-all cursor-pointer group flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] group-hover:bg-[#FFF3D6] border border-[#ECE5CC] flex items-center justify-center text-[#9A6B00] mb-3 transition-colors">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <h4 className="font-bold text-[14px] text-[#2E2B1A] group-hover:text-[#9A6B00] transition-colors">
+                Carbon Recommendations
+              </h4>
+              <p className="text-[12px] text-[#686450] mt-1 leading-relaxed">
+                Actionable resource remediation actions to immediately eliminate wasted operational grid emissions.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11.5px] font-bold text-[#9A6B00]">
+              <span>Review Actions</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+
+          {/* Card 6: Green Modernization Opportunities */}
+          <div
+            onClick={() => onNavigateSubTab("sustainability-opportunities")}
+            className="p-5 rounded-2xl bg-white border border-[#ECE5CC] hover:border-[#1F8A70] hover:shadow-warm-xs transition-all cursor-pointer group flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] group-hover:bg-[#E2F5EF] border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70] mb-3 transition-colors">
+                <Layers className="w-5 h-5" />
+              </div>
+              <h4 className="font-bold text-[14px] text-[#2E2B1A] group-hover:text-[#1F8A70] transition-colors">
+                Green Opportunities
+              </h4>
+              <p className="text-[12px] text-[#686450] mt-1 leading-relaxed">
+                Architectural transformations: AWS Graviton3 Arm64 migration, non-prod sleep cycles, and gp3 upgrades.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11.5px] font-bold text-[#1F8A70]">
+              <span>Explore Modernization</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>

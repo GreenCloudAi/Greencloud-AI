@@ -57,6 +57,8 @@ import { CarbonAccountingView } from "@/components/sustainability/CarbonAccounti
 import { ResourceCarbonView } from "@/components/sustainability/ResourceCarbonView";
 import { RegionalGridMatrixView } from "@/components/sustainability/RegionalGridMatrixView";
 import { SciTunerGovernanceView } from "@/components/sustainability/SciTunerGovernanceView";
+import { RecommendationsView } from "@/components/optimization/RecommendationsView";
+import { OpportunitiesView } from "@/components/optimization/OpportunitiesView";
 
 interface CloudAccount {
   id: string;
@@ -466,7 +468,7 @@ resource "aws_instance" "production_node" {
     try {
       const parsed = JSON.parse(rec.evidence);
       cleanEvidence = parsed.reason || parsed.calculation || rec.evidence;
-    } catch {}
+    } catch { }
 
     return `### [GreenCloud AI] Optimization: ${rec.title}
 **Resource ID**: \`${rec.resource?.providerResourceId || "N/A"}\`
@@ -766,9 +768,8 @@ Apply the proposed Terraform configuration change or safely update the resource 
       {/* 1. LEFT SIDEBAR NAVIGATION                                                */}
       {/* ========================================================================= */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#FFFDF7] border-r border-[#ECE5CC] flex flex-col justify-between transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${
-          mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#FFFDF7] border-r border-[#ECE5CC] flex flex-col justify-between transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
       >
         <div className="flex flex-col flex-grow min-h-0">
           {/* Brand Header */}
@@ -808,11 +809,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                 setActiveNavItem("overview");
                 setMobileSidebarOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-[13.5px] font-bold transition-all cursor-pointer ${
-                activeNavItem === "overview" && currentTab === "overview"
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-[13.5px] font-bold transition-all cursor-pointer ${activeNavItem === "overview" && currentTab === "overview"
                   ? "bg-[#FAF6E8] text-[#2E2B1A]"
                   : "text-[#686450] hover:bg-[#FAF6E8]/60 hover:text-[#2E2B1A]"
-              }`}
+                }`}
             >
               <LayoutGrid className="w-4 h-4 text-[#2E2B1A]" />
               <span>Overview</span>
@@ -830,9 +830,8 @@ Apply the proposed Terraform configuration change or safely update the resource 
                   <span className="text-[#555240] group-hover:text-[#2E2B1A]">Infrastructure</span>
                 </div>
                 <ChevronDown
-                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${
-                    openSections.infrastructure ? "" : "-rotate-90"
-                  }`}
+                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${openSections.infrastructure ? "" : "-rotate-90"
+                    }`}
                 />
               </button>
 
@@ -845,11 +844,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("infra-accounts");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "infra-accounts" && currentTab === "infrastructure"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "infra-accounts" && currentTab === "infrastructure"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Accounts
                   </button>
@@ -861,11 +859,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setInfraTypeFilter("all");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "infra-resources" && currentTab === "infrastructure"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "infra-resources" && currentTab === "infrastructure"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Resources
                   </button>
@@ -876,11 +873,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("infra-regions");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "infra-regions" && currentTab === "infrastructure"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "infra-regions" && currentTab === "infrastructure"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Regions
                   </button>
@@ -900,9 +896,8 @@ Apply the proposed Terraform configuration change or safely update the resource 
                   <span className="text-[#555240] group-hover:text-[#2E2B1A]">Costs & Usage</span>
                 </div>
                 <ChevronDown
-                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${
-                    openSections.costs ? "" : "-rotate-90"
-                  }`}
+                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${openSections.costs ? "" : "-rotate-90"
+                    }`}
                 />
               </button>
 
@@ -915,11 +910,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("cost-overview");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "cost-overview" && currentTab === "cost"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-overview" && currentTab === "cost"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Cost Overview
                   </button>
@@ -930,11 +924,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("cost-explorer");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "cost-explorer" && currentTab === "cost"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-explorer" && currentTab === "cost"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Cost Explorer
                   </button>
@@ -945,11 +938,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("cost-allocation");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "cost-allocation" && currentTab === "cost"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-allocation" && currentTab === "cost"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Cost Allocation
                   </button>
@@ -960,11 +952,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("cost-budgets");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "cost-budgets" && currentTab === "cost"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-budgets" && currentTab === "cost"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Budgets
                   </button>
@@ -975,11 +966,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("cost-anomalies");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "cost-anomalies" && currentTab === "cost"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-anomalies" && currentTab === "cost"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Anomalies
                   </button>
@@ -990,11 +980,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("cost-forecast");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "cost-forecast" && currentTab === "cost"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-forecast" && currentTab === "cost"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Forecast
                   </button>
@@ -1014,9 +1003,8 @@ Apply the proposed Terraform configuration change or safely update the resource 
                   <span className="text-[#555240] group-hover:text-[#2E2B1A]">Sustainability</span>
                 </div>
                 <ChevronDown
-                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${
-                    openSections.sustainability ? "" : "-rotate-90"
-                  }`}
+                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${openSections.sustainability ? "" : "-rotate-90"
+                    }`}
                 />
               </button>
 
@@ -1029,11 +1017,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("sustainability-overview");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "sustainability-overview" && currentTab === "carbon"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-overview" && currentTab === "carbon"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Overview
                   </button>
@@ -1044,11 +1031,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("sustainability-carbon");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "sustainability-carbon" && currentTab === "carbon"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-carbon" && currentTab === "carbon"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Carbon
                   </button>
@@ -1059,11 +1045,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("sustainability-resources");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "sustainability-resources" && currentTab === "carbon"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-resources" && currentTab === "carbon"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Resources
                   </button>
@@ -1074,11 +1059,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("sustainability-regions");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "sustainability-regions" && currentTab === "carbon"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-regions" && currentTab === "carbon"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Regions
                   </button>
@@ -1089,13 +1073,43 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("sustainability-sci");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "sustainability-sci" && currentTab === "carbon"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-sci" && currentTab === "carbon"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     SCI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("carbon");
+                      setActiveNavItem("sustainability-recommendations");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-recommendations" && currentTab === "carbon"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                      }`}
+                  >
+                    <span>Recommendations</span>
+                    <span className="w-5 h-5 rounded-full bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] font-bold text-[10.5px] flex items-center justify-center shrink-0">
+                      {data?.recommendations?.activeCount || 2}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab("carbon");
+                      setActiveNavItem("sustainability-opportunities");
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-opportunities" && currentTab === "carbon"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                      }`}
+                  >
+                    Opportunities
                   </button>
                 </div>
               )}
@@ -1113,9 +1127,8 @@ Apply the proposed Terraform configuration change or safely update the resource 
                   <span className="text-[#555240] group-hover:text-[#2E2B1A]">Optimization</span>
                 </div>
                 <ChevronDown
-                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${
-                    openSections.optimization ? "" : "-rotate-90"
-                  }`}
+                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${openSections.optimization ? "" : "-rotate-90"
+                    }`}
                 />
               </button>
 
@@ -1128,11 +1141,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("opt-recommendations");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "opt-recommendations" && currentTab === "recommendations"
+                    className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "opt-recommendations" && currentTab === "recommendations"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     <span>Recommendations</span>
                     <span className="w-5 h-5 rounded-full bg-[#FFF76A] border border-[#DFD6B5] text-[#2E2B1A] font-bold text-[11px] flex items-center justify-center shrink-0">
@@ -1146,11 +1158,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("opt-opportunities");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "opt-opportunities" && currentTab === "recommendations"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "opt-opportunities" && currentTab === "recommendations"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Opportunities
                   </button>
@@ -1161,11 +1172,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       setActiveNavItem("opt-actions");
                       setMobileSidebarOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${
-                      activeNavItem === "opt-actions" && currentTab === "audit"
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "opt-actions" && currentTab === "audit"
                         ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
                         : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                    }`}
+                      }`}
                   >
                     Actions
                   </button>
@@ -1182,11 +1192,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                   setExportModalOpen(true);
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-[13px] font-bold transition-all cursor-pointer ${
-                  activeNavItem === "reports"
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-[13px] font-bold transition-all cursor-pointer ${activeNavItem === "reports"
                     ? "bg-[#FAF6E8] text-[#2E2B1A]"
                     : "text-[#2E2B1A] bg-[#FAF6E8]/70 hover:bg-[#FAF6E8]"
-                }`}
+                  }`}
               >
                 <FileText className="w-4 h-4 text-[#8D8975]" />
                 <span>Reports</span>
@@ -1202,11 +1211,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                   setSettingsModalOpen(true);
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center gap-3 px-3.5 py-2 text-[13px] font-bold transition-all cursor-pointer ${
-                  activeNavItem === "settings" || settingsModalOpen
+                className={`w-full flex items-center gap-3 px-3.5 py-2 text-[13px] font-bold transition-all cursor-pointer ${activeNavItem === "settings" || settingsModalOpen
                     ? "bg-[#FAF6E8] text-[#2E2B1A] rounded-xl"
                     : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 rounded-xl"
-                }`}
+                  }`}
               >
                 <Settings className="w-4 h-4 text-[#8D8975]" />
                 <span>Settings</span>
@@ -1264,21 +1272,27 @@ Apply the proposed Terraform configuration change or safely update the resource 
                     {currentTab === "overview" && "Cloud Overview"}
                     {currentTab === "cost" && (
                       activeNavItem === "cost-explorer" ? "Costs & Usage / Cost Explorer" :
-                      activeNavItem === "cost-allocation" ? "Costs & Usage / Cost Allocation & Tags" :
-                      activeNavItem === "cost-budgets" ? "Costs & Usage / Budgets & Governance" :
-                      activeNavItem === "cost-anomalies" ? "Costs & Usage / Cost Anomalies" :
-                      activeNavItem === "cost-forecast" ? "Costs & Usage / Predictive Forecast Studio" :
-                      "Costs & Usage / Overview"
+                        activeNavItem === "cost-allocation" ? "Costs & Usage / Cost Allocation & Tags" :
+                          activeNavItem === "cost-budgets" ? "Costs & Usage / Budgets & Governance" :
+                            activeNavItem === "cost-anomalies" ? "Costs & Usage / Cost Anomalies" :
+                              activeNavItem === "cost-forecast" ? "Costs & Usage / Predictive Forecast Studio" :
+                                "Costs & Usage / Overview"
                     )}
                     {currentTab === "carbon" && (
                       activeNavItem === "sustainability-carbon" ? "Sustainability / Scope 2 & 3 Accounting" :
-                      activeNavItem === "sustainability-resources" ? "Sustainability / Resource Carbon Ledger" :
-                      activeNavItem === "sustainability-regions" ? "Sustainability / Regional Grid Matrix" :
-                      activeNavItem === "sustainability-sci" ? "Sustainability / GSF-SCI Tuner Studio" :
-                      "Sustainability / Overview"
+                        activeNavItem === "sustainability-resources" ? "Sustainability / Resource Carbon Ledger" :
+                          activeNavItem === "sustainability-regions" ? "Sustainability / Regional Grid Matrix" :
+                            activeNavItem === "sustainability-sci" ? "Sustainability / GSF-SCI Tuner Studio" :
+                              activeNavItem === "sustainability-recommendations" ? "Sustainability / Carbon Reduction Recommendations" :
+                                activeNavItem === "sustainability-opportunities" ? "Sustainability / Green Modernization Opportunities" :
+                                  "Sustainability / Overview"
                     )}
                     {currentTab === "infrastructure" && "Infrastructure Overview"}
-                    {currentTab === "recommendations" && "Recommendations Summary"}
+                    {currentTab === "recommendations" && (
+                      activeNavItem === "opt-opportunities"
+                        ? "Optimization / Strategic Modernization Opportunities"
+                        : "Optimization / Actionable Recommendations"
+                    )}
                     {currentTab === "audit" && "Audit History"}
                   </h1>
 
@@ -1333,11 +1347,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                             setAccountDropdownOpen(false);
                             loadDashboard(acc.id);
                           }}
-                          className={`w-full text-left px-2.5 py-2 rounded-xl text-[12px] flex items-center justify-between transition-colors ${
-                            acc.id === activeAccount.id
+                          className={`w-full text-left px-2.5 py-2 rounded-xl text-[12px] flex items-center justify-between transition-colors ${acc.id === activeAccount.id
                               ? "bg-[#FAF6E8] font-bold text-[#2E2B1A]"
                               : "text-[#686450] hover:bg-[#FAF6E8]/60"
-                          }`}
+                            }`}
                         >
                           <div className="truncate">
                             <span className="block truncate">{acc.name}</span>
@@ -1372,11 +1385,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                     key={r}
                     type="button"
                     onClick={() => setTimeRange(r)}
-                    className={`px-2.5 py-1 rounded-lg transition-all ${
-                      timeRange === r
+                    className={`px-2.5 py-1 rounded-lg transition-all ${timeRange === r
                         ? "bg-[#FFF76A] text-[#2E2B1A] shadow-2xs"
                         : "text-[#8D8975] hover:text-[#2E2B1A]"
-                    }`}
+                      }`}
                   >
                     {r}
                   </button>
@@ -1405,11 +1417,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                     setCredsError(null);
                     setCredentialsModalOpen(true);
                   }}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[12px] font-bold shadow-2xs transition-all cursor-pointer ${
-                    activeAccount.hasEncryptedCredentials
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[12px] font-bold shadow-2xs transition-all cursor-pointer ${activeAccount.hasEncryptedCredentials
                       ? "bg-[#E2F5EF] hover:bg-[#D4EFE7] border-[#BDEBDD] text-[#1F8A70]"
                       : "bg-white hover:bg-[#FAF6E8] border-[#ECE5CC] text-[#2E2B1A]"
-                  }`}
+                    }`}
                   title={
                     activeAccount.hasEncryptedCredentials
                       ? `AES-256 encrypted keys active (${activeAccount.maskedAccessKey || "configured"})`
@@ -1576,13 +1587,12 @@ Apply the proposed Terraform configuration change or safely update the resource 
                       </span>
                       <div className="flex items-center gap-1.5 flex-wrap justify-end">
                         {data?.forecast?.trendVelocity && (
-                          <span className={`inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full border ${
-                            data.forecast.trendVelocity === "accelerating"
+                          <span className={`inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full border ${data.forecast.trendVelocity === "accelerating"
                               ? "bg-[#FDE8E8] text-[#C84B31] border-[#F8B4B4]"
                               : data.forecast.trendVelocity === "decelerating"
-                              ? "bg-[#E2F5EF] text-[#1F8A70] border-[#BDEBDD]"
-                              : "bg-[#FAF6E8] text-[#9A6B00] border-[#ECE5CC]"
-                          }`}>
+                                ? "bg-[#E2F5EF] text-[#1F8A70] border-[#BDEBDD]"
+                                : "bg-[#FAF6E8] text-[#9A6B00] border-[#ECE5CC]"
+                            }`}>
                             {data.forecast.trendVelocity === "accelerating" ? (
                               <>
                                 <TrendingUp className="w-3 h-3" />
@@ -1599,13 +1609,12 @@ Apply the proposed Terraform configuration change or safely update the resource 
                           </span>
                         )}
                         {data?.forecast?.budgetRisk && (
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                            data.forecast.budgetRisk === "high"
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${data.forecast.budgetRisk === "high"
                               ? "bg-[#FDE8E8] text-[#C84B31] border-[#F8B4B4]"
                               : data.forecast.budgetRisk === "medium"
-                              ? "bg-[#FEF3D6] text-[#9A6B00] border-[#F6DC9B]"
-                              : "bg-[#E2F5EF] text-[#1F8A70] border-[#BDEBDD]"
-                          }`}>
+                                ? "bg-[#FEF3D6] text-[#9A6B00] border-[#F6DC9B]"
+                                : "bg-[#E2F5EF] text-[#1F8A70] border-[#BDEBDD]"
+                            }`}>
                             {data.forecast.budgetRisk.toUpperCase()} RISK
                           </span>
                         )}
@@ -1906,8 +1915,8 @@ Apply the proposed Terraform configuration change or safely update the resource 
                     {ec2Total === 0
                       ? "0"
                       : ec2Running > 0
-                      ? `${ec2Running} Active (${ec2Stopped} Stopped)`
-                      : `${ec2Stopped} Stopped`}
+                        ? `${ec2Running} Active (${ec2Stopped} Stopped)`
+                        : `${ec2Stopped} Stopped`}
                   </span>
                   <span className="px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A] font-bold flex items-center gap-1.5">
                     <HardDrive className="w-3.5 h-3.5 text-[#1F8A70]" />
@@ -2160,9 +2169,8 @@ Apply the proposed Terraform configuration change or safely update the resource 
                           return (
                             <div key={log.id || i} className="flex items-start gap-2">
                               <span
-                                className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
-                                  isGreen ? "bg-[#1F8A70]" : "bg-[#9A6B00]"
-                                }`}
+                                className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isGreen ? "bg-[#1F8A70]" : "bg-[#9A6B00]"
+                                  }`}
                               />
                               <div className="min-w-0 flex-1">
                                 <p className="text-[#686450] leading-snug truncate">
@@ -2233,11 +2241,11 @@ Apply the proposed Terraform configuration change or safely update the resource 
               )}
               {(activeNavItem === "cost-overview" ||
                 !["cost-explorer", "cost-allocation", "cost-budgets", "cost-anomalies", "cost-forecast"].includes(activeNavItem)) && (
-                <CostOverviewView
-                  data={data}
-                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
-                />
-              )}
+                  <CostOverviewView
+                    data={data}
+                    onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                  />
+                )}
             </div>
           )}
 
@@ -2270,14 +2278,29 @@ Apply the proposed Terraform configuration change or safely update the resource 
                   onNavigateSubTab={(sub) => setActiveNavItem(sub)}
                 />
               )}
-              {(activeNavItem === "sustainability-overview" ||
-                !["sustainability-carbon", "sustainability-resources", "sustainability-regions", "sustainability-sci"].includes(activeNavItem)) && (
-                <SustainabilityOverviewView
+              {activeNavItem === "sustainability-recommendations" && (
+                <RecommendationsView
                   data={data}
-                  sciFunctionalUnit={sciFunctionalUnit}
-                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                  onSelectRecommendation={setSelectedRecommendation}
+                  onApproveRecommendation={handleApproveRecommendation}
+                  onNavigateSubTab={(sub: string) => setActiveNavItem(sub)}
                 />
               )}
+              {activeNavItem === "sustainability-opportunities" && (
+                <OpportunitiesView
+                  data={data}
+                  onNavigateSubTab={(sub: string) => setActiveNavItem(sub)}
+                  onSelectRecommendation={setSelectedRecommendation}
+                />
+              )}
+              {(activeNavItem === "sustainability-overview" ||
+                !["sustainability-carbon", "sustainability-resources", "sustainability-regions", "sustainability-sci", "sustainability-recommendations", "sustainability-opportunities"].includes(activeNavItem)) && (
+                  <SustainabilityOverviewView
+                    data={data}
+                    sciFunctionalUnit={sciFunctionalUnit}
+                    onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                  />
+                )}
             </div>
           )}
 
@@ -2292,22 +2315,20 @@ Apply the proposed Terraform configuration change or safely update the resource 
                     <button
                       type="button"
                       onClick={() => setActiveNavItem("infra-resources")}
-                      className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer ${
-                        activeNavItem === "infra-resources" || (activeNavItem !== "infra-accounts" && activeNavItem !== "infra-regions")
+                      className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer ${activeNavItem === "infra-resources" || (activeNavItem !== "infra-accounts" && activeNavItem !== "infra-regions")
                           ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
                           : "text-[#686450] hover:text-[#2E2B1A]"
-                      }`}
+                        }`}
                     >
                       Resources ({filteredResources.length})
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveNavItem("infra-accounts")}
-                      className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        activeNavItem === "infra-accounts"
+                      className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeNavItem === "infra-accounts"
                           ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
                           : "text-[#686450] hover:text-[#2E2B1A]"
-                      }`}
+                        }`}
                     >
                       <Cloud className="w-3.5 h-3.5" />
                       <span>Accounts ({accountsList.length})</span>
@@ -2315,11 +2336,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                     <button
                       type="button"
                       onClick={() => setActiveNavItem("infra-regions")}
-                      className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer ${
-                        activeNavItem === "infra-regions"
+                      className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer ${activeNavItem === "infra-regions"
                           ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
                           : "text-[#686450] hover:text-[#2E2B1A]"
-                      }`}
+                        }`}
                     >
                       Regions ({data?.resources.byRegion?.length || 0})
                     </button>
@@ -2383,11 +2403,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                         return (
                           <div
                             key={acc.id}
-                            className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                              isActive
+                            className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isActive
                                 ? "bg-white border-[#1F8A70]/50 ring-1 ring-[#1F8A70]/20 shadow-warm-xs"
                                 : "bg-[#FAF6E8]/30 border-[#ECE5CC] hover:bg-white"
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center gap-3.5 min-w-0">
                               <div className="w-10 h-10 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A] shrink-0">
@@ -2574,11 +2593,10 @@ Apply the proposed Terraform configuration change or safely update the resource 
                                   )}
                                 </td>
                                 <td className="py-2.5">
-                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase ${
-                                    res.lifecycleState === "running" || res.lifecycleState === "in-use"
+                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase ${res.lifecycleState === "running" || res.lifecycleState === "in-use"
                                       ? "bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]"
                                       : "bg-[#FFF3D6] text-[#9A6B00] border border-[#ECE5CC]"
-                                  }`}>
+                                    }`}>
                                     {res.lifecycleState === "running" && (
                                       <span className="w-1.5 h-1.5 rounded-full bg-[#1F8A70] animate-pulse"></span>
                                     )}
@@ -2614,100 +2632,20 @@ Apply the proposed Terraform configuration change or safely update the resource 
           {/* TAB 5: RECOMMENDATIONS SUMMARY */}
           {currentTab === "recommendations" && activeAccount && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-sm space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#ECE5CC]">
-                  <div>
-                    <h2 className="text-[18px] font-bold text-[#2E2B1A]">High-Confidence Optimization Actions</h2>
-                    <p className="text-[13px] text-[#686450]">
-                      Prioritized recommendations ranked by financial ROI, carbon savings, and operational risk.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1.5 rounded-xl bg-[#FFF76A] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A]">
-                      {data?.recommendations.totalSavings !== null ? `$${data?.recommendations.totalSavings.toLocaleString()}/mo Total Potential` : "--"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Recommendations List */}
-                <div className="space-y-3">
-                  {filteredRecommendations.length ? (
-                    filteredRecommendations.map((rec) => {
-                      let parsedEvidence: any = null;
-                      try {
-                        parsedEvidence = JSON.parse(rec.evidence);
-                      } catch {
-                        // ignore
-                      }
-
-                      return (
-                        <div
-                          key={rec.id}
-                          className="p-4 sm:p-5 rounded-2xl border border-[#ECE5CC] bg-[#FAF6E8]/20 hover:bg-[#FAF6E8]/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                        >
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="px-2 py-0.5 rounded text-[10.5px] font-mono font-bold uppercase bg-[#FAF6E8] border border-[#ECE5CC] text-[#9A6B00]">
-                                {rec.category}
-                              </span>
-                              <span className="text-[11px] font-mono text-[#8D8975]">
-                                Risk Score: {(rec.riskScore * 100).toFixed(0)}%
-                              </span>
-                            </div>
-                            <h4 className="font-bold text-[14.5px] text-[#2E2B1A]">
-                              {rec.title}
-                            </h4>
-                            <p className="text-[12px] text-[#686450] max-w-2xl leading-relaxed">
-                              {parsedEvidence?.reason || rec.evidence}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-4 shrink-0 sm:self-center">
-                            <div className="text-right">
-                              <span className="text-[16px] font-black text-[#1F8A70] block">
-                                +${rec.estimatedMonthlySavings.toLocaleString()}/mo
-                              </span>
-                              <span className="text-[10.5px] font-mono text-[#8D8975] block">
-                                Confidence: {(rec.confidence * 100).toFixed(0)}%
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedRecommendation(rec)}
-                                className="px-3.5 py-1.5 rounded-full bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px] font-bold text-[#2E2B1A] transition-all cursor-pointer flex items-center gap-1.5"
-                              >
-                                <Code className="w-3.5 h-3.5 text-[#1F8A70]" />
-                                <span>Inspect & IaC</span>
-                              </button>
-
-                              {rec.status === "active" ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleApproveRecommendation(rec.id)}
-                                  className="px-4 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] shadow-xs cursor-pointer"
-                                >
-                                  Approve
-                                </button>
-                              ) : (
-                                <span className="px-3 py-1 rounded-full bg-[#E2F5EF] text-[11px] font-bold text-[#1F8A70]">
-                                  Approved
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="py-8 text-center text-[#8D8975]">
-                      No recommendations found. Run "Sync Telemetry" to analyze resources for waste and rightsizing.
-                    </div>
-                  )}
-                </div>
-              </div>
+              {activeNavItem === "opt-opportunities" ? (
+                <OpportunitiesView
+                  data={data}
+                  onNavigateSubTab={(sub: string) => setActiveNavItem(sub)}
+                  onSelectRecommendation={setSelectedRecommendation}
+                />
+              ) : (
+                <RecommendationsView
+                  data={data}
+                  onSelectRecommendation={setSelectedRecommendation}
+                  onApproveRecommendation={handleApproveRecommendation}
+                  onNavigateSubTab={(sub: string) => setActiveNavItem(sub)}
+                />
+              )}
             </div>
           )}
 
@@ -2778,926 +2716,919 @@ Apply the proposed Terraform configuration change or safely update the resource 
           className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-150"
           onClick={() => setSelectedRecommendation(null)}
         >
-              <div
-                className="w-full max-w-2xl bg-[#FFFDF4] rounded-3xl shadow-2xl flex flex-col max-h-[90vh] border border-[#ECE5CC] overflow-hidden animate-in zoom-in-95 duration-200"
-                onClick={(e) => e.stopPropagation()}
+          <div
+            className="w-full max-w-2xl bg-[#FFFDF4] rounded-3xl shadow-2xl flex flex-col max-h-[90vh] border border-[#ECE5CC] overflow-hidden animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-5 sm:p-6 border-b border-[#ECE5CC] bg-white flex items-start justify-between gap-4 shrink-0">
+              <div className="space-y-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded text-[10.5px] font-mono font-bold uppercase bg-[#FAF6E8] text-[#9A6B00] border border-[#ECE5CC]">
+                    {selectedRecommendation.category}
+                  </span>
+                  <span className="text-[11px] font-mono text-[#8D8975]">
+                    Risk: {(selectedRecommendation.riskScore * 100).toFixed(0)}%
+                  </span>
+                  <span className="text-[11px] font-mono text-[#1F8A70] font-bold">
+                    Confidence: {(selectedRecommendation.confidence * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <h3 className="font-bold text-[17px] text-[#2E2B1A] leading-snug">
+                  {selectedRecommendation.title}
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedRecommendation(null)}
+                className="p-1.5 rounded-xl border border-[#ECE5CC] hover:bg-[#FAF6E8] text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer shrink-0"
               >
-                {/* Modal Header */}
-                <div className="p-5 sm:p-6 border-b border-[#ECE5CC] bg-white flex items-start justify-between gap-4 shrink-0">
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[10.5px] font-mono font-bold uppercase bg-[#FAF6E8] text-[#9A6B00] border border-[#ECE5CC]">
-                        {selectedRecommendation.category}
-                      </span>
-                      <span className="text-[11px] font-mono text-[#8D8975]">
-                        Risk: {(selectedRecommendation.riskScore * 100).toFixed(0)}%
-                      </span>
-                      <span className="text-[11px] font-mono text-[#1F8A70] font-bold">
-                        Confidence: {(selectedRecommendation.confidence * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    <h3 className="font-bold text-[17px] text-[#2E2B1A] leading-snug">
-                      {selectedRecommendation.title}
-                    </h3>
-                  </div>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRecommendation(null)}
-                    className="p-1.5 rounded-xl border border-[#ECE5CC] hover:bg-[#FAF6E8] text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer shrink-0"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+            {/* Modal Body Scrollable */}
+            <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1">
+              {/* ROI & Sustainability Summary */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3.5 rounded-2xl bg-[#E2F5EF]/60 border border-[#BDEBDD]">
+                  <span className="text-[10.5px] font-mono uppercase font-bold text-[#1F8A70] block mb-0.5">
+                    Financial ROI
+                  </span>
+                  <span className="text-[22px] font-black text-[#1F8A70]">
+                    +${selectedRecommendation.estimatedMonthlySavings.toFixed(2)}/mo
+                  </span>
+                  <span className="text-[11px] text-[#1F8A70] block">
+                    Annual: +${(selectedRecommendation.estimatedMonthlySavings * 12).toFixed(2)}/yr
+                  </span>
                 </div>
 
-                {/* Modal Body Scrollable */}
-                <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1">
-                  {/* ROI & Sustainability Summary */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3.5 rounded-2xl bg-[#E2F5EF]/60 border border-[#BDEBDD]">
-                      <span className="text-[10.5px] font-mono uppercase font-bold text-[#1F8A70] block mb-0.5">
-                        Financial ROI
-                      </span>
-                      <span className="text-[22px] font-black text-[#1F8A70]">
-                        +${selectedRecommendation.estimatedMonthlySavings.toFixed(2)}/mo
-                      </span>
-                      <span className="text-[11px] text-[#1F8A70] block">
-                        Annual: +${(selectedRecommendation.estimatedMonthlySavings * 12).toFixed(2)}/yr
-                      </span>
-                    </div>
-
-                    <div className="p-3.5 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC]">
-                      <span className="text-[10.5px] font-mono uppercase font-bold text-[#9A6B00] block mb-0.5">
-                        Carbon Impact
-                      </span>
-                      <span className="text-[22px] font-black text-[#2E2B1A]">
-                        -{selectedRecommendation.estimatedGco2eSavings > 1000
-                          ? `${(selectedRecommendation.estimatedGco2eSavings / 1000).toFixed(2)} kgCO2e`
-                          : `${selectedRecommendation.estimatedGco2eSavings.toFixed(1)} gCO2e`}
-                      </span>
-                      <span className="text-[11px] text-[#686450] block">
-                        Estimated carbon reduction
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Telemetry Evidence Box */}
-                  <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
-                    <span className="text-[11px] font-mono font-bold text-[#8D8975] uppercase block">
-                      Telemetry Evidence & Root Cause
-                    </span>
-                    <p className="text-[12.5px] text-[#2E2B1A] leading-relaxed">
-                      {(() => {
-                        try {
-                          const parsed = JSON.parse(selectedRecommendation.evidence);
-                          return parsed.reason || selectedRecommendation.evidence;
-                        } catch {
-                          return selectedRecommendation.evidence;
-                        }
-                      })()}
-                    </p>
-                    <div className="pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] text-[#8D8975] font-mono">
-                      <span>Source: CloudWatch Metrics & AWS EC2 API</span>
-                      <span>Verified: Real-Time</span>
-                    </div>
-                  </div>
-
-                  {/* Target Asset Details */}
-                  {selectedRecommendation.resource && (
-                    <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
-                      <span className="text-[11px] font-mono font-bold text-[#8D8975] uppercase block">
-                        Target Asset Details
-                      </span>
-                      <div className="grid grid-cols-2 gap-2 text-[12px] font-mono">
-                        <div>
-                          <span className="text-[#8D8975] block text-[10.5px]">Resource ID:</span>
-                          <strong className="text-[#2E2B1A]">{selectedRecommendation.resource.providerResourceId}</strong>
-                        </div>
-                        <div>
-                          <span className="text-[#8D8975] block text-[10.5px]">Region:</span>
-                          <strong className="text-[#2E2B1A]">{selectedRecommendation.resource.region}</strong>
-                        </div>
-                        <div>
-                          <span className="text-[#8D8975] block text-[10.5px]">Type:</span>
-                          <strong className="text-[#2E2B1A]">{selectedRecommendation.resource.resourceType.toUpperCase()}</strong>
-                        </div>
-                        <div>
-                          <span className="text-[#8D8975] block text-[10.5px]">Current State:</span>
-                          <strong className="text-[#1F8A70]">{selectedRecommendation.resource.lifecycleState}</strong>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Generated Terraform IaC Snippet */}
-                  <div className="p-4 rounded-2xl bg-[#2E2B1A] text-white space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Code className="w-4 h-4 text-[#FFF76A]" />
-                        <span className="font-mono text-[12px] font-bold text-[#FFF76A]">
-                          Terraform IaC Remediation Code
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const code = generateTerraformSnippet(selectedRecommendation);
-                          navigator.clipboard.writeText(code);
-                          setCopiedIaC(true);
-                          setTimeout(() => setCopiedIaC(false), 2000);
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-mono text-white flex items-center gap-1.5 transition-colors cursor-pointer"
-                      >
-                        {copiedIaC ? <Check className="w-3.5 h-3.5 text-[#1F8A70]" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedIaC ? "Copied!" : "Copy Snippet"}</span>
-                      </button>
-                    </div>
-
-                    <pre className="font-mono text-[11px] text-[#FAF6E8] bg-black/30 p-3 rounded-xl overflow-x-auto leading-relaxed border border-white/10">
-                      {generateTerraformSnippet(selectedRecommendation)}
-                    </pre>
-                  </div>
-
-                  {/* 1-Click Ticket Generator (Jira / GitHub) */}
-                  <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-mono font-bold text-[#8D8975] uppercase block">
-                        DevOps Ticket Integration
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const ticket = generateTicketMarkdown(selectedRecommendation);
-                          navigator.clipboard.writeText(ticket);
-                          setCopiedTicket(true);
-                          setTimeout(() => setCopiedTicket(false), 2000);
-                        }}
-                        className="text-[11.5px] font-bold text-[#1F8A70] hover:underline flex items-center gap-1 cursor-pointer"
-                      >
-                        {copiedTicket ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedTicket ? "Ticket Copied to Clipboard!" : "Copy Jira / GitHub Markdown"}</span>
-                      </button>
-                    </div>
-                    <p className="text-[11.5px] text-[#686450]">
-                      Export formatted issue context to your engineering backlog (GitHub, Jira, or ServiceNow).
-                    </p>
-                  </div>
-                </div>
-
-                {/* Drawer Footer Actions */}
-                <div className="p-4 sm:p-5 border-t border-[#ECE5CC] bg-white flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRecommendation(null)}
-                    className="px-4 py-2 rounded-full border border-[#ECE5CC] text-[12px] font-bold text-[#686450] hover:bg-[#FAF6E8] cursor-pointer"
-                  >
-                    Close
-                  </button>
-
-                  <div className="flex items-center gap-2">
-                    {selectedRecommendation.status === "active" && !selectedRecommendation.id.startsWith("opp-") ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleApproveRecommendation(selectedRecommendation.id);
-                          setSelectedRecommendation(null);
-                        }}
-                        className="px-5 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12.5px] font-bold text-[#2E2B1A] shadow-xs cursor-pointer"
-                      >
-                        Approve Optimization
-                      </button>
-                    ) : (
-                      <span className="px-3 py-1.5 rounded-full bg-[#E2F5EF] text-[11.5px] font-bold text-[#1F8A70]">
-                        Action Active
-                      </span>
-                    )}
-                  </div>
+                <div className="p-3.5 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC]">
+                  <span className="text-[10.5px] font-mono uppercase font-bold text-[#9A6B00] block mb-0.5">
+                    Carbon Impact
+                  </span>
+                  <span className="text-[22px] font-black text-[#2E2B1A]">
+                    -{selectedRecommendation.estimatedGco2eSavings > 1000
+                      ? `${(selectedRecommendation.estimatedGco2eSavings / 1000).toFixed(2)} kgCO2e`
+                      : `${selectedRecommendation.estimatedGco2eSavings.toFixed(1)} gCO2e`}
+                  </span>
+                  <span className="text-[11px] text-[#686450] block">
+                    Estimated carbon reduction
+                  </span>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* AES-256 ENCRYPTED CREDENTIALS MODAL */}
-          {credentialsModalOpen && (
-            <div
-              className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
-              onClick={() => setCredentialsModalOpen(false)}
-            >
-              <div
-                className="max-w-lg w-full bg-[#FFFDF4] rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-lg space-y-5 animate-in zoom-in-95 duration-150"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Modal Header */}
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] flex items-center justify-center text-[#1F8A70] shrink-0">
-                      <Shield className="w-5 h-5" />
+              {/* Telemetry Evidence Box */}
+              <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
+                <span className="text-[11px] font-mono font-bold text-[#8D8975] uppercase block">
+                  Telemetry Evidence & Root Cause
+                </span>
+                <p className="text-[12.5px] text-[#2E2B1A] leading-relaxed">
+                  {(() => {
+                    try {
+                      const parsed = JSON.parse(selectedRecommendation.evidence);
+                      return parsed.reason || selectedRecommendation.evidence;
+                    } catch {
+                      return selectedRecommendation.evidence;
+                    }
+                  })()}
+                </p>
+                <div className="pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] text-[#8D8975] font-mono">
+                  <span>Source: CloudWatch Metrics & AWS EC2 API</span>
+                  <span>Verified: Real-Time</span>
+                </div>
+              </div>
+
+              {/* Target Asset Details */}
+              {selectedRecommendation.resource && (
+                <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
+                  <span className="text-[11px] font-mono font-bold text-[#8D8975] uppercase block">
+                    Target Asset Details
+                  </span>
+                  <div className="grid grid-cols-2 gap-2 text-[12px] font-mono">
+                    <div>
+                      <span className="text-[#8D8975] block text-[10.5px]">Resource ID:</span>
+                      <strong className="text-[#2E2B1A]">{selectedRecommendation.resource.providerResourceId}</strong>
                     </div>
                     <div>
-                      <h3 className="font-black text-[18px] text-[#2E2B1A]">
-                        Encrypted AWS Credentials
-                      </h3>
-                      <p className="text-[12px] text-[#686450]">
-                        AES-256-GCM authenticated cipher with in-memory decryption
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setCredentialsModalOpen(false)}
-                    className="p-1 rounded-lg text-[#8D8975] hover:text-[#2E2B1A] transition-colors cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Security Guarantee Box */}
-                <div className="p-3.5 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] space-y-1.5">
-                  <div className="flex items-center gap-2 text-[12px] font-bold text-[#2E2B1A]">
-                    <Lock className="w-3.5 h-3.5 text-[#1F8A70]" />
-                    <span>Zero Plaintext Exposure Guarantee</span>
-                  </div>
-                  <p className="text-[11.5px] text-[#686450] leading-relaxed">
-                    Credentials are encrypted at rest using AES-256-GCM with a per-record initialization vector and authentication tag. Secret keys are never returned in API payloads, never committed to Git, and only decrypted in-memory (RAM) when performing live Cost Explorer & EC2 telemetry queries.
-                  </p>
-                </div>
-
-                {/* Current Status Box */}
-                <div className="p-3.5 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[12px] font-bold text-[#686450]">Active Account</span>
-                    <span className="text-[12px] font-bold text-[#2E2B1A]">{activeAccount?.name || "None"}</span>
-                  </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-[#ECE5CC]">
-                    <span className="text-[12px] text-[#686450]">Credentials Status</span>
-                    {activeAccount?.hasEncryptedCredentials ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]">
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span>AES-256 Keys Configured</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#FAF6E8] text-[#8D8975] border border-[#ECE5CC]">
-                        Server Environment Fallback
-                      </span>
-                    )}
-                  </div>
-                  {activeAccount?.hasEncryptedCredentials && (
-                    <div className="flex items-center justify-between pt-2 border-t border-[#ECE5CC] text-[12px]">
-                      <span className="text-[#686450]">Masked Access Key</span>
-                      <code className="font-mono font-bold text-[#2E2B1A] bg-[#FAF6E8] px-2 py-0.5 rounded-lg border border-[#ECE5CC]">
-                        {activeAccount.maskedAccessKey || "AKIA••••••••"}
-                      </code>
-                    </div>
-                  )}
-                </div>
-
-                {/* Feedback Alerts */}
-                {credsError && (
-                  <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-[12px] flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span>{credsError}</span>
-                  </div>
-                )}
-                {credsSuccess && (
-                  <div className="p-3 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] text-[12px] flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>{credsSuccess}</span>
-                  </div>
-                )}
-
-                {/* Form Fields */}
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
-                      AWS Access Key ID
-                    </label>
-                    <div className="relative">
-                      <Key className="w-4 h-4 text-[#8D8975] absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        placeholder={activeAccount?.hasEncryptedCredentials ? "Enter new Access Key ID to update" : "AKIAIOSFODNN7EXAMPLE"}
-                        value={credAccessKeyId}
-                        onChange={(e) => setCredAccessKeyId(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-[#ECE5CC] text-[13px] text-[#2E2B1A] placeholder:text-[#8D8975]/60 focus:outline-none focus:border-[#1F8A70] focus:ring-1 focus:ring-[#1F8A70]"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
-                      AWS Secret Access Key
-                    </label>
-                    <div className="relative">
-                      <Lock className="w-4 h-4 text-[#8D8975] absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type={showSecretKey ? "text" : "password"}
-                        placeholder={activeAccount?.hasEncryptedCredentials ? "Enter new Secret Key to update" : "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"}
-                        value={credSecretKey}
-                        onChange={(e) => setCredSecretKey(e.target.value)}
-                        className="w-full pl-9 pr-10 py-2 rounded-xl bg-white border border-[#ECE5CC] text-[13px] text-[#2E2B1A] placeholder:text-[#8D8975]/60 focus:outline-none focus:border-[#1F8A70] focus:ring-1 focus:ring-[#1F8A70]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowSecretKey(!showSecretKey)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D8975] hover:text-[#2E2B1A] cursor-pointer"
-                      >
-                        {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="pt-2 flex items-center justify-between gap-3 border-t border-[#ECE5CC]">
-                  {activeAccount?.hasEncryptedCredentials ? (
-                    <button
-                      type="button"
-                      onClick={handlePurgeCredentials}
-                      disabled={purgingCreds || savingCreds}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 bg-white hover:bg-red-50 text-[12px] font-bold text-red-600 transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>{purgingCreds ? "Purging..." : "Purge Keys"}</span>
-                    </button>
-                  ) : (
-                    <div />
-                  )}
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCredentialsModalOpen(false)}
-                      className="px-4 py-2 rounded-xl border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[12px] font-bold text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveCredentials}
-                      disabled={savingCreds || purgingCreds || !credAccessKeyId.trim() || !credSecretKey.trim()}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
-                    >
-                      {savingCreds ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Encrypting...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Lock className="w-3.5 h-3.5" />
-                          <span>Encrypt & Sync</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 1-CLICK EXPORT REPORT MODAL */}
-          {exportModalOpen && (
-            <div
-              className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
-              onClick={() => setExportModalOpen(false)}
-            >
-              <div
-                className="max-w-md w-full bg-[#FFFDF4] rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-lg space-y-5 animate-in zoom-in-95 duration-150"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-black text-[18px] text-[#2E2B1A]">
-                      Export Telemetry & ESG Report
-                    </h3>
-                    <p className="text-[12px] text-[#686450] mt-0.5">
-                      Download audit-compliant records for FinOps showback and ESG compliance.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setExportModalOpen(false)}
-                    className="p-1 rounded-lg text-[#8D8975] hover:text-[#2E2B1A]"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {/* Option 1: CSV Export */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleExportCsv();
-                      setExportModalOpen(false);
-                    }}
-                    className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-between transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-[#E2F5EF] text-[#1F8A70] flex items-center justify-center shrink-0">
-                        <FileText className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <strong className="block text-[13px] text-[#2E2B1A]">
-                          Cost & Resource Inventory (CSV)
-                        </strong>
-                        <span className="text-[11px] text-[#686450]">
-                          Detailed ledger of all resources, billing items, and savings
-                        </span>
-                      </div>
-                    </div>
-                    <Download className="w-4 h-4 text-[#8D8975] group-hover:text-[#1F8A70]" />
-                  </button>
-
-                  {/* Option 2: JSON Export */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleExportJson();
-                      setExportModalOpen(false);
-                    }}
-                    className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-between transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] text-[#9A6B00] flex items-center justify-center shrink-0">
-                        <Code className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <strong className="block text-[13px] text-[#2E2B1A]">
-                          Full System Telemetry JSON
-                        </strong>
-                        <span className="text-[11px] text-[#686450]">
-                          Raw API data payload for automation pipelines
-                        </span>
-                      </div>
-                    </div>
-                    <Download className="w-4 h-4 text-[#8D8975] group-hover:text-[#9A6B00]" />
-                  </button>
-
-                  {/* Option 3: Print Executive Summary */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExportModalOpen(false);
-                      setTimeout(() => window.print(), 200);
-                    }}
-                    className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-between transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-[#FFF76A] text-[#2E2B1A] flex items-center justify-center shrink-0 border border-[#DFD6B5]">
-                        <Printer className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <strong className="block text-[13px] text-[#2E2B1A]">
-                          Print Executive & ESG Brief
-                        </strong>
-                        <span className="text-[11px] text-[#686450]">
-                          Print-ready PDF overview for stakeholders
-                        </span>
-                      </div>
-                    </div>
-                    <Printer className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
-                  </button>
-                </div>
-
-                <div className="pt-2 text-right">
-                  <button
-                    type="button"
-                    onClick={() => setExportModalOpen(false)}
-                    className="px-4 py-1.5 rounded-full border border-[#ECE5CC] text-[12px] font-bold text-[#686450] hover:bg-[#FAF6E8]"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================================= */}
-          {/* SETTINGS & CLOUD GOVERNANCE MODAL                                         */}
-          {/* ========================================================================= */}
-          {settingsModalOpen && (
-            <div
-              className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
-              onClick={() => setSettingsModalOpen(false)}
-            >
-              <div
-                className="max-w-2xl w-full bg-[#FFFDF4] rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-lg space-y-5 animate-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Modal Header */}
-                <div className="flex items-start justify-between pb-3 border-b border-[#ECE5CC]">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A]">
-                      <Settings className="w-5 h-5 text-[#8D8975]" />
+                      <span className="text-[#8D8975] block text-[10.5px]">Region:</span>
+                      <strong className="text-[#2E2B1A]">{selectedRecommendation.resource.region}</strong>
                     </div>
                     <div>
-                      <h3 className="font-black text-[18px] text-[#2E2B1A] leading-tight">
-                        Settings & Cloud Governance
-                      </h3>
-                      <p className="text-[12px] text-[#686450]">
-                        Manage connected AWS accounts, auto-sync schedules, and FinOps guardrails.
-                      </p>
+                      <span className="text-[#8D8975] block text-[10.5px]">Type:</span>
+                      <strong className="text-[#2E2B1A]">{selectedRecommendation.resource.resourceType.toUpperCase()}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[#8D8975] block text-[10.5px]">Current State:</span>
+                      <strong className="text-[#1F8A70]">{selectedRecommendation.resource.lifecycleState}</strong>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSettingsModalOpen(false)}
-                    className="p-1 rounded-lg text-[#8D8975] hover:text-[#2E2B1A] transition-colors cursor-pointer"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
                 </div>
+              )}
 
-                {/* Toast Notification Banner */}
-                {settingsToast && (
-                  <div className="p-3 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] text-[12.5px] font-medium flex items-center justify-between animate-in fade-in">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 shrink-0" />
-                      <span>{settingsToast}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSettingsToast(null)}
-                      className="text-[#1F8A70] hover:text-[#135A49] cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-
-                {/* Settings Tabs */}
-                <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC]">
-                  <button
-                    type="button"
-                    onClick={() => setSettingsTab("accounts")}
-                    className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                      settingsTab === "accounts"
-                        ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
-                        : "text-[#686450] hover:text-[#2E2B1A]"
-                    }`}
-                  >
-                    <Cloud className="w-4 h-4" />
-                    <span>Cloud Accounts</span>
-                    <span className="px-1.5 py-0.2 rounded-full text-[10.5px] bg-[#FAF6E8] border border-[#ECE5CC] font-mono">
-                      {accountsList.length}
+              {/* Generated Terraform IaC Snippet */}
+              <div className="p-4 rounded-2xl bg-[#2E2B1A] text-white space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Code className="w-4 h-4 text-[#FFF76A]" />
+                    <span className="font-mono text-[12px] font-bold text-[#FFF76A]">
+                      Terraform IaC Remediation Code
                     </span>
-                  </button>
-
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setSettingsTab("sync")}
-                    className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                      settingsTab === "sync"
-                        ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
-                        : "text-[#686450] hover:text-[#2E2B1A]"
-                    }`}
+                    onClick={() => {
+                      const code = generateTerraformSnippet(selectedRecommendation);
+                      navigator.clipboard.writeText(code);
+                      setCopiedIaC(true);
+                      setTimeout(() => setCopiedIaC(false), 2000);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-mono text-white flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
-                    <RefreshCw className="w-4 h-4" />
-                    <span>Sync & Discovery</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setSettingsTab("guardrails")}
-                    className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                      settingsTab === "guardrails"
-                        ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
-                        : "text-[#686450] hover:text-[#2E2B1A]"
-                    }`}
-                  >
-                    <Shield className="w-4 h-4" />
-                    <span>FinOps Guardrails</span>
+                    {copiedIaC ? <Check className="w-3.5 h-3.5 text-[#1F8A70]" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedIaC ? "Copied!" : "Copy Snippet"}</span>
                   </button>
                 </div>
 
-                {/* Modal Body / Scrollable Content */}
-                <div className="overflow-y-auto space-y-4 pr-1 flex-1">
-                  {/* TAB 1: CLOUD ACCOUNTS */}
-                  {settingsTab === "accounts" && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
-                            Connected AWS Accounts ({accountsList.length})
-                          </h4>
-                          <p className="text-[11.5px] text-[#686450]">
-                            Active and configured AWS cross-account IAM integrations.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleCleanDuplicates}
-                          disabled={cleaningDuplicates}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[11.5px] font-bold text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer disabled:opacity-50"
-                        >
-                          <RefreshCw className={`w-3 h-3 ${cleaningDuplicates ? "animate-spin" : ""}`} />
-                          <span>{cleaningDuplicates ? "Cleaning..." : "Purge Duplicate Stubs"}</span>
-                        </button>
-                      </div>
+                <pre className="font-mono text-[11px] text-[#FAF6E8] bg-black/30 p-3 rounded-xl overflow-x-auto leading-relaxed border border-white/10">
+                  {generateTerraformSnippet(selectedRecommendation)}
+                </pre>
+              </div>
 
-                      {/* Accounts Cards List */}
-                      <div className="space-y-2.5">
-                        {accountsList.map((acc) => {
-                          const isActive = acc.id === activeAccount?.id;
-                          const isDeleting = deletingAccountId === acc.id;
-
-                          return (
-                            <div
-                              key={acc.id}
-                              className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-                                isActive
-                                  ? "bg-white border-[#1F8A70]/40 shadow-warm-xs ring-1 ring-[#1F8A70]/15"
-                                  : "bg-white/80 border-[#ECE5CC] hover:bg-white"
-                              }`}
-                            >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-10 h-10 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A] shrink-0">
-                                  <Cloud className="w-5 h-5 text-[#9A6B00]" />
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <strong className="text-[13.5px] text-[#2E2B1A] truncate">
-                                      {acc.name}
-                                    </strong>
-                                    {isActive && (
-                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD] flex items-center gap-1">
-                                        <Check className="w-3 h-3" />
-                                        <span>Active</span>
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-3 text-[11.5px] text-[#686450] mt-0.5 font-mono">
-                                    <span>Account ID: {acc.externalAccountId}</span>
-                                    <span>•</span>
-                                    <span className="uppercase">{acc.provider}</span>
-                                    {acc.hasEncryptedCredentials && (
-                                      <>
-                                        <span>•</span>
-                                        <span className="text-[#1F8A70] font-sans font-bold flex items-center gap-1">
-                                          <Lock className="w-2.5 h-2.5" />
-                                          <span>AES-256 Keys</span>
-                                        </span>
-                                      </>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (!isActive) loadDashboard(acc.id);
-                                    setCredAccessKeyId("");
-                                    setCredSecretKey("");
-                                    setCredsError(null);
-                                    setCredentialsModalOpen(true);
-                                  }}
-                                  className="p-2 rounded-xl border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer"
-                                  title="Configure AES-256 encrypted credentials"
-                                >
-                                  <Key className="w-4 h-4 text-[#8D8975]" />
-                                </button>
-
-                                {!isActive && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      loadDashboard(acc.id);
-                                      setSettingsToast(`Switched active context to ${acc.name}`);
-                                    }}
-                                    className="px-3 py-1.5 rounded-full bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px] font-bold text-[#2E2B1A] transition-colors cursor-pointer"
-                                  >
-                                    Switch Account
-                                  </button>
-                                )}
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteAccount(acc.id)}
-                                  disabled={isDeleting}
-                                  title="Disconnect cloud account"
-                                  className="p-2 rounded-xl text-[#8D8975] hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors cursor-pointer disabled:opacity-50"
-                                >
-                                  {isDeleting ? (
-                                    <RefreshCw className="w-4 h-4 animate-spin text-red-600" />
-                                  ) : (
-                                    <Trash2 className="w-4 h-4" />
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Connect New Account Action */}
-                      <div className="pt-2">
-                        <Link
-                          href="/onboarding"
-                          onClick={() => setSettingsModalOpen(false)}
-                          className="w-full py-3 rounded-2xl border border-dashed border-[#ECE5CC] hover:border-[#1F8A70] hover:bg-[#FAF6E8] text-[12.5px] font-bold text-[#2E2B1A] flex items-center justify-center gap-2 transition-all cursor-pointer group"
-                        >
-                          <PlusCircle className="w-4 h-4 text-[#8D8975] group-hover:text-[#1F8A70]" />
-                          <span>Connect Another Cloud Account</span>
-                        </Link>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* TAB 2: SYNC & SCANNING */}
-                  {settingsTab === "sync" && (
-                    <div className="space-y-4">
-                      {/* Auto-Sync Frequency */}
-                      <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
-                        <div>
-                          <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
-                            Telemetry Ingestion Cadence
-                          </h4>
-                          <p className="text-[11.5px] text-[#686450]">
-                            How frequently GreenCloud AI queries AWS CloudWatch, Cost Explorer, and EC2 APIs.
-                          </p>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2.5">
-                          {[
-                            { id: "1h", label: "Hourly", desc: "High sensitivity" },
-                            { id: "6h", label: "Every 6 Hours", desc: "Recommended balance" },
-                            { id: "24h", label: "Daily (24h)", desc: "Standard FinOps" },
-                          ].map((freq) => (
-                            <button
-                              key={freq.id}
-                              type="button"
-                              onClick={() => {
-                                setAutoSyncFrequency(freq.id);
-                                setSettingsToast(`Sync cadence updated to ${freq.label}.`);
-                              }}
-                              className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                                autoSyncFrequency === freq.id
-                                  ? "bg-[#FAF6E8] border-[#9A6B00] ring-1 ring-[#9A6B00]/20"
-                                  : "bg-white border-[#ECE5CC] hover:bg-[#FAF6E8]/40"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <strong className="text-[12.5px] text-[#2E2B1A]">{freq.label}</strong>
-                                {autoSyncFrequency === freq.id && (
-                                  <div className="w-2 h-2 rounded-full bg-[#9A6B00]" />
-                                )}
-                              </div>
-                              <span className="text-[10.5px] text-[#8D8975] block mt-0.5">
-                                {freq.desc}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Multi-Region Scanning Toggle */}
-                      <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] flex items-center justify-between gap-4">
-                        <div className="space-y-0.5">
-                          <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
-                            Multi-Region Orphan Scanner
-                          </h4>
-                          <p className="text-[11.5px] text-[#686450] max-w-md">
-                            Actively scan all 17 AWS regions (us-east-1, eu-central-1, ap-south-1, etc.) to discover forgotten EC2 instances and unassociated Elastic IPs.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMultiRegionScanEnabled(!multiRegionScanEnabled);
-                            setSettingsToast(
-                              !multiRegionScanEnabled
-                                ? "Multi-Region scanning enabled (17 regions active)."
-                                : "Multi-Region scanning restricted to primary region."
-                            );
-                          }}
-                          className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer ${
-                            multiRegionScanEnabled ? "bg-[#1F8A70]" : "bg-[#ECE5CC]"
-                          }`}
-                        >
-                          <div
-                            className={`w-5 h-5 rounded-full bg-white transition-transform transform shadow-xs ${
-                              multiRegionScanEnabled ? "translate-x-6" : "translate-x-0.5"
-                            }`}
-                          />
-                        </button>
-                      </div>
-
-                      {/* Manual Sync Trigger */}
-                      <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] flex items-center justify-between gap-3">
-                        <div>
-                          <strong className="text-[13px] text-[#2E2B1A] block">Force Immediate Cloud Refresh</strong>
-                          <span className="text-[11.5px] text-[#686450]">
-                            Trigger real-time AWS API pull for instances, EBS volumes, and IP allocations.
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleTriggerSync}
-                          disabled={syncing}
-                          className="px-4 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer shrink-0 disabled:opacity-50"
-                        >
-                          <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
-                          <span>{syncing ? "Syncing AWS..." : "Sync AWS Telemetry"}</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* TAB 3: FINOPS GUARDRAILS */}
-                  {settingsTab === "guardrails" && (
-                    <div className="space-y-4">
-                      {/* Budget Limit */}
-                      <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
-                              Monthly Spend Budget Target
-                            </h4>
-                            <p className="text-[11.5px] text-[#686450]">
-                              Alert FinOps team when projected burn-rate pace exceeds this monthly figure.
-                            </p>
-                          </div>
-                          <span className="font-mono font-bold text-[14px] text-[#1F8A70]">
-                            ${budgetLimit}/mo
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="range"
-                            min="50"
-                            max="5000"
-                            step="50"
-                            value={budgetLimit}
-                            onChange={(e) => setBudgetLimit(Number(e.target.value))}
-                            className="w-full accent-[#1F8A70] cursor-pointer"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Idle CPU Threshold */}
-                      <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
-                              Idle Compute CPU Utilization Threshold
-                            </h4>
-                            <p className="text-[11.5px] text-[#686450]">
-                              Instances averaging below this threshold over 14 days will be flagged for automated stop or decommission.
-                            </p>
-                          </div>
-                          <span className="font-mono font-bold text-[14px] text-[#9A6B00]">
-                            {idleCpuThresholdVal}% CPU
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="range"
-                            min="1"
-                            max="20"
-                            step="1"
-                            value={idleCpuThresholdVal}
-                            onChange={(e) => setIdleCpuThresholdVal(Number(e.target.value))}
-                            className="w-full accent-[#9A6B00] cursor-pointer"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Save Button */}
-                      <div className="pt-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSettingsToast("Governance guardrails saved and applied.");
-                            setTimeout(() => setSettingsToast(null), 3500);
-                          }}
-                          className="px-5 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12.5px] font-bold text-[#2E2B1A] shadow-xs cursor-pointer"
-                        >
-                          Save Guardrail Rules
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Modal Footer */}
-                <div className="pt-3 border-t border-[#ECE5CC] flex items-center justify-between">
-                  <span className="text-[11px] text-[#8D8975] font-mono">
-                    GreenCloud AI v2.4 • Tenant Scoped
+              {/* 1-Click Ticket Generator (Jira / GitHub) */}
+              <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-mono font-bold text-[#8D8975] uppercase block">
+                    DevOps Ticket Integration
                   </span>
                   <button
                     type="button"
-                    onClick={() => setSettingsModalOpen(false)}
-                    className="px-4 py-1.5 rounded-full border border-[#ECE5CC] text-[12px] font-bold text-[#686450] hover:bg-[#FAF6E8] cursor-pointer"
+                    onClick={() => {
+                      const ticket = generateTicketMarkdown(selectedRecommendation);
+                      navigator.clipboard.writeText(ticket);
+                      setCopiedTicket(true);
+                      setTimeout(() => setCopiedTicket(false), 2000);
+                    }}
+                    className="text-[11.5px] font-bold text-[#1F8A70] hover:underline flex items-center gap-1 cursor-pointer"
                   >
-                    Done
+                    {copiedTicket ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedTicket ? "Ticket Copied to Clipboard!" : "Copy Jira / GitHub Markdown"}</span>
+                  </button>
+                </div>
+                <p className="text-[11.5px] text-[#686450]">
+                  Export formatted issue context to your engineering backlog (GitHub, Jira, or ServiceNow).
+                </p>
+              </div>
+            </div>
+
+            {/* Drawer Footer Actions */}
+            <div className="p-4 sm:p-5 border-t border-[#ECE5CC] bg-white flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setSelectedRecommendation(null)}
+                className="px-4 py-2 rounded-full border border-[#ECE5CC] text-[12px] font-bold text-[#686450] hover:bg-[#FAF6E8] cursor-pointer"
+              >
+                Close
+              </button>
+
+              <div className="flex items-center gap-2">
+                {selectedRecommendation.status === "active" && !selectedRecommendation.id.startsWith("opp-") ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleApproveRecommendation(selectedRecommendation.id);
+                      setSelectedRecommendation(null);
+                    }}
+                    className="px-5 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12.5px] font-bold text-[#2E2B1A] shadow-xs cursor-pointer"
+                  >
+                    Approve Optimization
+                  </button>
+                ) : (
+                  <span className="px-3 py-1.5 rounded-full bg-[#E2F5EF] text-[11.5px] font-bold text-[#1F8A70]">
+                    Action Active
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AES-256 ENCRYPTED CREDENTIALS MODAL */}
+      {credentialsModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setCredentialsModalOpen(false)}
+        >
+          <div
+            className="max-w-lg w-full bg-[#FFFDF4] rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-lg space-y-5 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] flex items-center justify-center text-[#1F8A70] shrink-0">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-[18px] text-[#2E2B1A]">
+                    Encrypted AWS Credentials
+                  </h3>
+                  <p className="text-[12px] text-[#686450]">
+                    AES-256-GCM authenticated cipher with in-memory decryption
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCredentialsModalOpen(false)}
+                className="p-1 rounded-lg text-[#8D8975] hover:text-[#2E2B1A] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Security Guarantee Box */}
+            <div className="p-3.5 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] space-y-1.5">
+              <div className="flex items-center gap-2 text-[12px] font-bold text-[#2E2B1A]">
+                <Lock className="w-3.5 h-3.5 text-[#1F8A70]" />
+                <span>Zero Plaintext Exposure Guarantee</span>
+              </div>
+              <p className="text-[11.5px] text-[#686450] leading-relaxed">
+                Credentials are encrypted at rest using AES-256-GCM with a per-record initialization vector and authentication tag. Secret keys are never returned in API payloads, never committed to Git, and only decrypted in-memory (RAM) when performing live Cost Explorer & EC2 telemetry queries.
+              </p>
+            </div>
+
+            {/* Current Status Box */}
+            <div className="p-3.5 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-bold text-[#686450]">Active Account</span>
+                <span className="text-[12px] font-bold text-[#2E2B1A]">{activeAccount?.name || "None"}</span>
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-[#ECE5CC]">
+                <span className="text-[12px] text-[#686450]">Credentials Status</span>
+                {activeAccount?.hasEncryptedCredentials ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>AES-256 Keys Configured</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#FAF6E8] text-[#8D8975] border border-[#ECE5CC]">
+                    Server Environment Fallback
+                  </span>
+                )}
+              </div>
+              {activeAccount?.hasEncryptedCredentials && (
+                <div className="flex items-center justify-between pt-2 border-t border-[#ECE5CC] text-[12px]">
+                  <span className="text-[#686450]">Masked Access Key</span>
+                  <code className="font-mono font-bold text-[#2E2B1A] bg-[#FAF6E8] px-2 py-0.5 rounded-lg border border-[#ECE5CC]">
+                    {activeAccount.maskedAccessKey || "AKIA••••••••"}
+                  </code>
+                </div>
+              )}
+            </div>
+
+            {/* Feedback Alerts */}
+            {credsError && (
+              <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-[12px] flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{credsError}</span>
+              </div>
+            )}
+            {credsSuccess && (
+              <div className="p-3 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] text-[12px] flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{credsSuccess}</span>
+              </div>
+            )}
+
+            {/* Form Fields */}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
+                  AWS Access Key ID
+                </label>
+                <div className="relative">
+                  <Key className="w-4 h-4 text-[#8D8975] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder={activeAccount?.hasEncryptedCredentials ? "Enter new Access Key ID to update" : "AKIAIOSFODNN7EXAMPLE"}
+                    value={credAccessKeyId}
+                    onChange={(e) => setCredAccessKeyId(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-[#ECE5CC] text-[13px] text-[#2E2B1A] placeholder:text-[#8D8975]/60 focus:outline-none focus:border-[#1F8A70] focus:ring-1 focus:ring-[#1F8A70]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
+                  AWS Secret Access Key
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-[#8D8975] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type={showSecretKey ? "text" : "password"}
+                    placeholder={activeAccount?.hasEncryptedCredentials ? "Enter new Secret Key to update" : "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"}
+                    value={credSecretKey}
+                    onChange={(e) => setCredSecretKey(e.target.value)}
+                    className="w-full pl-9 pr-10 py-2 rounded-xl bg-white border border-[#ECE5CC] text-[13px] text-[#2E2B1A] placeholder:text-[#8D8975]/60 focus:outline-none focus:border-[#1F8A70] focus:ring-1 focus:ring-[#1F8A70]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSecretKey(!showSecretKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D8975] hover:text-[#2E2B1A] cursor-pointer"
+                  >
+                    {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
             </div>
-          )}
+
+            {/* Actions */}
+            <div className="pt-2 flex items-center justify-between gap-3 border-t border-[#ECE5CC]">
+              {activeAccount?.hasEncryptedCredentials ? (
+                <button
+                  type="button"
+                  onClick={handlePurgeCredentials}
+                  disabled={purgingCreds || savingCreds}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 bg-white hover:bg-red-50 text-[12px] font-bold text-red-600 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{purgingCreds ? "Purging..." : "Purge Keys"}</span>
+                </button>
+              ) : (
+                <div />
+              )}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCredentialsModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[12px] font-bold text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveCredentials}
+                  disabled={savingCreds || purgingCreds || !credAccessKeyId.trim() || !credSecretKey.trim()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {savingCreds ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Encrypting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Encrypt & Sync</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 1-CLICK EXPORT REPORT MODAL */}
+      {exportModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setExportModalOpen(false)}
+        >
+          <div
+            className="max-w-md w-full bg-[#FFFDF4] rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-lg space-y-5 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-black text-[18px] text-[#2E2B1A]">
+                  Export Telemetry & ESG Report
+                </h3>
+                <p className="text-[12px] text-[#686450] mt-0.5">
+                  Download audit-compliant records for FinOps showback and ESG compliance.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExportModalOpen(false)}
+                className="p-1 rounded-lg text-[#8D8975] hover:text-[#2E2B1A]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {/* Option 1: CSV Export */}
+              <button
+                type="button"
+                onClick={() => {
+                  handleExportCsv();
+                  setExportModalOpen(false);
+                }}
+                className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-between transition-all cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#E2F5EF] text-[#1F8A70] flex items-center justify-center shrink-0">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <strong className="block text-[13px] text-[#2E2B1A]">
+                      Cost & Resource Inventory (CSV)
+                    </strong>
+                    <span className="text-[11px] text-[#686450]">
+                      Detailed ledger of all resources, billing items, and savings
+                    </span>
+                  </div>
+                </div>
+                <Download className="w-4 h-4 text-[#8D8975] group-hover:text-[#1F8A70]" />
+              </button>
+
+              {/* Option 2: JSON Export */}
+              <button
+                type="button"
+                onClick={() => {
+                  handleExportJson();
+                  setExportModalOpen(false);
+                }}
+                className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-between transition-all cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] text-[#9A6B00] flex items-center justify-center shrink-0">
+                    <Code className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <strong className="block text-[13px] text-[#2E2B1A]">
+                      Full System Telemetry JSON
+                    </strong>
+                    <span className="text-[11px] text-[#686450]">
+                      Raw API data payload for automation pipelines
+                    </span>
+                  </div>
+                </div>
+                <Download className="w-4 h-4 text-[#8D8975] group-hover:text-[#9A6B00]" />
+              </button>
+
+              {/* Option 3: Print Executive Summary */}
+              <button
+                type="button"
+                onClick={() => {
+                  setExportModalOpen(false);
+                  setTimeout(() => window.print(), 200);
+                }}
+                className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-between transition-all cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#FFF76A] text-[#2E2B1A] flex items-center justify-center shrink-0 border border-[#DFD6B5]">
+                    <Printer className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <strong className="block text-[13px] text-[#2E2B1A]">
+                      Print Executive & ESG Brief
+                    </strong>
+                    <span className="text-[11px] text-[#686450]">
+                      Print-ready PDF overview for stakeholders
+                    </span>
+                  </div>
+                </div>
+                <Printer className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
+              </button>
+            </div>
+
+            <div className="pt-2 text-right">
+              <button
+                type="button"
+                onClick={() => setExportModalOpen(false)}
+                className="px-4 py-1.5 rounded-full border border-[#ECE5CC] text-[12px] font-bold text-[#686450] hover:bg-[#FAF6E8]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SETTINGS & CLOUD GOVERNANCE MODAL                                         */}
+      {/* ========================================================================= */}
+      {settingsModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setSettingsModalOpen(false)}
+        >
+          <div
+            className="max-w-2xl w-full bg-[#FFFDF4] rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-lg space-y-5 animate-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-[#ECE5CC]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A]">
+                  <Settings className="w-5 h-5 text-[#8D8975]" />
+                </div>
+                <div>
+                  <h3 className="font-black text-[18px] text-[#2E2B1A] leading-tight">
+                    Settings & Cloud Governance
+                  </h3>
+                  <p className="text-[12px] text-[#686450]">
+                    Manage connected AWS accounts, auto-sync schedules, and FinOps guardrails.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSettingsModalOpen(false)}
+                className="p-1 rounded-lg text-[#8D8975] hover:text-[#2E2B1A] transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Toast Notification Banner */}
+            {settingsToast && (
+              <div className="p-3 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] text-[12.5px] font-medium flex items-center justify-between animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{settingsToast}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSettingsToast(null)}
+                  className="text-[#1F8A70] hover:text-[#135A49] cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Settings Tabs */}
+            <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC]">
+              <button
+                type="button"
+                onClick={() => setSettingsTab("accounts")}
+                className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${settingsTab === "accounts"
+                    ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                    : "text-[#686450] hover:text-[#2E2B1A]"
+                  }`}
+              >
+                <Cloud className="w-4 h-4" />
+                <span>Cloud Accounts</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10.5px] bg-[#FAF6E8] border border-[#ECE5CC] font-mono">
+                  {accountsList.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSettingsTab("sync")}
+                className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${settingsTab === "sync"
+                    ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                    : "text-[#686450] hover:text-[#2E2B1A]"
+                  }`}
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Sync & Discovery</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSettingsTab("guardrails")}
+                className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${settingsTab === "guardrails"
+                    ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                    : "text-[#686450] hover:text-[#2E2B1A]"
+                  }`}
+              >
+                <Shield className="w-4 h-4" />
+                <span>FinOps Guardrails</span>
+              </button>
+            </div>
+
+            {/* Modal Body / Scrollable Content */}
+            <div className="overflow-y-auto space-y-4 pr-1 flex-1">
+              {/* TAB 1: CLOUD ACCOUNTS */}
+              {settingsTab === "accounts" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                        Connected AWS Accounts ({accountsList.length})
+                      </h4>
+                      <p className="text-[11.5px] text-[#686450]">
+                        Active and configured AWS cross-account IAM integrations.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCleanDuplicates}
+                      disabled={cleaningDuplicates}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[11.5px] font-bold text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${cleaningDuplicates ? "animate-spin" : ""}`} />
+                      <span>{cleaningDuplicates ? "Cleaning..." : "Purge Duplicate Stubs"}</span>
+                    </button>
+                  </div>
+
+                  {/* Accounts Cards List */}
+                  <div className="space-y-2.5">
+                    {accountsList.map((acc) => {
+                      const isActive = acc.id === activeAccount?.id;
+                      const isDeleting = deletingAccountId === acc.id;
+
+                      return (
+                        <div
+                          key={acc.id}
+                          className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${isActive
+                              ? "bg-white border-[#1F8A70]/40 shadow-warm-xs ring-1 ring-[#1F8A70]/15"
+                              : "bg-white/80 border-[#ECE5CC] hover:bg-white"
+                            }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A] shrink-0">
+                              <Cloud className="w-5 h-5 text-[#9A6B00]" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <strong className="text-[13.5px] text-[#2E2B1A] truncate">
+                                  {acc.name}
+                                </strong>
+                                {isActive && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD] flex items-center gap-1">
+                                    <Check className="w-3 h-3" />
+                                    <span>Active</span>
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 text-[11.5px] text-[#686450] mt-0.5 font-mono">
+                                <span>Account ID: {acc.externalAccountId}</span>
+                                <span>•</span>
+                                <span className="uppercase">{acc.provider}</span>
+                                {acc.hasEncryptedCredentials && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-[#1F8A70] font-sans font-bold flex items-center gap-1">
+                                      <Lock className="w-2.5 h-2.5" />
+                                      <span>AES-256 Keys</span>
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!isActive) loadDashboard(acc.id);
+                                setCredAccessKeyId("");
+                                setCredSecretKey("");
+                                setCredsError(null);
+                                setCredentialsModalOpen(true);
+                              }}
+                              className="p-2 rounded-xl border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer"
+                              title="Configure AES-256 encrypted credentials"
+                            >
+                              <Key className="w-4 h-4 text-[#8D8975]" />
+                            </button>
+
+                            {!isActive && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  loadDashboard(acc.id);
+                                  setSettingsToast(`Switched active context to ${acc.name}`);
+                                }}
+                                className="px-3 py-1.5 rounded-full bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px] font-bold text-[#2E2B1A] transition-colors cursor-pointer"
+                              >
+                                Switch Account
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAccount(acc.id)}
+                              disabled={isDeleting}
+                              title="Disconnect cloud account"
+                              className="p-2 rounded-xl text-[#8D8975] hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              {isDeleting ? (
+                                <RefreshCw className="w-4 h-4 animate-spin text-red-600" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Connect New Account Action */}
+                  <div className="pt-2">
+                    <Link
+                      href="/onboarding"
+                      onClick={() => setSettingsModalOpen(false)}
+                      className="w-full py-3 rounded-2xl border border-dashed border-[#ECE5CC] hover:border-[#1F8A70] hover:bg-[#FAF6E8] text-[12.5px] font-bold text-[#2E2B1A] flex items-center justify-center gap-2 transition-all cursor-pointer group"
+                    >
+                      <PlusCircle className="w-4 h-4 text-[#8D8975] group-hover:text-[#1F8A70]" />
+                      <span>Connect Another Cloud Account</span>
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: SYNC & SCANNING */}
+              {settingsTab === "sync" && (
+                <div className="space-y-4">
+                  {/* Auto-Sync Frequency */}
+                  <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
+                    <div>
+                      <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                        Telemetry Ingestion Cadence
+                      </h4>
+                      <p className="text-[11.5px] text-[#686450]">
+                        How frequently GreenCloud AI queries AWS CloudWatch, Cost Explorer, and EC2 APIs.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2.5">
+                      {[
+                        { id: "1h", label: "Hourly", desc: "High sensitivity" },
+                        { id: "6h", label: "Every 6 Hours", desc: "Recommended balance" },
+                        { id: "24h", label: "Daily (24h)", desc: "Standard FinOps" },
+                      ].map((freq) => (
+                        <button
+                          key={freq.id}
+                          type="button"
+                          onClick={() => {
+                            setAutoSyncFrequency(freq.id);
+                            setSettingsToast(`Sync cadence updated to ${freq.label}.`);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${autoSyncFrequency === freq.id
+                              ? "bg-[#FAF6E8] border-[#9A6B00] ring-1 ring-[#9A6B00]/20"
+                              : "bg-white border-[#ECE5CC] hover:bg-[#FAF6E8]/40"
+                            }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <strong className="text-[12.5px] text-[#2E2B1A]">{freq.label}</strong>
+                            {autoSyncFrequency === freq.id && (
+                              <div className="w-2 h-2 rounded-full bg-[#9A6B00]" />
+                            )}
+                          </div>
+                          <span className="text-[10.5px] text-[#8D8975] block mt-0.5">
+                            {freq.desc}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Multi-Region Scanning Toggle */}
+                  <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] flex items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                        Multi-Region Orphan Scanner
+                      </h4>
+                      <p className="text-[11.5px] text-[#686450] max-w-md">
+                        Actively scan all 17 AWS regions (us-east-1, eu-central-1, ap-south-1, etc.) to discover forgotten EC2 instances and unassociated Elastic IPs.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMultiRegionScanEnabled(!multiRegionScanEnabled);
+                        setSettingsToast(
+                          !multiRegionScanEnabled
+                            ? "Multi-Region scanning enabled (17 regions active)."
+                            : "Multi-Region scanning restricted to primary region."
+                        );
+                      }}
+                      className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer ${multiRegionScanEnabled ? "bg-[#1F8A70]" : "bg-[#ECE5CC]"
+                        }`}
+                    >
+                      <div
+                        className={`w-5 h-5 rounded-full bg-white transition-transform transform shadow-xs ${multiRegionScanEnabled ? "translate-x-6" : "translate-x-0.5"
+                          }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Manual Sync Trigger */}
+                  <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] flex items-center justify-between gap-3">
+                    <div>
+                      <strong className="text-[13px] text-[#2E2B1A] block">Force Immediate Cloud Refresh</strong>
+                      <span className="text-[11.5px] text-[#686450]">
+                        Trigger real-time AWS API pull for instances, EBS volumes, and IP allocations.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleTriggerSync}
+                      disabled={syncing}
+                      className="px-4 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer shrink-0 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+                      <span>{syncing ? "Syncing AWS..." : "Sync AWS Telemetry"}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: FINOPS GUARDRAILS */}
+              {settingsTab === "guardrails" && (
+                <div className="space-y-4">
+                  {/* Budget Limit */}
+                  <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                          Monthly Spend Budget Target
+                        </h4>
+                        <p className="text-[11.5px] text-[#686450]">
+                          Alert FinOps team when projected burn-rate pace exceeds this monthly figure.
+                        </p>
+                      </div>
+                      <span className="font-mono font-bold text-[14px] text-[#1F8A70]">
+                        ${budgetLimit}/mo
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min="50"
+                        max="5000"
+                        step="50"
+                        value={budgetLimit}
+                        onChange={(e) => setBudgetLimit(Number(e.target.value))}
+                        className="w-full accent-[#1F8A70] cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Idle CPU Threshold */}
+                  <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                          Idle Compute CPU Utilization Threshold
+                        </h4>
+                        <p className="text-[11.5px] text-[#686450]">
+                          Instances averaging below this threshold over 14 days will be flagged for automated stop or decommission.
+                        </p>
+                      </div>
+                      <span className="font-mono font-bold text-[14px] text-[#9A6B00]">
+                        {idleCpuThresholdVal}% CPU
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min="1"
+                        max="20"
+                        step="1"
+                        value={idleCpuThresholdVal}
+                        onChange={(e) => setIdleCpuThresholdVal(Number(e.target.value))}
+                        className="w-full accent-[#9A6B00] cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Save Button */}
+                  <div className="pt-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsToast("Governance guardrails saved and applied.");
+                        setTimeout(() => setSettingsToast(null), 3500);
+                      }}
+                      className="px-5 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12.5px] font-bold text-[#2E2B1A] shadow-xs cursor-pointer"
+                    >
+                      Save Guardrail Rules
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-3 border-t border-[#ECE5CC] flex items-center justify-between">
+              <span className="text-[11px] text-[#8D8975] font-mono">
+                GreenCloud AI v2.4 • Tenant Scoped
+              </span>
+              <button
+                type="button"
+                onClick={() => setSettingsModalOpen(false)}
+                className="px-4 py-1.5 rounded-full border border-[#ECE5CC] text-[12px] font-bold text-[#686450] hover:bg-[#FAF6E8] cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

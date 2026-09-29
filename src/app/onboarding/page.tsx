@@ -39,7 +39,7 @@ export default function OnboardingPage() {
           setExistingAccounts(accs);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Wizard Step State (1 through 4)
@@ -266,18 +266,16 @@ export default function OnboardingPage() {
                   onClick={() => {
                     if (step.num < currentStep) setCurrentStep(step.num);
                   }}
-                  className={`flex flex-col items-center gap-1.5 focus:outline-none transition-all ${
-                    step.num < currentStep ? "cursor-pointer group" : "cursor-default"
-                  }`}
+                  className={`flex flex-col items-center gap-1.5 focus:outline-none transition-all ${step.num < currentStep ? "cursor-pointer group" : "cursor-default"
+                    }`}
                 >
                   <div
-                    className={`w-9 h-9 rounded-full flex items-center justify-center font-mono text-[13px] font-bold transition-all shadow-2xs ${
-                      currentStep === step.num
+                    className={`w-9 h-9 rounded-full flex items-center justify-center font-mono text-[13px] font-bold transition-all shadow-2xs ${currentStep === step.num
                         ? "bg-[#FFF76A] border-2 border-[#2E2B1A] text-[#2E2B1A] ring-4 ring-[#FFF76A]/40 scale-105"
                         : currentStep > step.num
-                        ? "bg-[#1F8A70] text-white border-2 border-[#1F8A70]"
-                        : "bg-[#FAF6E8] border-2 border-[#ECE5CC] text-[#8D8975]"
-                    }`}
+                          ? "bg-[#1F8A70] text-white border-2 border-[#1F8A70]"
+                          : "bg-[#FAF6E8] border-2 border-[#ECE5CC] text-[#8D8975]"
+                      }`}
                   >
                     {currentStep > step.num ? (
                       <Check className="w-4 h-4 stroke-[3]" />
@@ -286,13 +284,12 @@ export default function OnboardingPage() {
                     )}
                   </div>
                   <span
-                    className={`text-[12px] font-bold tracking-tight whitespace-nowrap ${
-                      currentStep === step.num
+                    className={`text-[12px] font-bold tracking-tight whitespace-nowrap ${currentStep === step.num
                         ? "text-[#2E2B1A]"
                         : currentStep > step.num
-                        ? "text-[#1F8A70] group-hover:underline"
-                        : "text-[#8D8975]"
-                    }`}
+                          ? "text-[#1F8A70] group-hover:underline"
+                          : "text-[#8D8975]"
+                      }`}
                   >
                     {step.label}
                   </span>
@@ -301,9 +298,8 @@ export default function OnboardingPage() {
                 {/* Segmented connector line between steps */}
                 {idx < steps.length - 1 && (
                   <div
-                    className={`flex-1 h-[2.5px] mx-3 -mt-5 rounded-full transition-all duration-300 ${
-                      currentStep > step.num ? "bg-[#1F8A70]" : "bg-[#ECE5CC]"
-                    }`}
+                    className={`flex-1 h-[2.5px] mx-3 -mt-5 rounded-full transition-all duration-300 ${currentStep > step.num ? "bg-[#1F8A70]" : "bg-[#ECE5CC]"
+                      }`}
                   />
                 )}
               </React.Fragment>
@@ -444,11 +440,10 @@ export default function OnboardingPage() {
                         key={role.id}
                         type="button"
                         onClick={() => setSelectedRole(role.id)}
-                        className={`p-4 rounded-2xl border text-left transition-all flex items-start justify-between cursor-pointer ${
-                          isSelected
+                        className={`p-4 rounded-2xl border text-left transition-all flex items-start justify-between cursor-pointer ${isSelected
                             ? "bg-white border-[#2E2B1A] shadow-warm-sm ring-2 ring-[#FFF76A]"
                             : "bg-white border-[#ECE5CC] hover:border-[#DFD6B5] hover:bg-[#FAF6E8]/30"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-start gap-3">
                           <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A] shrink-0 mt-0.5">
@@ -466,11 +461,10 @@ export default function OnboardingPage() {
 
                         <div className="shrink-0 ml-2 mt-1">
                           <div
-                            className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                              isSelected
+                            className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected
                                 ? "bg-[#1F8A70] border-[#1F8A70] text-white"
                                 : "border-[#ECE5CC] bg-white"
-                            }`}
+                              }`}
                           >
                             {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                           </div>
@@ -606,11 +600,10 @@ export default function OnboardingPage() {
                   setSelectedProvider("aws");
                   setProviderError(null);
                 }}
-                className={`p-5 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
-                  selectedProvider === "aws"
+                className={`p-5 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${selectedProvider === "aws"
                     ? "bg-white border-[#2E2B1A] shadow-warm-sm ring-2 ring-[#FFF76A]"
                     : "bg-white border-[#ECE5CC] hover:border-[#DFD6B5]"
-                }`}
+                  }`}
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
