@@ -2,6 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
+    serverComponentsExternalPackages: ['@prisma/client'],
     outputFileTracingIncludes: {
       '/api/**/*': ['./prisma/**/*'],
     },
