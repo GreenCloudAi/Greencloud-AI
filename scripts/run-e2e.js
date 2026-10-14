@@ -24,17 +24,22 @@ async function runE2ETests() {
   }
 
   try {
-    // Step 0: Reset Test DB
-    console.log("\n1. Resetting test database...");
-    await prisma.auditLog.deleteMany({});
-    await prisma.approval.deleteMany({});
-    await prisma.recommendation.deleteMany({});
-    await prisma.carbonEmission.deleteMany({});
-    await prisma.costLineItem.deleteMany({});
-    await prisma.cloudResource.deleteMany({});
-    await prisma.cloudAccount.deleteMany({});
-    await prisma.tenant.deleteMany({});
-    assert(true, "Database tables cleared");
+    // Step 0: Clean any previous E2E test data
+    console.log("\n1. Preparing isolated test environment...");
+    const previousTestTenants = await prisma.tenant.findMany({
+      where: { name: { in: ["Acme Enterprise", "Staging Tenant"] } }
+    });
+    for (const t of previousTestTenants) {
+      await prisma.auditLog.deleteMany({ where: { tenantId: t.id } });
+      await prisma.approval.deleteMany({ where: { recommendation: { tenantId: t.id } } });
+      await prisma.recommendation.deleteMany({ where: { tenantId: t.id } });
+      await prisma.carbonEmission.deleteMany({ where: { resource: { cloudAccount: { tenantId: t.id } } } });
+      await prisma.costLineItem.deleteMany({ where: { cloudAccount: { tenantId: t.id } } });
+      await prisma.cloudResource.deleteMany({ where: { cloudAccount: { tenantId: t.id } } });
+      await prisma.cloudAccount.deleteMany({ where: { tenantId: t.id } });
+      await prisma.tenant.delete({ where: { id: t.id } });
+    }
+    assert(true, "Isolated test environment initialized");
 
     // Acceptance Criterion 1: Connect AWS account without static keys
     console.log("\n2. [Criterion 1] Testing AWS Connection without static keys...");
@@ -239,6 +244,18 @@ async function runE2ETests() {
 
     assert(cfExists, "CloudFormation template file (infra/cloudformation.template.json) exists");
     assert(docExists, "Demo setup documentation file (docs/demo-setup.md) exists");
+
+    // Clean up test tenants so the dev database remains pristine
+    for (const tId of [tenantA.id, tenantB.id]) {
+      await prisma.auditLog.deleteMany({ where: { tenantId: tId } });
+      await prisma.approval.deleteMany({ where: { recommendation: { tenantId: tId } } });
+      await prisma.recommendation.deleteMany({ where: { tenantId: tId } });
+      await prisma.carbonEmission.deleteMany({ where: { resource: { cloudAccount: { tenantId: tId } } } });
+      await prisma.costLineItem.deleteMany({ where: { cloudAccount: { tenantId: tId } } });
+      await prisma.cloudResource.deleteMany({ where: { cloudAccount: { tenantId: tId } } });
+      await prisma.cloudAccount.deleteMany({ where: { tenantId: tId } });
+      await prisma.tenant.delete({ where: { id: tId } });
+    }
 
     console.log("\n==========================================");
     console.log(` E2E RESULT: ${passed} PASSED, ${failed} FAILED`);

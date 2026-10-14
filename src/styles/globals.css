@@ -297,6 +297,23 @@ a:hover {
   background-color: var(--bg-surface-hover);
 }
 
+.btn-danger {
+  background-color: transparent;
+  border: 1px solid hsl(0, 85%, 60%, 0.3);
+  color: hsl(0, 85%, 65%);
+  padding: 0.5rem 0.85rem;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-danger:hover {
+  background-color: hsl(0, 85%, 60%, 0.15);
+  border-color: hsl(0, 85%, 60%);
+  color: hsl(0, 85%, 75%);
+}
+
 /* Badges */
 .badge {
   display: inline-flex;

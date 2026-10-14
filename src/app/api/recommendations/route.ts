@@ -52,9 +52,9 @@ export async function GET(request: Request) {
     const totalOperationalCarbon = uniqueCarbonList.reduce((sum, c) => sum + c.operationalGco2e, 0);
     const totalEmbodiedCarbon = uniqueCarbonList.reduce((sum, c) => sum + c.embodiedGco2e, 0);
 
-    // SCI calculation for entire tenant (mocking 100k requests functional units)
-    const mockFunctionalUnits = 120000;
-    const sciScore = (totalOperationalCarbon + totalEmbodiedCarbon) / mockFunctionalUnits;
+    // SCI calculation for entire tenant based on organizational functional units (e.g. API requests)
+    const functionalUnits = parseInt(process.env.GREENCLOUD_FUNCTIONAL_UNITS || "100000", 10);
+    const sciScore = (totalOperationalCarbon + totalEmbodiedCarbon) / (functionalUnits || 1);
 
     return NextResponse.json({
       recommendations,
@@ -66,7 +66,7 @@ export async function GET(request: Request) {
         totalOperationalCarbon: parseFloat(totalOperationalCarbon.toFixed(2)),
         totalEmbodiedCarbon: parseFloat(totalEmbodiedCarbon.toFixed(2)),
         sciScore: parseFloat(sciScore.toFixed(5)),
-        functionalUnits: mockFunctionalUnits
+        functionalUnits: functionalUnits
       }
     });
   } catch (error: any) {

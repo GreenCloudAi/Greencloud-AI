@@ -98,6 +98,22 @@ export default function Dashboard() {
     }
   };
 
+  const handleDisconnect = async (accountId: string, accountName: string) => {
+    if (!confirm(`Are you sure you want to disconnect and remove "${accountName}"? All synced resources, recommendations, and metrics for this account will be removed.`)) {
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/cloud-accounts/${accountId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      await fetchData();
+    } catch (err: any) {
+      alert(`Failed to disconnect account: ${err.message}`);
+      setLoading(false);
+    }
+  };
+
   const executeApproval = async (recommendationId: string) => {
     try {
       const res = await fetch(`/api/recommendations/${recommendationId}/approve`, {
@@ -269,13 +285,23 @@ export default function Dashboard() {
                         {acc.syncFreshness ? new Date(acc.syncFreshness).toLocaleString() : "Never Synced"}
                       </td>
                       <td>
-                        <button 
-                          className="btn btn-action" 
-                          onClick={() => triggerSync(acc.id)}
-                          disabled={syncingAccountId !== null || acc.status === "syncing"}
-                        >
-                          {syncingAccountId === acc.id ? "Syncing..." : "Sync Billing & Assets"}
-                        </button>
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <button 
+                            className="btn btn-action" 
+                            onClick={() => triggerSync(acc.id)}
+                            disabled={syncingAccountId !== null || acc.status === "syncing"}
+                          >
+                            {syncingAccountId === acc.id ? "Syncing..." : "Sync Billing & Assets"}
+                          </button>
+                          <button
+                            className="btn btn-danger"
+                            onClick={() => handleDisconnect(acc.id, acc.name)}
+                            disabled={syncingAccountId === acc.id || acc.status === "syncing"}
+                            title="Disconnect and delete this cloud account"
+                          >
+                            Disconnect
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
