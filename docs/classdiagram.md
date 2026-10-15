@@ -101,7 +101,7 @@ sequenceDiagram
 
 **Explanation:** The sequence emphasizes auditability and rollback monitoring.
 
-## 14.5 Component Diagram
+## 14.5 Component Diagram of GreenCloud AI
 
 ```mermaid
 flowchart LR
@@ -149,4 +149,5 @@ flowchart LR
   RecSvc --> PG
 ```
 
-**Explanation:** Components are isolated so carbon, cost, forecast, recommendations, and automation can evolve independently.
+**Explanation:** Components are isolated so carbon, cost, forecast, recommendations and automation can evolve independently.
+ 

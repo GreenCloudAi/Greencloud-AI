@@ -387,3 +387,6 @@ If you have a team, create an IAM Group:
 - Verify resources exist in the **correct region** (`us-east-1` by default)
 - Check `GREENCLOUD_SCAN_REGIONS` in `.env.local` matches where your resources are
 - Check the sync error in the dashboard's Connected Cloud Accounts table
+    
+
+    
