@@ -194,4 +194,4 @@ For complete user story specifications and use case diagrams, refer to [`docs/us
 | OLAP | ClickHouse | Fast analytical queries on billing line items. | BigQuery, Snowflake. |
 | ML / Forecasting | scikit-learn, StatsForecast, Prophet | Baselines + deep learning; uncertainty support. | PyTorch, GluonTS. |
 | Kubernetes Cost | OpenCost + Kepler | OSS cost allocation standard & energy telemetry. | Kubecost, RAPL custom exporters. |
-
+ 
