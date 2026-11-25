@@ -31,7 +31,7 @@ module.exports = {
         "sage-light": "#EDF4EA",
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        sans: ["'Google Sans Flex'", "var(--font-inter)", "Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
         mono: ["var(--font-mono)", "IBM Plex Mono", "monospace"],
       },
       boxShadow: {

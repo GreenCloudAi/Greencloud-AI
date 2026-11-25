@@ -1,3 +1,5 @@
+import "./dnsFallback";
+
 /**
  * GreenCloud AI — Centralized Configuration
  * All tunable parameters are driven from environment variables.

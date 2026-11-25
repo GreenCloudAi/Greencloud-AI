@@ -1,4 +1,5 @@
 import { STSClient, AssumeRoleCommand } from "@aws-sdk/client-sts";
+import "./dnsFallback";
 import {
   EC2Client,
   DescribeInstancesCommand,
@@ -138,13 +139,18 @@ export class AwsCloudConnector {
       durationSeconds: GreenCloudConfig.stsSessionDurationSeconds,
     });
 
+    const rawAccessKey = this.baseCredentials?.accessKeyId || process.env.AWS_ACCESS_KEY_ID;
+    const rawSecretKey = this.baseCredentials?.secretAccessKey || process.env.AWS_SECRET_ACCESS_KEY;
+    const accessKeyId = rawAccessKey ? rawAccessKey.trim() : undefined;
+    const secretAccessKey = rawSecretKey ? rawSecretKey.trim() : undefined;
+
     const stsClient = new STSClient({
       region: GreenCloudConfig.defaultRegion,
-      ...(this.baseCredentials?.accessKeyId && this.baseCredentials?.secretAccessKey
+      ...(accessKeyId && secretAccessKey
         ? {
             credentials: {
-              accessKeyId: this.baseCredentials.accessKeyId,
-              secretAccessKey: this.baseCredentials.secretAccessKey,
+              accessKeyId,
+              secretAccessKey,
             },
           }
         : {}),

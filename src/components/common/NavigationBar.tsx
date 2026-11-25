@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowRight, Menu, X, Sparkles, LayoutDashboard } from "lucide-react";
 
 export function NavigationBar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hasAccount, setHasAccount] = useState<boolean>(false);
-  const [accountName, setAccountName] = useState<string>("");
+  const [activeHash, setActiveHash] = useState<string>("");
   const pathname = usePathname();
+  const barRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     fetch("/api/cloud-accounts")
@@ -17,146 +17,168 @@ export function NavigationBar() {
       .then((accounts) => {
         if (Array.isArray(accounts) && accounts.length > 0) {
           setHasAccount(true);
-          setAccountName(accounts[0].name || "AWS Workspace");
         }
       })
       .catch(() => { });
   }, []);
 
+  useEffect(() => {
+    if (pathname !== "/") {
+      setActiveHash("");
+      return;
+    }
+
+    const sectionIds = ["overview", "optimization", "integrations", "documentation"];
+    const updateActive = () => {
+      const y = window.scrollY + 140;
+      let current = "overview";
+      for (const id of sectionIds) {
+        const el = document.getElementById(id);
+        if (el && el.offsetTop <= y) current = id;
+      }
+      setActiveHash(current === "overview" ? "/" : `/#${current}`);
+    };
+
+    updateActive();
+    window.addEventListener("scroll", updateActive, { passive: true });
+    return () => window.removeEventListener("scroll", updateActive);
+  }, [pathname]);
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (mobileMenuOpen && barRef.current && !barRef.current.contains(e.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && mobileMenuOpen) {
+        setMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [mobileMenuOpen]);
+
   const navLinks = [
-    { label: "Product", href: "/" },
-    ...(hasAccount ? [{ label: "Dashboard", href: "/dashboard" }] : []),
-    { label: "Why?", href: "/why" },
+    { label: "Overview", href: "/" },
+    { label: "Actions", href: "/#optimization" },
     { label: "How it works", href: "/how-it-works" },
-    { label: "Cost & Carbon", href: "/#optimization" },
-    { label: "Security", href: "/#security" },
-    { label: "Documentation", href: "/#documentation" },
+    { label: "Why?", href: "/why" },
+    { label: "Integrations", href: "/#integrations" },
+    { label: "Docs", href: "/#documentation" },
   ];
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-[#FFFDF4]/90 backdrop-blur-md pt-2.5 pb-2.5 mb-2 transition-all">
-      <div className="max-w-[1360px] mx-auto px-4 sm:px-6">
-        <div className="bg-[#FFFDF7] border border-[#ECE5CC] rounded-full px-4 sm:px-6 py-2 sm:py-2.5 flex items-center justify-between shadow-warm-sm transition-all">
-          {/* Brand Logo & Title */}
-          <Link href="/" className="flex items-center gap-2.5 sm:gap-3 group focus:outline-none shrink-0">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#FFF76A] border border-[#DFD6B5] flex items-center justify-center text-[#2E2B1A] shadow-sm transition-transform group-hover:scale-105">
-              <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#2E2B1A]" width="20" height="20" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                <path d="M24 4C25.7818 14.2173 33.7827 22.2182 44 24C33.7827 25.7818 25.7818 33.7827 24 44C22.2182 33.7827 14.2173 25.7818 4 24C14.2173 22.2182 22.2182 14.2173 24 4Z" fill="currentColor" />
-              </svg>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[#2E2B1A] font-extrabold text-[15px] sm:text-[16px] tracking-tight leading-none">
-                GreenCloud AI
+    <header className="sticky top-0 z-50 w-full bg-[#FFFDF4]/95 backdrop-blur-md pt-2.5 pb-2.5 mb-2">
+      <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div
+          ref={barRef}
+          className="relative bg-[#F5EED6] rounded-full p-1.5 sm:p-2 pl-2.5 sm:pl-3 flex items-center gap-2 sm:gap-3 flex-nowrap min-w-0"
+        >
+          {/* Brand Logo & Wordmark */}
+          <Link
+            href="/"
+            aria-label="GreenCloud AI home"
+            className="flex items-center gap-2 sm:gap-2.5 mr-auto min-w-0 shrink-0 group focus:outline-none"
+          >
+            <span className="w-9 h-9 sm:w-10 sm:h-10 rounded-[13px] sm:rounded-[14px] bg-[#FFFDF4] flex items-center justify-center text-[#2E2B1A] shrink-0 transition-transform duration-200 group-hover:scale-105">
+              <span className="material-symbols-outlined text-[20px] sm:text-[22px] leading-none text-[#1F8A70]">
+                eco
               </span>
-              <span className="text-[10.5px] text-[#8D8975] font-medium tracking-normal mt-0.5 hidden xs:inline">
-                Cloud Cost & Carbon Intelligence
-              </span>
-            </div>
+            </span>
+            <span className="font-extrabold text-[15.5px] sm:text-[18px] tracking-[-0.015em] text-[#2E2B1A] whitespace-nowrap">
+              GreenCloud AI
+            </span>
           </Link>
 
-          {/* Desktop Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-4 xl:gap-5 text-[13.5px] font-medium text-[#686450]">
+          {/* Desktop Inline Links */}
+          <nav
+            aria-label="Main navigation"
+            className="hidden lg:flex items-center justify-center gap-0.5 min-w-0"
+          >
             {navLinks.map((link) => {
-              const isActive = link.href === pathname;
+              const isActive =
+                pathname === "/" ? activeHash === link.href : link.href === pathname;
               return (
                 <Link
                   key={link.label}
                   href={link.href}
-                  className={`py-1 px-2.5 rounded-full transition-all relative ${isActive
-                      ? "bg-[#FAF6E8] text-[#2E2B1A] font-bold border border-[#ECE5CC] shadow-2xs"
-                      : "hover:text-[#2E2B1A]"
-                    }`}
+                  className={`px-2.5 xl:px-3.5 py-2 rounded-full text-[13px] xl:text-[14.5px] font-semibold whitespace-nowrap transition-colors duration-150 ${
+                    isActive
+                      ? "bg-[#FAF6E8] text-[#2E2B1A]"
+                      : "text-[#2E2B1A] hover:bg-[#FAF6E8]"
+                  }`}
                 >
-                  <span>{link.label}</span>
-                  {isActive && (
-                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-[2px] bg-[#1F8A70] rounded-full"></span>
-                  )}
+                  {link.label}
                 </Link>
               );
             })}
           </nav>
 
-          {/* Right Action Buttons */}
-          <div className="flex items-center gap-3 shrink-0">
-            {hasAccount ? (
-              <>
-                <Link
-                  href="/onboarding"
-                  className="hidden md:inline-flex items-center justify-center px-3 py-1.5 rounded-full text-[12.5px] font-semibold text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8] transition-colors"
-                >
-                  + Connect Account
-                </Link>
-                <Link
-                  href="/dashboard"
-                  className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 rounded-full text-[12.5px] sm:text-[13px] font-bold bg-[#FFF76A] hover:bg-[#F5EC50] text-[#2E2B1A] border border-[#DFD6B5] shadow-sm hover:shadow-sunshine-glow transition-all whitespace-nowrap"
-                >
-                  <LayoutDashboard className="w-3.5 h-3.5 text-[#1F8A70]" />
-                  <span>Go to Dashboard</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/dashboard"
-                  className="hidden md:inline-flex items-center justify-center px-4 py-1.5 rounded-full text-[13px] font-semibold text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8] transition-colors"
-                >
-                  Live Demo
-                </Link>
+          {/* Primary Pill Action Button */}
+          <Link
+            href={hasAccount ? "/dashboard" : "/onboarding"}
+            className="h-[40px] sm:h-[46px] px-3.5 sm:px-5 rounded-full active:scale-[0.99] bg-[#FFF76A] hover:bg-[#F5EC50] text-[#2E2B1A] font-bold text-[13px] sm:text-[14px] inline-flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap shrink-0 transition-[background-color,transform] duration-150"
+          >
+            <span className="material-symbols-outlined icon-filled text-[18px] sm:text-[19px] leading-none">
+              {hasAccount ? "dashboard" : "rocket_launch"}
+            </span>
+            <span>{hasAccount ? "Dashboard" : "Start setup"}</span>
+          </Link>
 
+          {/* Secondary Quick Icon Action (visible on sm+ so narrow 320px phones stay clean) */}
+          <Link
+            href={hasAccount ? "/onboarding" : "/dashboard"}
+            aria-label={hasAccount ? "Connect AWS account" : "Open live demo"}
+            title={hasAccount ? "Connect AWS account" : "Open live demo"}
+            className="hidden sm:inline-flex w-[46px] h-[46px] rounded-full active:scale-[0.99] bg-[#FAF6E8] hover:bg-[#EAE2C7] text-[#2E2B1A] items-center justify-center shrink-0 transition-[background-color,transform] duration-150"
+          >
+            <span className="material-symbols-outlined text-[22px] leading-none">
+              {hasAccount ? "link" : "play_circle"}
+            </span>
+          </Link>
+
+          {/* Compact Menu Toggle */}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
+            aria-expanded={mobileMenuOpen}
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            className="lg:hidden w-[40px] h-[40px] sm:w-[46px] sm:h-[46px] rounded-full hover:bg-[#EDE3C2] text-[#2E2B1A] inline-flex items-center justify-center shrink-0 transition-colors duration-150"
+          >
+            <span className="material-symbols-outlined text-[21px] sm:text-[22px] leading-none">
+              {mobileMenuOpen ? "close" : "menu"}
+            </span>
+          </button>
+
+          {/* Responsive Popover Menu */}
+          {mobileMenuOpen && (
+            <div className="lg:hidden absolute top-[calc(100%+10px)] left-0 right-0 p-2.5 bg-[#F5EED6] rounded-[32px] shadow-warm-xl flex flex-col gap-0.5 z-40">
+              {navLinks.map((link) => (
                 <Link
-                  href="/onboarding"
-                  className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 rounded-full text-[12.5px] sm:text-[13px] font-bold bg-[#FFF76A] hover:bg-[#F5EC50] text-[#2E2B1A] border border-[#DFD6B5] shadow-sm hover:shadow-sunshine-glow transition-all whitespace-nowrap"
+                  key={link.label}
+                  href={link.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="px-5 py-3 text-[15px] font-semibold text-[#2E2B1A] rounded-[20px] hover:bg-[#FAF6E8] transition-colors"
                 >
-                  <span>Start setup</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  {link.label}
                 </Link>
-              </>
-            )}
-
-            {/* Mobile Menu Toggle */}
-            <button
-              type="button"
-              className="lg:hidden p-2 rounded-full hover:bg-[#FAF6E8] text-[#2E2B1A] transition-colors focus:outline-none"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label="Toggle navigation menu"
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Drawer Menu */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden mt-2 p-4 bg-[#FFFDF7] border border-[#ECE5CC] rounded-3xl shadow-warm-lg flex flex-col gap-2 font-medium text-[14px] text-[#2E2B1A] animate-in fade-in slide-in-from-top-2 duration-150">
-          {navLinks.map((link) => (
-            <Link
-              key={link.label}
-              href={link.href}
-              onClick={() => setMobileMenuOpen(false)}
-              className="py-2 px-3 rounded-xl hover:bg-[#FAF6E8] transition-colors flex items-center justify-between"
-            >
-              <span>{link.label}</span>
-              <ArrowRight className="w-4 h-4 text-[#8D8975]" />
-            </Link>
-          ))}
-          {hasAccount && (
-            <Link
-              href="/dashboard"
-              onClick={() => setMobileMenuOpen(false)}
-              className="mt-2 py-2.5 px-4 rounded-xl bg-[#FFF76A] font-bold text-[#2E2B1A] flex items-center justify-between"
-            >
-              <div className="flex items-center gap-2">
-                <LayoutDashboard className="w-4 h-4 text-[#1F8A70]" />
-                <span>Go to Dashboard</span>
-              </div>
-              <ArrowRight className="w-4 h-4" />
-            </Link>
+              ))}
+              <Link
+                href={hasAccount ? "/onboarding" : "/dashboard"}
+                onClick={() => setMobileMenuOpen(false)}
+                className="sm:hidden px-5 py-3 text-[15px] font-semibold text-[#155E4B] rounded-[20px] hover:bg-[#FAF6E8] transition-colors"
+              >
+                {hasAccount ? "Connect AWS account" : "Live demo"}
+              </Link>
+            </div>
           )}
         </div>
-      )}
+      </div>
     </header>
   );
 }
-

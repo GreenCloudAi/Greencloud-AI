@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GreenCloudAI - Visual Flow Diagram</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body {
+      background: radial-gradient(circle at 50% 0%, #0f172a 0%, #020617 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+  </style>
+</head>
+<body class="text-slate-100 min-h-screen p-6 md:p-10 flex flex-col items-center">
+  <div class="max-w-6xl w-full">
+    <!-- Header -->
+    <header class="text-center mb-10">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold tracking-wider uppercase mb-3">
+        🌱 FinOps meets GreenOps
+      </div>
+      <h1 class="text-4xl md:text-5xl font-extrabold text-white tracking-tight">
+        GreenCloudAI <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">System Flow</span>
+      </h1>
+      <p class="text-slate-400 mt-3 text-base md:text-lg max-w-2xl mx-auto">
+        End-to-end architecture and operational workflow: from multi-cloud data collection to AI-powered multi-objective optimization and safe approval-based execution.
+      </p>
+    </header>
+
+    <!-- Key Concept Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+      <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl backdrop-blur-sm flex items-start gap-4">
+        <div class="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 text-xl font-bold">
+          💰
+        </div>
+        <div>
+          <h2 class="text-lg font-semibold text-white">FinOps Pillar</h2>
+          <p class="text-sm text-slate-400 mt-1">Identifies idle instances, oversized virtual machines, and unattached disks to cut unnecessary cloud expenditure.</p>
+        </div>
+      </div>
+
+      <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl backdrop-blur-sm flex items-start gap-4">
+        <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xl font-bold">
+          🌍
+        </div>
+        <div>
+          <h2 class="text-lg font-semibold text-white">GreenOps Pillar</h2>
+          <p class="text-sm text-slate-400 mt-1">Estimates carbon emissions (gCO2eq) by analyzing electricity consumption and grid carbon intensity across regional data centers.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Diagram Container -->
+    <div class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-6 md:p-8 shadow-2xl backdrop-blur-md mb-10 overflow-x-auto">
+      <div class="mermaid flex justify-center">
+flowchart TD
+    %% Styling Classes
+    classDef cloud fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#e0f2fe;
+    classDef data fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#e0e7ff;
+    classDef core fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#ecfdf5;
+    classDef ai fill:#4c1d95,stroke:#c084fc,stroke-width:2px,color:#f3e8ff;
+    classDef action fill:#701a75,stroke:#f472b6,stroke-width:2px,color:#fdf2f8;
+    classDef value fill:#134e4a,stroke:#2dd4bf,stroke-width:2px,color:#ccfbf1;
+
+    subgraph S1 ["1. Cloud Connections"]
+        AWS["AWS (EC2, S3, RDS)"]
+        AZ["Azure (VMs, Blob)"]
+        GCP["GCP (Compute, GKE)"]
+        K8S["Kubernetes Clusters"]
+    end
+    class AWS,AZ,GCP,K8S cloud;
+
+    subgraph S2 ["2. Data Ingestion"]
+        BILL["Billing & Cost Telemetry"]
+        RES["CPU / Memory Usage Data"]
+        GRID["Carbon Intensity (gCO2e/kWh)"]
+    end
+    class BILL,RES,GRID data;
+
+    S1 -->|Read-Only Connectors| S2
+
+    subgraph S3 ["3. Dual Core Analysis"]
+        direction TB
+        FIN["<b>FinOps Engine</b><br/>• Unused server identification<br/>• Oversized VM detection<br/>• Cost forecasting"]
+        GREEN["<b>GreenOps Engine</b><br/>• Power calculation (PUE/kWh)<br/>• Regional carbon intensity<br/>• Emission reporting"]
+    end
+    class FIN,GREEN core;
+
+    S2 --> S3
+
+    subgraph S4 ["4. AI Engine & Recommendations"]
+        AI["<b>GreenCloudAI AI Engine</b><br/>Multi-objective Pareto optimization"]
+        REC["<b>Ranked Recommendations</b><br/>• Rightsizing VMs<br/>• Terminating idle volumes<br/>• Green off-peak scheduling"]
+    end
+    class AI,REC ai;
+
+    S3 --> AI
+    AI --> REC
+
+    subgraph S5 ["5. Safe Automation & Human-in-the-Loop"]
+        DASH["Unified Dashboard<br/>(FinOps + GreenOps view)"]
+        DEC{"User Review &<br/>Approval"}
+        RUN["Safe Automated Execution<br/>(API Orchestrator)"]
+        SAFE["Post-monitoring &<br/>Instant Rollback"]
+    end
+    class DASH,DEC,RUN,SAFE action;
+
+    REC --> DASH
+    DASH --> DEC
+    DEC -->|Approve| RUN
+    DEC -->|Reject / Defer| DASH
+    RUN --> SAFE
+    SAFE -.->|Telemetry Feedback| S2
+
+    subgraph IMPACT ["Real-World Outcomes"]
+        V1["Startups & IT Enterprises: Reduced Cloud Bills"]
+        V2["Sustainability Teams: Net-Zero Carbon Alignment"]
+        V3["DevOps Teams: Unified Single-Pane Visibility"]
+    end
+    class V1,V2,V3 value;
+
+    SAFE --> IMPACT
+      </div>
+    </div>
+
+    <!-- 5-Step Process Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+        <div class="text-xs font-bold text-sky-400 mb-1">STEP 1</div>
+        <div class="font-semibold text-white mb-1 text-sm">Connect Accounts</div>
+        <p class="text-xs text-slate-400">AWS, Azure, and Google Cloud connected via secure, read-only IAM credentials.</p>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+        <div class="text-xs font-bold text-indigo-400 mb-1">STEP 2</div>
+        <div class="font-semibold text-white mb-1 text-sm">Collect Telemetry</div>
+        <p class="text-xs text-slate-400">Ingests granular billing line items, compute utilization, and grid carbon data.</p>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+        <div class="text-xs font-bold text-emerald-400 mb-1">STEP 3</div>
+        <div class="font-semibold text-white mb-1 text-sm">Analyze Waste</div>
+        <p class="text-xs text-slate-400">Finds idle servers, unattached disks, and high-emission regional workloads.</p>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+        <div class="text-xs font-bold text-purple-400 mb-1">STEP 4</div>
+        <div class="font-semibold text-white mb-1 text-sm">AI Recommend</div>
+        <p class="text-xs text-slate-400">Ranks suggestions by cost savings, carbon reduction, and risk tolerance.</p>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+        <div class="text-xs font-bold text-pink-400 mb-1">STEP 5</div>
+        <div class="font-semibold text-white mb-1 text-sm">Approve & Execute</div>
+        <p class="text-xs text-slate-400">Approval-driven actions with automated health monitoring and one-click rollback.</p>
+      </div>
+    </div>
+
+    <footer class="text-center text-xs text-slate-500 mt-12">
+      Team GreenCloudAI: Anshul Yadav, Anjishnu Srivastava, Anubhav Bansal, Aru Pandey
+    </footer>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#090d16',
+        primaryColor: '#059669',
+        primaryTextColor: '#f8fafc',
+        lineColor: '#64748b'
+      }
+    });
+  </script>
+</body>
+</html>
+

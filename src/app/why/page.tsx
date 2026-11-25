@@ -1,897 +1,883 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { NavigationBar } from "@/components/common/NavigationBar";
 import { ComplianceFooter } from "@/components/common/ComplianceFooter";
+import { HeroShapeMorph } from "@/components/overview/MotionPrimitives";
 import {
-  Eye,
-  Activity,
-  DollarSign,
-  TrendingUp,
-  Cloud,
-  Layers,
-  Leaf,
-  ArrowDown,
-  Wand2,
-  ArrowRight,
-  Server,
-  Receipt,
-  Cpu,
-  Gauge,
-  CheckCircle2,
-  Sparkles,
-  Sliders,
-  LineChart,
-  AlertTriangle,
-  FileText,
-  Shield,
-  History,
-  HelpCircle,
-  PiggyBank,
-  Terminal,
-  Code,
-  Globe2,
-  BarChart3,
-  RefreshCw,
-  BookOpen,
-} from "lucide-react";
+  OptimizationReviewModal,
+  type OptimizationReviewItem,
+} from "@/components/overview/OptimizationReviewModal";
 
-export default function WhyPage() {
+interface PipelineItem {
+  num: string;
+  subtitle: string;
+  title: string;
+  desc: string;
+  shape: "sunny" | "clover" | "flower" | "cookie9";
+  shapeColor: string;
+  numInk: string;
+  showClouds?: boolean;
+}
+
+interface CapabilityCard {
+  subtitle: string;
+  title: string;
+  desc: string;
+  href: string;
+  linkLabel: string;
+  shape: "sunny" | "clover" | "flower" | "cookie9";
+  shapeColor: string;
+  iconInk: string;
+  icon: string;
+}
+
+interface QaItem {
+  topic: string;
+  question: string;
+  answer: string;
+  trayBg: string;
+  accentInk: string;
+}
+
+interface TeamRole {
+  subtitle: string;
+  title: string;
+  desc: string;
+  shape: "sunny" | "clover" | "flower" | "cookie9";
+  shapeColor: string;
+  iconInk: string;
+  icon: string;
+}
+
+const PIPELINE_ITEMS: PipelineItem[] = [
+  {
+    num: "01",
+    subtitle: "Multi-cloud context",
+    title: "Cloud Accounts",
+    desc: "Link AWS accounts with read-only IAM alongside unified AWS, GCP, and Azure telemetry baselines.",
+    shape: "sunny",
+    shapeColor: "text-[#FFE985]",
+    numInk: "text-[#524305]",
+    showClouds: true,
+  },
+  {
+    num: "02",
+    subtitle: "Daily billing pulse",
+    title: "Cost",
+    desc: "Track hourly and monthly dollar trends across compute, managed databases, and storage tiers.",
+    shape: "clover",
+    shapeColor: "text-[#FBE0BC]",
+    numInk: "text-[#6B4814]",
+  },
+  {
+    num: "03",
+    subtitle: "Asset inventory",
+    title: "Resources",
+    desc: "Group idle servers, oversized RDS clusters, detached EBS disks, and cold object buckets cleanly.",
+    shape: "flower",
+    shapeColor: "text-[#CEECE0]",
+    numInk: "text-[#155E4B]",
+  },
+  {
+    num: "04",
+    subtitle: "Empirical utilization",
+    title: "Usage",
+    desc: "Measure 14-to-30-day CPU, memory, network, and disk IOPS peaks before suggesting changes.",
+    shape: "cookie9",
+    shapeColor: "text-[#EAE0BE]",
+    numInk: "text-[#2E2B1A]",
+  },
+  {
+    num: "05",
+    subtitle: "Grid-aware intensity",
+    title: "Carbon",
+    desc: "Convert estimated server kilowatt-hours into regional kg CO₂e based on data center energy mix.",
+    shape: "flower",
+    shapeColor: "text-[#CEECE0]",
+    numInk: "text-[#155E4B]",
+  },
+  {
+    num: "06",
+    subtitle: "Reviewable diffs",
+    title: "Recommendations",
+    desc: "Prioritize every action by monthly savings, emissions reduction, and production risk level.",
+    shape: "sunny",
+    shapeColor: "text-[#FFE985]",
+    numInk: "text-[#524305]",
+  },
+];
+
+const CAPABILITY_CARDS: CapabilityCard[] = [
+  {
+    subtitle: "Unified overview",
+    title: "Spend & carbon trendline",
+    desc: "Compare daily cloud bills against carbon footprint in one synchronized chart.",
+    href: "/dashboard",
+    linkLabel: "Open dashboard",
+    shape: "sunny",
+    shapeColor: "text-[#FFE985]",
+    iconInk: "text-[#524305]",
+    icon: "show_chart",
+  },
+  {
+    subtitle: "Idle compute detection",
+    title: "Off-hours dev schedules",
+    desc: "Spot non-production servers sitting under 2% CPU at night and weekends.",
+    href: "/#optimization",
+    linkLabel: "See recommendations",
+    shape: "clover",
+    shapeColor: "text-[#FBE0BC]",
+    iconInk: "text-[#6B4814]",
+    icon: "schedule",
+  },
+  {
+    subtitle: "Database right-sizing",
+    title: "Oversized RDS clusters",
+    desc: "Match memory and vCPU tiers to observed 30-day peak load instead of guess estimates.",
+    href: "/#optimization",
+    linkLabel: "Inspect DB findings",
+    shape: "flower",
+    shapeColor: "text-[#CEECE0]",
+    iconInk: "text-[#155E4B]",
+    icon: "database",
+  },
+  {
+    subtitle: "Storage hygiene",
+    title: "Detached volumes & buckets",
+    desc: "Reclaim unattached gp3 disks and move unread object archives to low-cost cold tiers.",
+    href: "/#optimization",
+    linkLabel: "View storage savings",
+    shape: "cookie9",
+    shapeColor: "text-[#EAE0BE]",
+    iconInk: "text-[#2E2B1A]",
+    icon: "hard_drive",
+  },
+  {
+    subtitle: "Code-first workflow",
+    title: "Terraform HCL previews",
+    desc: "Inspect exact line-by-line resource diffs before any infrastructure change happens.",
+    href: "/how-it-works",
+    linkLabel: "See Terraform flow",
+    shape: "sunny",
+    shapeColor: "text-[#FFE985]",
+    iconInk: "text-[#524305]",
+    icon: "code",
+  },
+  {
+    subtitle: "Grid intensity math",
+    title: "Regional emission factors",
+    desc: "Identify workloads running on carbon-heavy grids versus hydroelectric regions.",
+    href: "/#documentation",
+    linkLabel: "Read methodology",
+    shape: "flower",
+    shapeColor: "text-[#CEECE0]",
+    iconInk: "text-[#155E4B]",
+    icon: "public",
+  },
+  {
+    subtitle: "Governance ledger",
+    title: "Immutable audit trail",
+    desc: "Verify who synced accounts, approved fixes, or exported Terraform patches and when.",
+    href: "/audit-history",
+    linkLabel: "Open audit history",
+    shape: "clover",
+    shapeColor: "text-[#FBE0BC]",
+    iconInk: "text-[#6B4814]",
+    icon: "history",
+  },
+  {
+    subtitle: "Zero write risk",
+    title: "Read-only IAM posture",
+    desc: "Evaluate full infrastructure health safely using scoped read-only credentials.",
+    href: "/how-it-works",
+    linkLabel: "Inspect security",
+    shape: "cookie9",
+    shapeColor: "text-[#EAE0BE]",
+    iconInk: "text-[#2E2B1A]",
+    icon: "verified_user",
+  },
+  {
+    subtitle: "Instant onboarding",
+    title: "Sandbox & live modes",
+    desc: "Test full optimization reports immediately or connect live AWS billing in minutes.",
+    href: "/onboarding",
+    linkLabel: "Connect account",
+    shape: "sunny",
+    shapeColor: "text-[#FFE985]",
+    iconInk: "text-[#524305]",
+    icon: "rocket_launch",
+  },
+];
+
+const QA_ITEMS: QaItem[] = [
+  {
+    topic: "Idle compute",
+    question: "Why are we still paying for staging clusters overnight?",
+    answer: "Dev and staging EC2 instances with near-zero night traffic are flagged with 14-day CPU proofs and one-click schedule diffs.",
+    trayBg: "bg-[#FBF6E3]",
+    accentInk: "text-[#524305]",
+  },
+  {
+    topic: "Carbon math",
+    question: "How does cutting idle cloud spend reduce real CO₂e?",
+    answer: "Physical servers draw 50 to 70% of peak power even at idle. Shutting down unused capacity cuts measurable grid electricity.",
+    trayBg: "bg-[#E2F5EF]",
+    accentInk: "text-[#155E4B]",
+  },
+  {
+    topic: "Engineering trust",
+    question: "Will automated tools break production workloads?",
+    answer: "Never. GreenCloud works read-only and outputs Terraform pull request diffs that require explicit human sign-off.",
+    trayBg: "bg-[#FBE7CB]",
+    accentInk: "text-[#6B4814]",
+  },
+  {
+    topic: "ROI visibility",
+    question: "Which single action delivers the biggest win this month?",
+    answer: "Recommendations rank highest monthly savings plus kg CO₂e removed at the top so teams focus where impact is greatest.",
+    trayBg: "bg-[#FFF3A8]",
+    accentInk: "text-[#524305]",
+  },
+];
+
+const TEAM_ROLES: TeamRole[] = [
+  {
+    subtitle: "Budget & variance",
+    title: "Finance",
+    desc: "Reconcile monthly spend spikes and quantify net savings from completed cleanup actions.",
+    shape: "sunny",
+    shapeColor: "text-[#FFE985]",
+    iconInk: "text-[#524305]",
+    icon: "account_balance_wallet",
+  },
+  {
+    subtitle: "Uptime & capacity",
+    title: "Operations",
+    desc: "Retire detached storage disks and unused load balancers without risking SLA stability.",
+    shape: "clover",
+    shapeColor: "text-[#FBE0BC]",
+    iconInk: "text-[#6B4814]",
+    icon: "settings_suggest",
+  },
+  {
+    subtitle: "Terraform velocity",
+    title: "Engineering",
+    desc: "Receive exact HCL diffs backed by P95 utilization instead of vague spreadsheets.",
+    shape: "cookie9",
+    shapeColor: "text-[#EAE0BE]",
+    iconInk: "text-[#2E2B1A]",
+    icon: "terminal",
+  },
+  {
+    subtitle: "ESG reporting",
+    title: "Sustainability",
+    desc: "Track verifiable regional CO₂e reductions tied directly to infrastructure changes.",
+    shape: "flower",
+    shapeColor: "text-[#CEECE0]",
+    iconInk: "text-[#155E4B]",
+    icon: "eco",
+  },
+  {
+    subtitle: "Executive ROI",
+    title: "Leaders",
+    desc: "Monitor cloud efficiency gains and sustainability targets in one high-signal view.",
+    shape: "sunny",
+    shapeColor: "text-[#FFE985]",
+    iconInk: "text-[#524305]",
+    icon: "insights",
+  },
+];
+
+interface PillarRecommendation extends OptimizationReviewItem {
+  monthlySavings: string;
+  trayHint: string;
+  trayBg: string;
+  metrics: { k: string; v: string }[];
+}
+
+const PILLAR_RECOMMENDATIONS: PillarRecommendation[] = [
+  {
+    id: "why-ec2-i0a883e2",
+    title: "Low-utilization development node",
+    service: "Amazon EC2",
+    resource: "i-0a883e2",
+    region: "us-east-1",
+    monthlySavings: "+$96",
+    trayHint: "Verified schedule patch ready to preview",
+    trayBg: "bg-[#FFF3A8]/60",
+    metrics: [
+      { k: "14d P95 CPU", v: "1.8%" },
+      { k: "Current cost", v: "$148/mo" },
+      { k: "Savings", v: "+$96/mo" },
+      { k: "Carbon cut", v: "19 kg CO₂e" },
+    ],
+    recommendation:
+      "Schedule automatic off-hours shutdown during nights and weekends on development node i-0a883e2, saving $96/mo and cutting 19 kg CO₂e/mo with zero impact on daytime workflows.",
+    evidence: [
+      { label: "14d P95 CPU", value: "1.8%" },
+      { label: "Current cost", value: "$148/mo" },
+      { label: "Savings", value: "+$96/mo ($1,152/yr)" },
+      { label: "Carbon cut", value: "19 kg CO₂e/mo" },
+    ],
+    terraform: `# Off-hours schedule patch for development node i-0a883e2
+resource "aws_instance" "dev_node_i0a883e2" {
+  instance_state = "stopped"
+  tags = {
+    InstanceId   = "i-0a883e2"
+    Environment  = "development"
+    AutoShutdown = "nights-and-weekends"
+  }
+}`,
+    shape: "cookie9",
+    icon: "dns",
+    shapeColor: "text-[#FFF3A8]",
+    iconInk: "text-[#524305]",
+  },
+  {
+    id: "why-rds-staging-postgres",
+    title: "Oversized staging database",
+    service: "Amazon RDS",
+    resource: "staging-postgres-db",
+    region: "us-east-1",
+    monthlySavings: "+$184",
+    trayHint: "Verified Graviton rightsize diff ready to preview",
+    trayBg: "bg-[#FBE7CB]/65",
+    metrics: [
+      { k: "30d peak RAM", v: "2.4 / 32 GB" },
+      { k: "Current cost", v: "$280/mo" },
+      { k: "Savings", v: "+$184/mo" },
+      { k: "Carbon cut", v: "31 kg CO₂e" },
+    ],
+    recommendation:
+      "Downsize staging-postgres-db from db.m5.xlarge (32 GB) to Graviton db.t4g.medium (8 GB) during your scheduled maintenance window based on 30-day peak load below 10%.",
+    evidence: [
+      { label: "30d peak RAM", value: "2.4 GB / 32 GB" },
+      { label: "Average IOPS", value: "42 IOPS" },
+      { label: "Savings", value: "+$184/mo ($2,208/yr)" },
+      { label: "Carbon cut", value: "31 kg CO₂e/mo" },
+    ],
+    terraform: `# Right-size oversized staging database based on 30-day peak load
+resource "aws_db_instance" "staging_postgres" {
+  identifier        = "staging-postgres-db"
+  instance_class    = "db.t4g.medium" # Down from db.m5.xlarge
+  allocated_storage = 100
+}`,
+    shape: "flower",
+    icon: "database",
+    shapeColor: "text-[#FBE0BC]",
+    iconInk: "text-[#6B4814]",
+  },
+];
+
+export default function WhyGreenOpsPage() {
+  const [activeReviewItem, setActiveReviewItem] =
+    useState<OptimizationReviewItem | null>(null);
+
   return (
     <div className="min-h-screen bg-[#FFFDF4] text-[#2E2B1A] flex flex-col justify-between selection:bg-[#FFF76A] selection:text-[#2E2B1A]">
-      {/* 1. TOP NAVIGATION BAR */}
       <NavigationBar />
 
-      {/* 2. MAIN CONTENT */}
-      <main className="max-w-[1440px] mx-auto px-4 sm:px-8 w-full flex-grow space-y-16 sm:space-y-20 pt-4 pb-16">
-        {/* HERO / INTRO HEADER */}
-        <section className="text-center max-w-3xl mx-auto pt-6 sm:pt-10 flex flex-col items-center">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] mb-4 shadow-warm-sm">
-            <Eye className="w-4 h-4 text-[#1F8A70]" />
-            <span className="text-[11px] font-mono font-bold tracking-wider uppercase">
-              WHY GREENCLOUD AI?
+      <main className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 w-full flex-grow space-y-14 sm:space-y-20 pt-3 sm:pt-6">
+        {/* Intro Hero */}
+        <section className="max-w-3xl mx-auto text-center space-y-5 pt-2 sm:pt-4">
+          <div className="inline-flex items-center justify-center gap-2.5">
+            <div className="relative w-8 h-8 flex items-center justify-center">
+              <div className="absolute inset-0 text-[#CEECE0]">
+                <HeroShapeMorph shape="flower" />
+              </div>
+              <span className="material-symbols-outlined icon-filled relative z-10 text-[16px] text-[#155E4B]">
+                eco
+              </span>
+            </div>
+            <span className="text-[13px] font-semibold text-[#686450]">
+              Why cloud cost and carbon belong together
             </span>
           </div>
 
-          <h1 className="text-[34px] sm:text-[46px] lg:text-[50px] font-black text-[#2E2B1A] leading-[1.1] tracking-[-0.03em] mb-4">
-            Your cloud can be hard to understand.
+          <h1 className="text-[32px] sm:text-[42px] lg:text-[46px] font-extrabold tracking-[-0.03em] text-[#2E2B1A] leading-[1.12]">
+            Wasted cloud compute costs twice: in dollars and in carbon
           </h1>
 
-          <p className="text-[16px] sm:text-[18px] text-[#686450] leading-relaxed max-w-2xl font-normal mb-5">
-            GreenCloud brings your cloud cost, resources, usage, and carbon information together so you can quickly see what is happening and what needs attention.
+          <p className="text-[16px] sm:text-[17.5px] text-[#686450] leading-relaxed max-w-2xl mx-auto">
+            Over-provisioned databases and idle night servers inflate your monthly invoice while burning preventable grid energy. Fixing one fixes both.
           </p>
 
-          <div className="inline-flex flex-wrap items-center justify-center gap-2 px-4 py-1.5 rounded-full bg-[#FAF6E8] border border-[#ECE5CC] text-[#686450] text-[12px] font-mono shadow-xs">
-            <Activity className="w-3.5 h-3.5 text-[#1F8A70]" />
-            <span className="font-semibold text-[#2E2B1A]">PUBLIC READING SHOWCASE</span>
-            <span>•</span>
-            <span>ILLUSTRATIVE TELEMETRY DATA</span>
-            <span>•</span>
-            <span className="text-[#1F8A70] font-semibold">NO CREDENTIALS REQUIRED</span>
+          <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+            <Link href="/dashboard" className="m3-btn m3-pastel-sun">
+              <span className="material-symbols-outlined icon-filled text-[18px] leading-none">
+                dashboard
+              </span>
+              <span>Open live dashboard</span>
+            </Link>
+            <Link href="/how-it-works" className="m3-btn m3-pastel-oat">
+              <span className="material-symbols-outlined icon-filled text-[18px] leading-none">
+                account_tree
+              </span>
+              <span>See how it works</span>
+            </Link>
           </div>
         </section>
 
-        {/* SECTION 1: THE CORE PROBLEMS (2x2 Grid) */}
-        <section>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Card 1: FinOps */}
-            <div className="bg-white rounded-[26px] p-6 sm:p-7 border border-[#ECE5CC] shadow-warm-sm hover:shadow-warm-md transition-all flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFF3D6] text-[#9A6B00] border border-[#F3E5BC] font-mono text-[11px] font-bold">
-                    <DollarSign className="w-3.5 h-3.5" />
-                    FINOPS
-                  </span>
-                  <span className="font-mono text-[11px] text-[#8D8975] bg-[#FAF6E8] border border-[#ECE5CC] px-2 py-0.5 rounded-md font-semibold">
-                    DEMO DATA
-                  </span>
+        {/* Section 1: Four Pillars in Practice */}
+        <section className="space-y-6 sm:space-y-7">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
+            <div className="space-y-1.5">
+              <h2 className="text-[26px] sm:text-[32px] font-bold tracking-[-0.02em] text-[#2E2B1A] leading-tight">
+                Cost, waste, and emissions in one picture
+              </h2>
+              <p className="text-[15px] text-[#686450] max-w-2xl mx-auto lg:mx-0">
+                See how cloud spend, unused infrastructure, and grid carbon move together across your workspace.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Pillar 1: FinOps */}
+            <div className="gc-card-hover group rounded-[28px] bg-[#FAF6E8] p-6 sm:p-7 flex flex-col justify-between gap-5">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="relative w-11 h-11 shrink-0 flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-105 group-hover:rotate-3">
+                    <div className="absolute inset-0 text-[#FFE985]">
+                      <HeroShapeMorph shape="sunny" />
+                    </div>
+                    <span className="material-symbols-outlined icon-filled relative z-10 text-[20px] text-[#524305]">
+                      payments
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-[12px] font-semibold text-[#686450]">FinOps visibility</div>
+                    <h3 className="text-[18px] font-bold text-[#2E2B1A] leading-snug">Monthly cloud spend</h3>
+                  </div>
                 </div>
 
-                <h2 className="text-[22px] sm:text-[24px] font-black text-[#2E2B1A] tracking-tight mb-2">
-                  Where is my money going?
-                </h2>
-                <p className="text-[14px] text-[#686450] leading-relaxed mb-6">
-                  See how much your cloud costs and which services, teams, accounts, and environments are using the most.
-                </p>
+                <div className="flex items-baseline gap-2.5">
+                  <span className="text-[34px] font-extrabold text-[#2E2B1A] tabular-nums tracking-tight">
+                    $24,842
+                  </span>
+                  <span className="text-[13px] font-medium text-[#686450]">/mo across AWS services</span>
+                </div>
               </div>
 
-              <div className="bg-[#FAF6E8] rounded-2xl p-4 sm:p-5 border border-[#ECE5CC]">
-                <div className="flex items-center justify-between pb-3 border-b border-[#ECE5CC]">
-                  <div>
-                    <span className="text-[12px] text-[#8D8975] font-medium block">Cloud Spend (MTD)</span>
-                    <span className="text-[24px] font-black text-[#2E2B1A]">$24,842</span>
-                  </div>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FFE8E8] text-[#D32F2F] font-mono text-[12px] font-bold">
-                    <TrendingUp className="w-3.5 h-3.5" /> +4.8%
-                  </span>
-                </div>
-
-                <div className="space-y-2.5 mt-3 text-[12px] font-mono">
-                  <div>
-                    <div className="flex justify-between text-[#686450] mb-1">
-                      <span>EC2 Compute</span>
-                      <span className="font-bold text-[#2E2B1A]">$10,420 (42%)</span>
+              <div className="rounded-[20px] bg-[#FFFDF4] p-4 space-y-3">
+                {[
+                  { label: "Amazon EC2 Compute", pct: "58%", amount: "$14,408", bar: "bg-[#2E2B1A] w-[58%]" },
+                  { label: "Amazon RDS Managed", pct: "26%", amount: "$6,459", bar: "bg-[#B8860B] w-[26%]" },
+                  { label: "EBS & S3 Storage", pct: "16%", amount: "$3,975", bar: "bg-[#155E4B] w-[16%]" },
+                ].map((row) => (
+                  <div key={row.label} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[12.5px]">
+                      <span className="font-semibold text-[#2E2B1A]">{row.label}</span>
+                      <span className="font-bold text-[#686450] tabular-nums">{row.amount} ({row.pct})</span>
                     </div>
-                    <div className="w-full bg-[#EAE3CB] rounded-full h-2 overflow-hidden">
-                      <div className="bg-[#9A6B00] h-full rounded-full" style={{ width: "42%" }}></div>
+                    <div className="h-2 rounded-full bg-[#FAF6E8] overflow-hidden">
+                      <div className={`h-full rounded-full ${row.bar}`} />
                     </div>
                   </div>
-
-                  <div>
-                    <div className="flex justify-between text-[#686450] mb-1">
-                      <span>Storage (S3 / EBS)</span>
-                      <span className="font-bold text-[#2E2B1A]">$4,280 (17%)</span>
-                    </div>
-                    <div className="w-full bg-[#EAE3CB] rounded-full h-2 overflow-hidden">
-                      <div className="bg-[#1F8A70] h-full rounded-full" style={{ width: "17%" }}></div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-[#686450] mb-1">
-                      <span>Network & NAT</span>
-                      <span className="font-bold text-[#2E2B1A]">$2,140 (9%)</span>
-                    </div>
-                    <div className="w-full bg-[#EAE3CB] rounded-full h-2 overflow-hidden">
-                      <div className="bg-[#788865] h-full rounded-full" style={{ width: "9%" }}></div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-[#686450] mb-1">
-                      <span>Other Workloads</span>
-                      <span className="font-bold text-[#2E2B1A]">$8,002 (32%)</span>
-                    </div>
-                    <div className="w-full bg-[#EAE3CB] rounded-full h-2 overflow-hidden">
-                      <div className="bg-[#A49E86] h-full rounded-full" style={{ width: "32%" }}></div>
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
-            {/* Card 2: Infrastructure */}
-            <div className="bg-white rounded-[26px] p-6 sm:p-7 border border-[#ECE5CC] shadow-warm-sm hover:shadow-warm-md transition-all flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FAF6E8] text-[#686450] border border-[#ECE5CC] font-mono text-[11px] font-bold">
-                    <Cloud className="w-3.5 h-3.5" />
-                    INFRASTRUCTURE
-                  </span>
-                  <span className="font-mono text-[11px] text-[#8D8975] bg-[#FAF6E8] border border-[#ECE5CC] px-2 py-0.5 rounded-md font-semibold">
-                    DEMO DATA
-                  </span>
+            {/* Pillar 2: Infrastructure */}
+            <div className="gc-card-hover group rounded-[28px] bg-[#FAF6E8] p-6 sm:p-7 flex flex-col justify-between gap-5">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="relative w-11 h-11 shrink-0 flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-105 group-hover:rotate-3">
+                    <div className="absolute inset-0 text-[#FBE0BC]">
+                      <HeroShapeMorph shape="clover" />
+                    </div>
+                    <span className="material-symbols-outlined icon-filled relative z-10 text-[20px] text-[#6B4814]">
+                      dns
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-[12px] font-semibold text-[#686450]">Infrastructure hygiene</div>
+                    <h3 className="text-[18px] font-bold text-[#2E2B1A] leading-snug">Unused capacity detected</h3>
+                  </div>
                 </div>
 
-                <h2 className="text-[22px] sm:text-[24px] font-black text-[#2E2B1A] tracking-tight mb-2">
-                  Am I paying for things I don't need?
-                </h2>
-                <p className="text-[14px] text-[#686450] leading-relaxed mb-6">
-                  Find unused, idle, or oversized resources that may be costing you money without providing enough value.
-                </p>
+                <div className="flex items-baseline gap-2.5">
+                  <span className="text-[34px] font-extrabold text-[#2E2B1A] tabular-nums tracking-tight">
+                    12 assets
+                  </span>
+                  <span className="text-[13px] font-semibold text-[#8C5A00] tabular-nums">
+                    $1,240/mo recoverable
+                  </span>
+                </div>
               </div>
 
-              <div className="bg-[#FAF6E8] rounded-2xl p-4 sm:p-5 border border-[#ECE5CC]">
-                <div className="flex items-center justify-between pb-3 border-b border-[#ECE5CC]">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A]">
-                      <Layers className="w-4 h-4 text-[#9A6B00]" />
+              <div className="rounded-[20px] bg-[#FFFDF4] p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { count: "5", label: "Idle EC2 dev boxes", detail: "Under 2% night CPU" },
+                  { count: "4", label: "Detached EBS disks", detail: "26+ days unmounted" },
+                  { count: "3", label: "Oversized RDS nodes", detail: "Below 10% RAM load" },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-[14px] bg-[#FAF6E8] p-3 space-y-1">
+                    <div className="text-[20px] font-extrabold text-[#2E2B1A] tabular-nums">{item.count}</div>
+                    <div className="text-[12.5px] font-bold text-[#2E2B1A] leading-tight">{item.label}</div>
+                    <div className="text-[11.5px] text-[#686450]">{item.detail}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Pillar 3: GreenOps */}
+            <div className="gc-card-hover group rounded-[28px] bg-[#FAF6E8] p-6 sm:p-7 flex flex-col justify-between gap-5">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="relative w-11 h-11 shrink-0 flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-105 group-hover:rotate-3">
+                    <div className="absolute inset-0 text-[#CEECE0]">
+                      <HeroShapeMorph shape="flower" />
+                    </div>
+                    <span className="material-symbols-outlined icon-filled relative z-10 text-[20px] text-[#155E4B]">
+                      eco
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-[12px] font-semibold text-[#686450]">Carbon intensity tracking</div>
+                    <h3 className="text-[18px] font-bold text-[#2E2B1A] leading-snug">Estimated emissions footprint</h3>
+                  </div>
+                </div>
+
+                <div className="flex items-baseline gap-2.5">
+                  <span className="text-[34px] font-extrabold text-[#155E4B] tabular-nums tracking-tight">
+                    12.8 tCO₂e
+                  </span>
+                  <span className="text-[13px] font-medium text-[#686450]">monthly regional footprint</span>
+                </div>
+
+                <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-2.5">
+                  {[
+                    { k: "Addressable waste", v: "2.1 tCO₂e/mo" },
+                    { k: "Estimated power", v: "34.6 MWh" },
+                    { k: "Hydro region gap", v: "95% lower" },
+                  ].map((stat) => (
+                    <div key={stat.k} className="rounded-[14px] bg-[#FFFDF4] p-2.5 sm:p-3">
+                      <div className="text-[11px] font-medium text-[#686450]">{stat.k}</div>
+                      <div className="text-[13.5px] font-extrabold text-[#155E4B] tabular-nums">{stat.v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[20px] bg-[#FFFDF4] p-4 sm:p-5 space-y-3">
+                {[
+                  { region: "ap-south-1 (Mumbai)", intensity: "708 gCO₂e/kWh", bar: "bg-[#8C5A00] w-[92%]" },
+                  { region: "us-east-1 (N. Virginia)", intensity: "379 gCO₂e/kWh", bar: "bg-[#6B4814] w-[58%]" },
+                  { region: "eu-west-1 (Ireland)", intensity: "285 gCO₂e/kWh", bar: "bg-[#155E4B] w-[42%]" },
+                  { region: "eu-north-1 (Stockholm)", intensity: "18 gCO₂e/kWh", bar: "bg-[#1F8A70] w-[10%]" },
+                ].map((r) => (
+                  <div key={r.region} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[12.5px]">
+                      <span className="font-semibold text-[#2E2B1A]">{r.region}</span>
+                      <span className="font-semibold text-[#686450] tabular-nums">{r.intensity}</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-[#FAF6E8] overflow-hidden">
+                      <div className={`h-full rounded-full ${r.bar}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Pillar 4: Two Uniform Optimization Rule Examples */}
+            <div className="gc-card-hover rounded-[28px] bg-[#FAF6E8] p-6 sm:p-7 flex flex-col justify-between gap-5">
+              {PILLAR_RECOMMENDATIONS.map((rec) => (
+                <div key={rec.id} className="space-y-3.5">
+                  <div className="flex items-center gap-3.5">
+                    <div className="relative w-11 h-11 shrink-0 flex items-center justify-center">
+                      <div className={`absolute inset-0 ${rec.shapeColor}`}>
+                        <HeroShapeMorph shape={rec.shape} />
+                      </div>
+                      <span
+                        className={`material-symbols-outlined icon-filled relative z-10 text-[20px] ${rec.iconInk}`}
+                      >
+                        {rec.icon}
+                      </span>
                     </div>
                     <div>
-                      <span className="text-[12px] text-[#8D8975] font-medium block">Unused Resources</span>
-                      <span className="text-[22px] font-black text-[#2E2B1A]">12 items</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[12px] text-[#8D8975] font-medium block">Potential Savings</span>
-                    <span className="text-[22px] font-black text-[#1F8A70]">$1,240/mo</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2 mt-3 text-[12.5px]">
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-[#ECE5CC]">
-                    <div className="flex items-center gap-2 text-[#2E2B1A] font-medium">
-                      <Cpu className="w-3.5 h-3.5 text-[#1F8A70]" />
-                      <span>Idle EC2 instances</span>
-                    </div>
-                    <span className="font-mono text-[12px] font-bold text-[#686450]">4 instances</span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-[#ECE5CC]">
-                    <div className="flex items-center gap-2 text-[#2E2B1A] font-medium">
-                      <Server className="w-3.5 h-3.5 text-[#1F8A70]" />
-                      <span>Unused EBS volumes</span>
-                    </div>
-                    <span className="font-mono text-[12px] font-bold text-[#686450]">5 detached</span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-[#ECE5CC]">
-                    <div className="flex items-center gap-2 text-[#2E2B1A] font-medium">
-                      <Globe2 className="w-3.5 h-3.5 text-[#1F8A70]" />
-                      <span>Unused Elastic IPs</span>
-                    </div>
-                    <span className="font-mono text-[12px] font-bold text-[#686450]">3 unbound</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 3: GreenOps */}
-            <div className="bg-white rounded-[26px] p-6 sm:p-7 border border-[#ECE5CC] shadow-warm-sm hover:shadow-warm-md transition-all flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD] font-mono text-[11px] font-bold">
-                    <Leaf className="w-3.5 h-3.5" />
-                    GREENOPS
-                  </span>
-                  <span className="font-mono text-[11px] text-[#8D8975] bg-[#FAF6E8] border border-[#ECE5CC] px-2 py-0.5 rounded-md font-semibold">
-                    DEMO DATA
-                  </span>
-                </div>
-
-                <h2 className="text-[22px] sm:text-[24px] font-black text-[#2E2B1A] tracking-tight mb-2">
-                  How much carbon does my cloud create?
-                </h2>
-                <p className="text-[14px] text-[#686450] leading-relaxed mb-6">
-                  See your estimated cloud emissions and understand where they come from with regional intensity tracking.
-                </p>
-              </div>
-
-              <div className="bg-[#FAF6E8] rounded-2xl p-4 sm:p-5 border border-[#ECE5CC]">
-                <div className="flex items-center justify-between pb-2 border-b border-[#ECE5CC]">
-                  <div>
-                    <span className="text-[12px] text-[#8D8975] font-medium block">Estimated Footprint</span>
-                    <span className="text-[24px] font-black text-[#1F8A70]">12.8 tCO₂e</span>
-                  </div>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#E2F5EF] text-[#1F8A70] font-mono text-[12px] font-bold">
-                    <ArrowDown className="w-3.5 h-3.5" /> ↓ 6.4% vs last mo
-                  </span>
-                </div>
-
-                <p className="text-[11.5px] text-[#8D8975] my-2">
-                  Estimated emissions calculated from regional grid carbon intensity (gCO₂e/kWh).
-                </p>
-
-                <div className="space-y-2 text-[12px] font-mono">
-                  <div>
-                    <div className="flex justify-between text-[#686450] mb-1">
-                      <span>Compute Workloads</span>
-                      <span className="font-bold text-[#1F8A70]">68%</span>
-                    </div>
-                    <div className="w-full bg-[#EAE3CB] rounded-full h-2 overflow-hidden">
-                      <div className="bg-[#1F8A70] h-full rounded-full" style={{ width: "68%" }}></div>
+                      <div className="text-[12px] font-semibold text-[#686450]">
+                        {rec.service} · {rec.resource}
+                      </div>
+                      <h3 className="text-[18px] font-bold text-[#2E2B1A] leading-snug">
+                        {rec.title}
+                      </h3>
                     </div>
                   </div>
 
-                  <div>
-                    <div className="flex justify-between text-[#686450] mb-1">
-                      <span>Storage Retention</span>
-                      <span className="font-bold text-[#2E2B1A]">22%</span>
-                    </div>
-                    <div className="w-full bg-[#EAE3CB] rounded-full h-2 overflow-hidden">
-                      <div className="bg-[#788865] h-full rounded-full" style={{ width: "22%" }}></div>
-                    </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {rec.metrics.map((m) => (
+                      <div key={m.k} className="rounded-[14px] bg-[#FFFDF4] p-2.5 sm:p-3">
+                        <div className="text-[11px] font-medium text-[#686450]">{m.k}</div>
+                        <div className="text-[13.5px] font-extrabold text-[#2E2B1A] tabular-nums">
+                          {m.v}
+                        </div>
+                      </div>
+                    ))}
                   </div>
 
-                  <div>
-                    <div className="flex justify-between text-[#686450] mb-1">
-                      <span>Other Cloud Services</span>
-                      <span className="font-bold text-[#2E2B1A]">10%</span>
-                    </div>
-                    <div className="w-full bg-[#EAE3CB] rounded-full h-2 overflow-hidden">
-                      <div className="bg-[#A49E86] h-full rounded-full" style={{ width: "10%" }}></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 4: Optimization */}
-            <div className="bg-white rounded-[26px] p-6 sm:p-7 border border-[#ECE5CC] shadow-warm-sm hover:shadow-warm-md transition-all flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFF76A] text-[#2E2B1A] border border-[#DFD6B5] font-mono text-[11px] font-bold">
-                    <Wand2 className="w-3.5 h-3.5" />
-                    OPTIMIZATION
-                  </span>
-                  <span className="font-mono text-[11px] text-[#8D8975] bg-[#FAF6E8] border border-[#ECE5CC] px-2 py-0.5 rounded-md font-semibold">
-                    DEMO DATA
-                  </span>
-                </div>
-
-                <h2 className="text-[22px] sm:text-[24px] font-black text-[#2E2B1A] tracking-tight mb-2">
-                  What should I fix first?
-                </h2>
-                <p className="text-[14px] text-[#686450] leading-relaxed mb-6">
-                  GreenCloud finds useful opportunities and shows the evidence, possible savings, carbon impact, risk, and confidence.
-                </p>
-              </div>
-
-              <div className="bg-[#FAF6E8] rounded-2xl p-4 sm:p-5 border border-[#ECE5CC]">
-                <div className="flex items-center justify-between pb-2">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-[#9A6B00]" />
-                    <span className="text-[15px] font-bold text-[#2E2B1A]">Low-utilization EC2</span>
-                  </div>
-                  <span className="px-2 py-0.5 rounded bg-white border border-[#ECE5CC] text-[#2E2B1A] font-mono text-[11.5px] font-semibold">
-                    i-0a883e2
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 my-3">
-                  <div className="p-2.5 rounded-xl bg-white border border-[#ECE5CC]">
-                    <span className="text-[11px] text-[#8D8975] font-medium block">Savings</span>
-                    <span className="font-mono text-[13px] font-bold text-[#1F8A70]">+$118/mo</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-white border border-[#ECE5CC]">
-                    <span className="text-[11px] text-[#8D8975] font-medium block">Carbon</span>
-                    <span className="font-mono text-[13px] font-bold text-[#1F8A70]">↓ 42 kg</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-white border border-[#ECE5CC]">
-                    <span className="text-[11px] text-[#8D8975] font-medium block">Risk</span>
-                    <span className="font-mono text-[13px] font-bold text-[#2E2B1A]">Moderate</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-white border border-[#ECE5CC]">
-                    <span className="text-[11px] text-[#8D8975] font-medium block">Confidence</span>
-                    <span className="font-mono text-[13px] font-bold text-[#9A6B00]">91%</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-[#ECE5CC]">
-                  <span className="text-[12px] text-[#686450]">Recommended: Rightsizing to t4g.large</span>
-                  <Link
-                    href="/#optimization"
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#1F8A70] text-white text-[12px] font-bold hover:bg-[#186D58] transition-colors"
+                  <div
+                    className={`rounded-[18px] ${rec.trayBg} px-4 py-3 flex items-center justify-between gap-3`}
                   >
-                    <span>Review</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
+                    <div>
+                      <div className="text-[18px] font-extrabold text-[#2E2B1A] tabular-nums leading-none">
+                        {rec.monthlySavings}{" "}
+                        <span className="text-[12px] font-semibold text-[#686450]">/mo</span>
+                      </div>
+                      <div className="text-[11.5px] font-medium text-[#686450] mt-1">
+                        {rec.trayHint}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveReviewItem(rec)}
+                      className="m3-btn m3-btn-compact m3-pastel-sun shrink-0"
+                    >
+                      <span>Review</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* SECTION 2: WHAT GREENCLOUD BRINGS TOGETHER (01-06 Visual Pipeline) */}
-        <section className="bg-[#FAF6E8] rounded-[30px] border border-[#ECE5CC] p-6 sm:p-10 shadow-warm-sm">
-          <div className="text-center max-w-2xl mx-auto mb-10">
-            <h2 className="text-[26px] sm:text-[34px] font-black text-[#2E2B1A] tracking-tight leading-tight mb-2">
-              Everything you need in one place.
-            </h2>
-            <p className="text-[15px] text-[#686450] leading-relaxed">
-              GreenCloud connects the information your teams normally have to check in different places.
-            </p>
+        {/* Section 2: Everything You Need in One Place */}
+        <section className="rounded-[32px] bg-[#FAF6E8] p-6 sm:p-8 lg:p-10 shadow-warm-sm space-y-7">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
+            <div className="space-y-1.5">
+              <h2 className="text-[26px] sm:text-[32px] font-bold tracking-[-0.02em] text-[#2E2B1A] leading-tight">
+                Everything you need in one place
+              </h2>
+              <p className="text-[15px] text-[#686450] max-w-2xl mx-auto lg:mx-0">
+                Six connected layers move teams smoothly from raw multi-cloud billing lines to safe optimization commits.
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-            {/* Step 1 */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#ECE5CC] shadow-xs flex flex-col justify-between hover:shadow-warm-sm transition-all">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70]">
-                    <Cloud className="w-4 h-4" />
-                  </div>
-                  <span className="font-mono text-[12px] font-bold text-[#8D8975]">01</span>
-                </div>
-                <h3 className="font-bold text-[#2E2B1A] text-[15px] mb-1">Cloud Accounts</h3>
-                <p className="text-[12px] text-[#686450] leading-relaxed">Where your cloud lives across multi-cloud setups.</p>
-              </div>
-              <div className="mt-4 pt-2 border-t border-[#ECE5CC] font-mono text-[11px] text-[#1F8A70] font-semibold flex items-center gap-1">
-                <span>AWS, Azure, GCP</span>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+            {PIPELINE_ITEMS.map((item) => (
+              <div
+                key={item.num}
+                className="gc-card-hover group rounded-[24px] bg-[#FFFDF4] p-5 flex flex-col justify-between gap-4"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="relative w-11 h-11 shrink-0 flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-105 group-hover:rotate-3">
+                        <div className={`absolute inset-0 ${item.shapeColor}`}>
+                          <HeroShapeMorph shape={item.shape} />
+                        </div>
+                        <span className={`relative z-10 text-[14px] font-extrabold tabular-nums ${item.numInk}`}>
+                          {item.num}
+                        </span>
+                      </div>
 
-            {/* Step 2 */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#ECE5CC] shadow-xs flex flex-col justify-between hover:shadow-warm-sm transition-all">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#9A6B00]">
-                    <Receipt className="w-4 h-4" />
-                  </div>
-                  <span className="font-mono text-[12px] font-bold text-[#8D8975]">02</span>
-                </div>
-                <h3 className="font-bold text-[#2E2B1A] text-[15px] mb-1">Cost</h3>
-                <p className="text-[12px] text-[#686450] leading-relaxed">What you're spending on invoices and line items.</p>
-              </div>
-              <div className="mt-4 pt-2 border-t border-[#ECE5CC] font-mono text-[11px] text-[#9A6B00] font-semibold flex items-center gap-1">
-                <span>Invoices & CUR</span>
-              </div>
-            </div>
+                      <div className="min-w-0">
+                        <div className="text-[12px] font-semibold text-[#686450] truncate">
+                          {item.subtitle}
+                        </div>
+                        <h3 className="text-[16.5px] font-bold text-[#2E2B1A] leading-snug">
+                          {item.title}
+                        </h3>
+                      </div>
+                    </div>
 
-            {/* Step 3 */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#ECE5CC] shadow-xs flex flex-col justify-between hover:shadow-warm-sm transition-all">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70]">
-                    <Server className="w-4 h-4" />
+                    {item.showClouds && (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="w-7 h-7 rounded-lg bg-[#FAF6E8] p-1 flex items-center justify-center">
+                          <img src="/icons/aws-dark.svg" alt="AWS" className="w-full h-full object-contain" />
+                        </span>
+                        <span className="w-7 h-7 rounded-lg bg-[#FAF6E8] p-1 flex items-center justify-center">
+                          <img src="/icons/gcp.svg" alt="GCP" className="w-full h-full object-contain" />
+                        </span>
+                        <span className="w-7 h-7 rounded-lg bg-[#FAF6E8] p-1 flex items-center justify-center">
+                          <img src="/icons/azure.svg" alt="Azure" className="w-full h-full object-contain" />
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <span className="font-mono text-[12px] font-bold text-[#8D8975]">03</span>
-                </div>
-                <h3 className="font-bold text-[#2E2B1A] text-[15px] mb-1">Resources</h3>
-                <p className="text-[12px] text-[#686450] leading-relaxed">What you're running: compute, disk, cluster nodes.</p>
-              </div>
-              <div className="mt-4 pt-2 border-t border-[#ECE5CC] font-mono text-[11px] text-[#1F8A70] font-semibold flex items-center gap-1">
-                <span>Live Inventory</span>
-              </div>
-            </div>
 
-            {/* Step 4 */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#ECE5CC] shadow-xs flex flex-col justify-between hover:shadow-warm-sm transition-all">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#9A6B00]">
-                    <Gauge className="w-4 h-4" />
-                  </div>
-                  <span className="font-mono text-[12px] font-bold text-[#8D8975]">04</span>
+                  <p className="text-[13.5px] text-[#686450] leading-relaxed">
+                    {item.desc}
+                  </p>
                 </div>
-                <h3 className="font-bold text-[#2E2B1A] text-[15px] mb-1">Usage</h3>
-                <p className="text-[12px] text-[#686450] leading-relaxed">How much you use: CPU, IOPS, and memory telemetry.</p>
               </div>
-              <div className="mt-4 pt-2 border-t border-[#ECE5CC] font-mono text-[11px] text-[#9A6B00] font-semibold flex items-center gap-1">
-                <span>Active Metrics</span>
-              </div>
-            </div>
-
-            {/* Step 5 */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#ECE5CC] shadow-xs flex flex-col justify-between hover:shadow-warm-sm transition-all">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70]">
-                    <Leaf className="w-4 h-4" />
-                  </div>
-                  <span className="font-mono text-[12px] font-bold text-[#8D8975]">05</span>
-                </div>
-                <h3 className="font-bold text-[#2E2B1A] text-[15px] mb-1">Carbon</h3>
-                <p className="text-[12px] text-[#686450] leading-relaxed">Your estimated footprint from regional grid mix.</p>
-              </div>
-              <div className="mt-4 pt-2 border-t border-[#ECE5CC] font-mono text-[11px] text-[#1F8A70] font-semibold flex items-center gap-1">
-                <span>Grid Intensity</span>
-              </div>
-            </div>
-
-            {/* Step 6 */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#ECE5CC] shadow-xs flex flex-col justify-between hover:shadow-warm-sm transition-all">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#9A6B00]">
-                    <CheckCircle2 className="w-4 h-4" />
-                  </div>
-                  <span className="font-mono text-[12px] font-bold text-[#8D8975]">06</span>
-                </div>
-                <h3 className="font-bold text-[#2E2B1A] text-[15px] mb-1">Recommendations</h3>
-                <p className="text-[12px] text-[#686450] leading-relaxed">What you can improve with clear, verified steps.</p>
-              </div>
-              <div className="mt-4 pt-2 border-t border-[#ECE5CC] font-mono text-[11px] text-[#9A6B00] font-semibold flex items-center gap-1">
-                <span>Verified Actions</span>
-              </div>
-            </div>
+            ))}
           </div>
         </section>
 
-        {/* SECTION 3: CORE CAPABILITIES (3x3 Grid of 9 Cards) */}
-        <section>
-          <div className="text-center max-w-2xl mx-auto mb-10">
-            <h2 className="text-[26px] sm:text-[34px] font-black text-[#2E2B1A] tracking-tight leading-tight mb-2">
-              One place to understand your cloud.
-            </h2>
-            <p className="text-[15px] text-[#686450] leading-relaxed">
-              Nine core capabilities built to give every team clarity without clutter.
-            </p>
+        {/* Section 3: One Place to Understand Your Cloud (9 Capabilities) */}
+        <section className="space-y-6 sm:space-y-7">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
+            <div className="space-y-1.5">
+              <h2 className="text-[26px] sm:text-[32px] font-bold tracking-[-0.02em] text-[#2E2B1A] leading-tight">
+                One place to understand your cloud
+              </h2>
+              <p className="text-[15px] text-[#686450] max-w-2xl mx-auto lg:mx-0">
+                Built around verifiable telemetry, carbon transparency, and Git-native workflows instead of black-box scripts.
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {/* Cap 1 */}
-            <div className="bg-white rounded-2xl p-6 border border-[#ECE5CC] shadow-xs hover:shadow-warm-sm transition-all flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-[#FFF3D6] border border-[#ECE5CC] flex items-center justify-center text-[#9A6B00] mb-4">
-                  <DollarSign className="w-5 h-5" />
-                </div>
-                <h3 className="text-[17px] font-bold text-[#2E2B1A] mb-1.5">Cloud Cost</h3>
-                <p className="text-[13.5px] text-[#686450] leading-relaxed">
-                  See where your money goes across accounts and workloads with transparent allocation.
-                </p>
-              </div>
-              <div className="mt-6 pt-3 border-t border-[#ECE5CC] flex items-center justify-between text-[12px]">
-                <span className="font-mono text-[#8D8975]">FinOps Module</span>
-                <Link href="/dashboard" className="text-[#9A6B00] font-bold hover:underline flex items-center gap-1">
-                  <span>View</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+            {CAPABILITY_CARDS.map((card) => (
+              <Link
+                key={card.title}
+                href={card.href}
+                className="gc-card-hover group rounded-[24px] bg-[#FBF6E3] p-5 flex flex-col justify-between gap-4"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3.5">
+                    <div className="relative w-10 h-10 shrink-0 flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-105 group-hover:rotate-3">
+                      <div className={`absolute inset-0 ${card.shapeColor}`}>
+                        <HeroShapeMorph shape={card.shape} />
+                      </div>
+                      <span className={`material-symbols-outlined icon-filled relative z-10 text-[18px] ${card.iconInk}`}>
+                        {card.icon}
+                      </span>
+                    </div>
 
-            {/* Cap 2 */}
-            <div className="bg-white rounded-2xl p-6 border border-[#ECE5CC] shadow-xs hover:shadow-warm-sm transition-all flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A] mb-4">
-                  <Sliders className="w-5 h-5" />
-                </div>
-                <h3 className="text-[17px] font-bold text-[#2E2B1A] mb-1.5">Resource Usage</h3>
-                <p className="text-[13.5px] text-[#686450] leading-relaxed">
-                  Find idle and oversized resources before they waste budget or accumulate dead weight.
-                </p>
-              </div>
-              <div className="mt-6 pt-3 border-t border-[#ECE5CC] flex items-center justify-between text-[12px]">
-                <span className="font-mono text-[#8D8975]">Inventory Live</span>
-                <Link href="/dashboard" className="text-[#9A6B00] font-bold hover:underline flex items-center gap-1">
-                  <span>View</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-semibold text-[#686450] truncate">
+                        {card.subtitle}
+                      </div>
+                      <h3 className="text-[16px] font-bold text-[#2E2B1A] leading-snug">
+                        {card.title}
+                      </h3>
+                    </div>
+                  </div>
 
-            {/* Cap 3 */}
-            <div className="bg-white rounded-2xl p-6 border border-[#ECE5CC] shadow-xs hover:shadow-warm-sm transition-all flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-[#E2F5EF] border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70] mb-4">
-                  <Leaf className="w-5 h-5" />
+                  <p className="text-[13.5px] text-[#686450] leading-relaxed">
+                    {card.desc}
+                  </p>
                 </div>
-                <h3 className="text-[17px] font-bold text-[#2E2B1A] mb-1.5">Carbon</h3>
-                <p className="text-[13.5px] text-[#686450] leading-relaxed">
-                  Understand your estimated cloud footprint with regional accuracy and clean energy mix insights.
-                </p>
-              </div>
-              <div className="mt-6 pt-3 border-t border-[#ECE5CC] flex items-center justify-between text-[12px]">
-                <span className="font-mono text-[#8D8975]">GreenOps Telemetry</span>
-                <Link href="/dashboard" className="text-[#1F8A70] font-bold hover:underline flex items-center gap-1">
-                  <span>View</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
 
-            {/* Cap 4 */}
-            <div className="bg-white rounded-2xl p-6 border border-[#ECE5CC] shadow-xs hover:shadow-warm-sm transition-all flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-[#FFF76A] border border-[#DFD6B5] flex items-center justify-center text-[#2E2B1A] mb-4">
-                  <Sparkles className="w-5 h-5" />
+                <div className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#2E2B1A]">
+                  <span>{card.linkLabel}</span>
+                  <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                 </div>
-                <h3 className="text-[17px] font-bold text-[#2E2B1A] mb-1.5">Recommendations</h3>
-                <p className="text-[13.5px] text-[#686450] leading-relaxed">
-                  Find useful actions backed by verifiable telemetry data and calculated confidence ratings.
-                </p>
-              </div>
-              <div className="mt-6 pt-3 border-t border-[#ECE5CC] flex items-center justify-between text-[12px]">
-                <span className="font-mono text-[#8D8975]">Decision Engine</span>
-                <Link href="/#optimization" className="text-[#9A6B00] font-bold hover:underline flex items-center gap-1">
-                  <span>View</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
-
-            {/* Cap 5 */}
-            <div className="bg-white rounded-2xl p-6 border border-[#ECE5CC] shadow-xs hover:shadow-warm-sm transition-all flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#9A6B00] mb-4">
-                  <LineChart className="w-5 h-5" />
-                </div>
-                <h3 className="text-[17px] font-bold text-[#2E2B1A] mb-1.5">Forecasts</h3>
-                <p className="text-[13.5px] text-[#686450] leading-relaxed">
-                  See where your cost and emissions may be heading next month based on historical run-rates.
-                </p>
-              </div>
-              <div className="mt-6 pt-3 border-t border-[#ECE5CC] flex items-center justify-between text-[12px]">
-                <span className="font-mono text-[#8D8975]">Predictive AI</span>
-                <Link href="/dashboard" className="text-[#9A6B00] font-bold hover:underline flex items-center gap-1">
-                  <span>View</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
-
-            {/* Cap 6 */}
-            <div className="bg-white rounded-2xl p-6 border border-[#ECE5CC] shadow-xs hover:shadow-warm-sm transition-all flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-[#FFE8E8] border border-[#ECE5CC] flex items-center justify-center text-[#D32F2F] mb-4">
-                  <AlertTriangle className="w-5 h-5" />
-                </div>
-                <h3 className="text-[17px] font-bold text-[#2E2B1A] mb-1.5">Anomalies</h3>
-                <p className="text-[13.5px] text-[#686450] leading-relaxed">
-                  Spot unusual changes in cost or usage the moment they occur before billing cycles close.
-                </p>
-              </div>
-              <div className="mt-6 pt-3 border-t border-[#ECE5CC] flex items-center justify-between text-[12px]">
-                <span className="font-mono text-[#8D8975]">Real-time Watch</span>
-                <Link href="/dashboard" className="text-[#D32F2F] font-bold hover:underline flex items-center gap-1">
-                  <span>View</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
-
-            {/* Cap 7 */}
-            <div className="bg-white rounded-2xl p-6 border border-[#ECE5CC] shadow-xs hover:shadow-warm-sm transition-all flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#686450] mb-4">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <h3 className="text-[17px] font-bold text-[#2E2B1A] mb-1.5">Reports</h3>
-                <p className="text-[13.5px] text-[#686450] leading-relaxed">
-                  Share clear, jargon-free information with your team and executives in one-click exports.
-                </p>
-              </div>
-              <div className="mt-6 pt-3 border-t border-[#ECE5CC] flex items-center justify-between text-[12px]">
-                <span className="font-mono text-[#8D8975]">Executive Summaries</span>
-                <Link href="/dashboard" className="text-[#9A6B00] font-bold hover:underline flex items-center gap-1">
-                  <span>View</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
-
-            {/* Cap 8 */}
-            <div className="bg-white rounded-2xl p-6 border border-[#ECE5CC] shadow-xs hover:shadow-warm-sm transition-all flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-[#E2F5EF] border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70] mb-4">
-                  <Shield className="w-5 h-5" />
-                </div>
-                <h3 className="text-[17px] font-bold text-[#2E2B1A] mb-1.5">Security</h3>
-                <p className="text-[13.5px] text-[#686450] leading-relaxed">
-                  Use secure, read-only cloud access with strict zero-mutation policy across your estate.
-                </p>
-              </div>
-              <div className="mt-6 pt-3 border-t border-[#ECE5CC] flex items-center justify-between text-[12px]">
-                <span className="font-mono text-[#8D8975]">Read-only IAM</span>
-                <Link href="/#documentation" className="text-[#1F8A70] font-bold hover:underline flex items-center gap-1">
-                  <span>View</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
-
-            {/* Cap 9 */}
-            <div className="bg-white rounded-2xl p-6 border border-[#ECE5CC] shadow-xs hover:shadow-warm-sm transition-all flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#9A6B00] mb-4">
-                  <History className="w-5 h-5" />
-                </div>
-                <h3 className="text-[17px] font-bold text-[#2E2B1A] mb-1.5">Audit</h3>
-                <p className="text-[13.5px] text-[#686450] leading-relaxed">
-                  Keep a clear, verifiable history of what changed and who approved it for total compliance.
-                </p>
-              </div>
-              <div className="mt-6 pt-3 border-t border-[#ECE5CC] flex items-center justify-between text-[12px]">
-                <span className="font-mono text-[#8D8975]">Signed Changelog</span>
-                <Link href="/audit-history" className="text-[#9A6B00] font-bold hover:underline flex items-center gap-1">
-                  <span>View</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
+              </Link>
+            ))}
           </div>
         </section>
 
-        {/* SECTION 4: SIMPLE QUESTIONS (4 Cards) */}
-        <section className="bg-[#FAF6E8] rounded-[30px] border border-[#ECE5CC] p-6 sm:p-10 shadow-warm-sm">
-          <div className="text-center max-w-2xl mx-auto mb-10">
-            <h2 className="text-[26px] sm:text-[34px] font-black text-[#2E2B1A] tracking-tight leading-tight mb-2">
-              Ask GreenCloud the simple questions.
-            </h2>
-            <p className="text-[15px] text-[#686450] leading-relaxed">
-              You shouldn't need a certification to know what is happening in your cloud.
-            </p>
+        {/* Section 4: Ask GreenCloud the Simple Questions */}
+        <section className="rounded-[32px] bg-[#FAF6E8] p-6 sm:p-8 lg:p-10 shadow-warm-sm space-y-7">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
+            <div className="space-y-1.5">
+              <h2 className="text-[26px] sm:text-[32px] font-bold tracking-[-0.02em] text-[#2E2B1A] leading-tight">
+                Ask the simple questions
+              </h2>
+              <p className="text-[15px] text-[#686450] max-w-2xl mx-auto lg:mx-0">
+                Plain answers backed by utilization data, carbon intensity factors, and safe Terraform changes.
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Question 1 */}
-            <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="w-8 h-8 rounded-lg bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A] mb-3">
-                  <HelpCircle className="w-4 h-4 text-[#9A6B00]" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+            {QA_ITEMS.map((item) => (
+              <div
+                key={item.question}
+                className="rounded-[24px] bg-[#FFFDF4] p-6 flex flex-col justify-between gap-4"
+              >
+                <div className="space-y-1.5">
+                  <div className={`text-[12px] font-semibold ${item.accentInk}`}>
+                    {item.topic}
+                  </div>
+                  <h3 className="text-[17px] font-bold text-[#2E2B1A] leading-snug">
+                    &ldquo;{item.question}&rdquo;
+                  </h3>
                 </div>
-                <h3 className="text-[15px] font-bold text-[#2E2B1A] mb-4">
-                  “How much did we spend?”
-                </h3>
-              </div>
-              <div className="bg-[#FAF6E8] rounded-xl p-3 border border-[#ECE5CC]">
-                <span className="text-[18px] font-black text-[#2E2B1A] block font-mono">$24,842</span>
-                <span className="text-[11px] text-[#8D8975] font-medium block mt-0.5">+4.8% vs last month</span>
-              </div>
-            </div>
 
-            {/* Question 2 */}
-            <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="w-8 h-8 rounded-lg bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A] mb-3">
-                  <HelpCircle className="w-4 h-4 text-[#1F8A70]" />
-                </div>
-                <h3 className="text-[15px] font-bold text-[#2E2B1A] mb-4">
-                  “Where are we wasting money?”
-                </h3>
+                <p className={`rounded-[18px] ${item.trayBg} px-4 py-3.5 text-[13.5px] text-[#2E2B1A] leading-relaxed`}>
+                  {item.answer}
+                </p>
               </div>
-              <div className="bg-[#FAF6E8] rounded-xl p-3 border border-[#ECE5CC]">
-                <span className="text-[18px] font-black text-[#1F8A70] block font-mono">12 resources</span>
-                <span className="text-[11px] text-[#8D8975] font-medium block mt-0.5">$1,240/mo recoverable</span>
-              </div>
-            </div>
-
-            {/* Question 3 */}
-            <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="w-8 h-8 rounded-lg bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A] mb-3">
-                  <HelpCircle className="w-4 h-4 text-[#9A6B00]" />
-                </div>
-                <h3 className="text-[15px] font-bold text-[#2E2B1A] mb-4">
-                  “Where are emissions coming from?”
-                </h3>
-              </div>
-              <div className="bg-[#FAF6E8] rounded-xl p-3 border border-[#ECE5CC]">
-                <span className="text-[18px] font-black text-[#2E2B1A] block">Compute loads</span>
-                <span className="text-[11px] text-[#8D8975] font-medium block mt-0.5">68% of total footprint</span>
-              </div>
-            </div>
-
-            {/* Question 4 */}
-            <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="w-8 h-8 rounded-lg bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A] mb-3">
-                  <HelpCircle className="w-4 h-4 text-[#1F8A70]" />
-                </div>
-                <h3 className="text-[15px] font-bold text-[#2E2B1A] mb-4">
-                  “What should we look at first?”
-                </h3>
-              </div>
-              <div className="bg-[#FAF6E8] rounded-xl p-3 border border-[#ECE5CC]">
-                <span className="text-[18px] font-black text-[#1F8A70] block font-mono">3 opportunities</span>
-                <span className="text-[11px] text-[#8D8975] font-medium block mt-0.5">Verified safe to review</span>
-              </div>
-            </div>
+            ))}
           </div>
         </section>
 
-        {/* SECTION 5: FOR DIFFERENT TEAMS (5 Compact Role Cards) */}
-        <section>
-          <div className="text-center max-w-2xl mx-auto mb-10">
-            <h2 className="text-[26px] sm:text-[34px] font-black text-[#2E2B1A] tracking-tight leading-tight mb-2">
-              Useful for every team.
-            </h2>
-            <p className="text-[15px] text-[#686450] leading-relaxed">
-              Tailored perspectives so finance, engineering, and leadership stay aligned.
-            </p>
+        {/* Section 5: Useful for Every Team */}
+        <section className="space-y-6 sm:space-y-7">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
+            <div className="space-y-1.5">
+              <h2 className="text-[26px] sm:text-[32px] font-bold tracking-[-0.02em] text-[#2E2B1A] leading-tight">
+                Useful for every team
+              </h2>
+              <p className="text-[15px] text-[#686450] max-w-2xl mx-auto lg:mx-0">
+                One shared telemetry source aligns financial planning, operations reliability, engineering code, and ESG disclosure.
+              </p>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            {/* Role 1: Finance */}
-            <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-xs hover:shadow-warm-sm transition-all flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#FFF3D6] border border-[#ECE5CC] flex items-center justify-center text-[#9A6B00]">
-                    <PiggyBank className="w-4 h-4" />
+            {TEAM_ROLES.map((role) => (
+              <div
+                key={role.title}
+                className="gc-card-hover group rounded-[24px] bg-[#FBF6E3] p-5 flex flex-col gap-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="relative w-10 h-10 shrink-0 flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-105 group-hover:rotate-3">
+                    <div className={`absolute inset-0 ${role.shapeColor}`}>
+                      <HeroShapeMorph shape={role.shape} />
+                    </div>
+                    <span className={`material-symbols-outlined icon-filled relative z-10 text-[18px] ${role.iconInk}`}>
+                      {role.icon}
+                    </span>
                   </div>
-                  <span className="font-mono text-[10.5px] font-bold text-[#9A6B00] bg-[#FAF6E8] border border-[#ECE5CC] px-2 py-0.5 rounded">
-                    FINOPS
-                  </span>
+                  <div className="min-w-0">
+                    <div className="text-[11.5px] font-semibold text-[#686450] truncate">
+                      {role.subtitle}
+                    </div>
+                    <h3 className="text-[16px] font-bold text-[#2E2B1A] leading-snug">
+                      {role.title}
+                    </h3>
+                  </div>
                 </div>
-                <h3 className="text-[16px] font-bold text-[#2E2B1A] mb-1">Finance</h3>
-                <p className="text-[12.5px] text-[#686450] leading-relaxed">
-                  Understand spending, manage budgets, and find immediate cloud savings.
-                </p>
-              </div>
-            </div>
 
-            {/* Role 2: DevOps */}
-            <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-xs hover:shadow-warm-sm transition-all flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A]">
-                    <Terminal className="w-4 h-4" />
-                  </div>
-                  <span className="font-mono text-[10.5px] font-bold text-[#2E2B1A] bg-[#FAF6E8] border border-[#ECE5CC] px-2 py-0.5 rounded">
-                    DEVOPS
-                  </span>
-                </div>
-                <h3 className="text-[16px] font-bold text-[#2E2B1A] mb-1">Operations</h3>
-                <p className="text-[12.5px] text-[#686450] leading-relaxed">
-                  Understand live resources, prevent waste, and maintain system stability.
+                <p className="text-[13px] text-[#686450] leading-relaxed">
+                  {role.desc}
                 </p>
               </div>
-            </div>
-
-            {/* Role 3: Developers */}
-            <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-xs hover:shadow-warm-sm transition-all flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70]">
-                    <Code className="w-4 h-4" />
-                  </div>
-                  <span className="font-mono text-[10.5px] font-bold text-[#1F8A70] bg-[#FAF6E8] border border-[#ECE5CC] px-2 py-0.5 rounded">
-                    DEVS
-                  </span>
-                </div>
-                <h3 className="text-[16px] font-bold text-[#2E2B1A] mb-1">Engineering</h3>
-                <p className="text-[12.5px] text-[#686450] leading-relaxed">
-                  See how your deployments directly impact daily cloud cost and telemetry.
-                </p>
-              </div>
-            </div>
-
-            {/* Role 4: Sustainability */}
-            <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-xs hover:shadow-warm-sm transition-all flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#E2F5EF] border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70]">
-                    <Leaf className="w-4 h-4" />
-                  </div>
-                  <span className="font-mono text-[10.5px] font-bold text-[#1F8A70] bg-[#FAF6E8] border border-[#ECE5CC] px-2 py-0.5 rounded">
-                    ESG
-                  </span>
-                </div>
-                <h3 className="text-[16px] font-bold text-[#2E2B1A] mb-1">Sustainability</h3>
-                <p className="text-[12.5px] text-[#686450] leading-relaxed">
-                  Report verifiable cloud carbon figures and emissions to ESG stakeholders.
-                </p>
-              </div>
-            </div>
-
-            {/* Role 5: Leaders */}
-            <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-xs hover:shadow-warm-sm transition-all flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#FFF3D6] border border-[#ECE5CC] flex items-center justify-center text-[#9A6B00]">
-                    <BarChart3 className="w-4 h-4" />
-                  </div>
-                  <span className="font-mono text-[10.5px] font-bold text-[#9A6B00] bg-[#FAF6E8] border border-[#ECE5CC] px-2 py-0.5 rounded">
-                    EXEC
-                  </span>
-                </div>
-                <h3 className="text-[16px] font-bold text-[#2E2B1A] mb-1">Leaders</h3>
-                <p className="text-[12.5px] text-[#686450] leading-relaxed">
-                  See the big picture, track efficiency results, and set organizational benchmarks.
-                </p>
-              </div>
-            </div>
+            ))}
           </div>
         </section>
 
-        {/* CALL TO ACTION & PROGRESSION FOOTER */}
-        <section className="rounded-[30px] bg-white border border-[#ECE5CC] p-8 sm:p-12 shadow-warm-md text-center flex flex-col items-center">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#FFF76A] border border-[#DFD6B5] text-[#2E2B1A] text-[12px] font-bold mb-4">
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>AUTOMATED INTELLIGENCE</span>
+        {/* Bottom CTA */}
+        <section className="rounded-[32px] bg-[#FAF6E8] p-8 sm:p-11 text-center flex flex-col items-center space-y-5">
+          <div className="space-y-2 max-w-xl">
+            <h2 className="text-[26px] sm:text-[32px] font-bold tracking-[-0.02em] text-[#2E2B1A] leading-tight">
+              Next: see the telemetry in action
+            </h2>
+            <p className="text-[15px] text-[#686450] leading-relaxed">
+              Explore live cost and carbon charts, inspect ranked optimization diffs, or review how GreenCloud connects step by step.
+            </p>
           </div>
 
-          <h2 className="text-[26px] sm:text-[34px] font-black text-[#2E2B1A] tracking-tight leading-tight max-w-xl mb-3">
-            Next: Explore the Decision Loop in depth
-          </h2>
-
-          <p className="text-[15px] text-[#686450] leading-relaxed max-w-lg mb-8">
-            See how GreenCloud continuously gathers telemetry, analyzes root causes, and provides risk-weighted recommendations.
-          </p>
-
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[#2E2B1A] font-bold text-[14px] shadow-sm hover:shadow-sunshine-glow transition-all"
-            >
-              <span>Explore Live Demo Sandbox</span>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+            <Link href="/dashboard" className="m3-btn m3-pastel-sun">
+              <span>Explore live dashboard</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
-            <Link
-              href="/#optimization"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A] font-semibold text-[14px] shadow-xs transition-colors"
-            >
-              <Sparkles className="w-4 h-4 text-[#9A6B00]" />
-              <span>View Recommendations</span>
+            <Link href="/#optimization" className="m3-btn m3-pastel-oat">
+              <span>View recommendations</span>
             </Link>
-            <Link
-              href="/#documentation"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#FAF6E8] hover:bg-[#F2ECD8] border border-[#ECE5CC] text-[#2E2B1A] font-semibold text-[14px] transition-colors"
-            >
-              <BookOpen className="w-4 h-4 text-[#9A6B00]" />
-              <span>Explore Documentation</span>
+            <Link href="/how-it-works" className="m3-btn m3-pastel-mint">
+              <span>How it works</span>
             </Link>
           </div>
-
-          <p className="text-[12px] text-[#8D8975] mt-6 font-mono flex items-center justify-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#1F8A70]"></span>
-            <span>Public Reading Showcase • Curated Demo Dataset • Zero Cloud Credentials Required</span>
-          </p>
         </section>
       </main>
 
-      {/* 3. FOOTER */}
       <ComplianceFooter />
+
+      <OptimizationReviewModal
+        item={activeReviewItem}
+        onClose={() => setActiveReviewItem(null)}
+      />
     </div>
   );
 }
