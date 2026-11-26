@@ -1,5 +1,5 @@
 /**
- * GreenCloud AI — Developer Logger & Error Diagnostic Utility
+ * GreenCloud AI - Developer Logger & Error Diagnostic Utility
  * Provides pretty-printed, categorized logs with clear 1-line actionable solutions.
  * Automatically masks sensitive tokens (e.g. AWS Keys, Session Tokens).
  */

@@ -4,6 +4,7 @@ import { CarbonEngine } from "./carbonEngine";
 import { GreenCloudConfig } from "./config";
 import { Logger } from "./logger";
 import { decryptCredential } from "./encryption";
+import { normalizeFocusServiceCategory, normalizeProviderId } from "./cloudMetadata";
 
 /**
  * Resilient Retry Helper
@@ -66,6 +67,48 @@ export class IngestionService {
       );
     }
 
+    const provider = normalizeProviderId(account.provider);
+    if (provider !== "aws") {
+      // GCP / Azure accounts ingest via CNCF FOCUS imports or project billing APIs;
+      // recompute carbon emissions across stored resources on re-sync without requiring STS AssumeRole.
+      const existingResources = await prisma.cloudResource.findMany({
+        where: { cloudAccountId: this.accountId },
+      });
+      const syncTime = new Date();
+      for (const res of existingResources) {
+        let avgCpu = 25;
+        if (res.telemetryMetrics) {
+          try {
+            const parsed = JSON.parse(res.telemetryMetrics);
+            if (Array.isArray(parsed.cpuDailyAverages) && parsed.cpuDailyAverages.length > 0) {
+              avgCpu =
+                parsed.cpuDailyAverages.reduce((a: number, b: number) => a + b, 0) /
+                parsed.cpuDailyAverages.length;
+            }
+          } catch {}
+        }
+        const carbonResult =
+          res.serviceCategory === "Storage" || res.resourceType.includes("ebs") || res.resourceType.includes("disk")
+            ? CarbonEngine.calculateEBSCarbon(res.sizeGb || 50, res.region)
+            : CarbonEngine.calculateEC2Carbon(res.instanceType || "n2-standard-2", res.region, avgCpu);
+        await prisma.carbonEmission.create({
+          data: {
+            resourceId: res.id,
+            ts: syncTime,
+            energyKwh: carbonResult.energyKwh,
+            operationalGco2e: carbonResult.operationalGco2e,
+            embodiedGco2e: carbonResult.embodiedGco2e,
+            method: carbonResult.method,
+          },
+        });
+      }
+      await prisma.cloudAccount.update({
+        where: { id: this.accountId },
+        data: { status: "active", syncFreshness: syncTime, syncError: null },
+      });
+      return { success: true, errors: [] };
+    }
+
     if (!account.roleArn) {
       throw new Error(
         `Cloud account "${account.name}" has no IAM Role ARN configured. ` +
@@ -112,8 +155,10 @@ export class IngestionService {
           create: {
             id: `${this.accountId}_${inst.InstanceId}`,
             cloudAccountId: this.accountId,
+            provider: "aws",
             providerResourceId: inst.InstanceId,
             resourceType: "ec2",
+            serviceCategory: "Compute",
             region: inst.Region,
             lifecycleState: inst.State,
             tags: JSON.stringify(inst.Tags),
@@ -129,6 +174,8 @@ export class IngestionService {
             lastSeenAt: syncTime,
           },
           update: {
+            provider: "aws",
+            serviceCategory: "Compute",
             lifecycleState: inst.State,
             tags: JSON.stringify(inst.Tags),
             instanceType: inst.InstanceType,
@@ -187,8 +234,10 @@ export class IngestionService {
           create: {
             id: `${this.accountId}_${vol.VolumeId}`,
             cloudAccountId: this.accountId,
+            provider: "aws",
             providerResourceId: vol.VolumeId,
             resourceType: "ebs",
+            serviceCategory: "Storage",
             region: vol.Region,
             lifecycleState: vol.State,
             tags: JSON.stringify(vol.Tags),
@@ -198,6 +247,8 @@ export class IngestionService {
             lastSeenAt: syncTime,
           },
           update: {
+            provider: "aws",
+            serviceCategory: "Storage",
             lifecycleState: vol.State,
             tags: JSON.stringify(vol.Tags),
             sizeGb: vol.Size,
@@ -242,8 +293,10 @@ export class IngestionService {
           create: {
             id: `${this.accountId}_${ip.AllocationId}`,
             cloudAccountId: this.accountId,
+            provider: "aws",
             providerResourceId: ip.PublicIp,
             resourceType: "eip",
+            serviceCategory: "Network",
             region: ip.Region,
             lifecycleState: ip.AssociationId ? "associated" : "unassociated",
             tags: JSON.stringify(ip.Tags),
@@ -252,6 +305,8 @@ export class IngestionService {
             lastSeenAt: syncTime,
           },
           update: {
+            provider: "aws",
+            serviceCategory: "Network",
             lifecycleState: ip.AssociationId ? "associated" : "unassociated",
             tags: JSON.stringify(ip.Tags),
             monthlyCost: ip.MonthlyCost,
@@ -345,8 +400,12 @@ export class IngestionService {
           data: {
             cloudAccountId: this.accountId,
             resourceId: matchedResourceId,
+            provider: "aws",
+            region: "global",
             chargeDate: new Date(row.Date),
             providerService: row.Service,
+            serviceCategory: normalizeFocusServiceCategory(row.Service),
+            chargeCategory: "Usage",
             billedCost: row.Cost,
             effectiveCost: row.Cost,
             currency: "USD",

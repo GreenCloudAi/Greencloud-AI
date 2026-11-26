@@ -139,6 +139,8 @@ export class TenantIsolatedDb {
     provider: string;
     externalAccountId: string;
     name: string;
+    primaryRegion?: string;
+    providerConfig?: string;
     roleArn?: string;
     externalId?: string;
     accessKeyId?: string;
@@ -147,11 +149,12 @@ export class TenantIsolatedDb {
     const encryptedAccessKey = data.accessKeyId ? encryptCredential(data.accessKeyId) : undefined;
     const encryptedSecretKey = data.secretAccessKey ? encryptCredential(data.secretAccessKey) : undefined;
 
-    // Check if account with same externalAccountId already exists for this tenant
+    // Check if account with same externalAccountId and provider already exists for this tenant
     const existing = await prisma.cloudAccount.findFirst({
       where: {
         tenantId: this.tenantId,
         externalAccountId: data.externalAccountId,
+        provider: data.provider,
       }
     });
 
@@ -160,6 +163,8 @@ export class TenantIsolatedDb {
         where: { id: existing.id },
         data: {
           name: data.name,
+          primaryRegion: data.primaryRegion ?? existing.primaryRegion,
+          providerConfig: data.providerConfig ?? existing.providerConfig,
           roleArn: data.roleArn,
           externalId: data.externalId,
           ...(encryptedAccessKey ? { encryptedAccessKey } : {}),
@@ -174,12 +179,36 @@ export class TenantIsolatedDb {
         provider: data.provider,
         externalAccountId: data.externalAccountId,
         name: data.name,
+        primaryRegion: data.primaryRegion || 'us-east-1',
+        providerConfig: data.providerConfig,
         roleArn: data.roleArn,
         externalId: data.externalId,
         encryptedAccessKey,
         encryptedSecretKey,
-        status: 'pending_validation'
+        status: data.provider === 'aws' ? 'pending_validation' : 'active',
+        syncFreshness: data.provider === 'aws' ? undefined : new Date(),
       }
+    });
+  }
+
+  async updateWorkspaceConfig(data: {
+    monthlyBudget?: number;
+    functionalUnits?: number;
+    activeRole?: string;
+  }) {
+    return prisma.tenant.update({
+      where: { id: this.tenantId },
+      data: {
+        ...(typeof data.monthlyBudget === 'number' && data.monthlyBudget > 0
+          ? { monthlyBudget: data.monthlyBudget }
+          : {}),
+        ...(typeof data.functionalUnits === 'number' && data.functionalUnits > 0
+          ? { functionalUnits: Math.round(data.functionalUnits) }
+          : {}),
+        ...(typeof data.activeRole === 'string' && data.activeRole.trim()
+          ? { activeRole: data.activeRole.trim() }
+          : {}),
+      },
     });
   }
 

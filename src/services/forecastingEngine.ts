@@ -1,5 +1,5 @@
 /**
- * GreenCloud AI — Time-Series Forecasting & Anomaly Spike Detection Engine
+ * GreenCloud AI - Time-Series Forecasting & Anomaly Spike Detection Engine
  * 
  * Provides:
  * 1. Double Exponential Smoothing (Holt's linear trend) and seasonal forecasting for cost and carbon emissions.

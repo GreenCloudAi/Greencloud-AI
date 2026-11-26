@@ -337,6 +337,7 @@ function OnboardingWizard() {
           provider: "aws",
           externalAccountId: accountId.trim(),
           name: accountName.trim(),
+          primaryRegion: selectedRegion === "all" ? "us-east-1" : selectedRegion,
           roleArn: roleArn.trim(),
           externalId: externalId.trim() || undefined,
           accessKeyId: accessKeyId.trim() || undefined,
@@ -348,6 +349,14 @@ function OnboardingWizard() {
       if (data.error) throw new Error(data.error.message);
 
       setHasAccount(true);
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("gc_selected_role", selectedRole);
+      }
+      await fetch("/api/workspace/config", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activeRole: selectedRole }),
+      }).catch(() => {});
       setConnectionStage("Connected successfully. Opening dashboard...");
       setTimeout(() => {
         router.push("/dashboard");
@@ -580,7 +589,17 @@ function OnboardingWizard() {
                     <button
                       key={role.id}
                       type="button"
-                      onClick={() => setSelectedRole(role.id)}
+                      onClick={() => {
+                        setSelectedRole(role.id);
+                        if (typeof window !== "undefined") {
+                          window.sessionStorage.setItem("gc_selected_role", role.id);
+                        }
+                        fetch("/api/workspace/config", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ activeRole: role.id }),
+                        }).catch(() => {});
+                      }}
                       aria-pressed={isSelected}
                       className={`group cursor-pointer rounded-[20px] p-4 text-left transition-all duration-200 active:scale-[0.985] flex flex-col gap-1.5 ${
                         isSelected

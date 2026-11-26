@@ -7,6 +7,12 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    if (request.headers.get("x-greencloud-role") === "viewer") {
+      return NextResponse.json(
+        { error: { code: "FORBIDDEN", message: "Read-Only Viewer cannot update cloud credentials." } },
+        { status: 403 }
+      );
+    }
     const tenant = await seedDefaultTenant();
     const db = new TenantIsolatedDb(tenant.id);
     const accountId = params.id;
@@ -53,6 +59,12 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    if (request.headers.get("x-greencloud-role") === "viewer") {
+      return NextResponse.json(
+        { error: { code: "FORBIDDEN", message: "Read-Only Viewer cannot purge cloud credentials." } },
+        { status: 403 }
+      );
+    }
     const tenant = await seedDefaultTenant();
     const db = new TenantIsolatedDb(tenant.id);
     const accountId = params.id;

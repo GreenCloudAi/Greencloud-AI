@@ -2,14 +2,53 @@ import { prisma } from "./db";
 import { GreenCloudConfig } from "./config";
 import { Logger } from "./logger";
 
-/**
- * Telemetry metrics shape stored in CloudResource.telemetryMetrics JSON field.
- */
 interface TelemetryMetrics {
   cpuDailyAverages: number[];
   peakCpu: number;
   lookbackDays: number;
   collectedAt: string;
+}
+
+function buildTerraformBlock(
+  kind: "ebs_delete" | "eip_release" | "ec2_stop" | "ec2_rightsize" | "stopped_review",
+  provider: string,
+  resourceId: string,
+  region: string,
+  instanceType?: string | null
+): string {
+  const safeName = resourceId.replace(/[^a-zA-Z0-9_]/g, "_");
+  if (provider === "gcp") {
+    if (kind === "ebs_delete") {
+      return `# GCP Persistent Disk unattached cleanup (${region})\n# Import existing disk then remove resource from state/manifest:\n# terraform import google_compute_disk.${safeName} projects/<project>/zones/${region}-a/disks/${resourceId}`;
+    }
+    return `resource "google_compute_instance" "${safeName}" {\n  name         = "${resourceId}"\n  zone         = "${region}-a"\n  machine_type = "${kind === "ec2_rightsize" ? "e2-medium" : instanceType || "e2-standard-2"}" # Downsized for <40% peak CPU\n}`;
+  }
+  if (provider === "azure") {
+    if (kind === "ebs_delete") {
+      return `# Azure Unattached Managed Disk (${region})\n# Remove unused resource from azurerm Terraform module:\n# az disk show --name "${resourceId}"`;
+    }
+    return `resource "azurerm_linux_virtual_machine" "${safeName}" {\n  name     = "${resourceId}"\n  location = "${region}"\n  size     = "${kind === "ec2_rightsize" ? "Standard_B2s" : instanceType || "Standard_D2s_v5"}"\n}`;
+  }
+
+  switch (kind) {
+    case "ebs_delete":
+      return `# Remove unattached AWS EBS volume (${resourceId} in ${region})\n# Snapshot first, then delete the unused aws_ebs_volume block:\n# aws ec2 create-snapshot --volume-id ${resourceId} --region ${region}\n- resource "aws_ebs_volume" "${safeName}" {\n-   availability_zone = "${region}a"\n-   tags = { Name = "${resourceId}" }\n- }`;
+    case "eip_release":
+      return `# Release unassociated AWS Elastic IP (${resourceId} in ${region})\n- resource "aws_eip" "${safeName}" {\n-   domain = "vpc"\n- }`;
+    case "ec2_stop":
+      return `resource "aws_ec2_instance_state" "${safeName}_schedule" {\n  instance_id = "${resourceId}"\n  state       = "stopped" # Average CPU below ${GreenCloudConfig.idleCpuThreshold}% over lookback window\n}`;
+    case "ec2_rightsize": {
+      const nextType =
+        instanceType && instanceType.includes("xlarge")
+          ? instanceType.replace("xlarge", "large")
+          : instanceType && instanceType.includes("large")
+          ? instanceType.replace("large", "medium")
+          : "t3.small";
+      return `resource "aws_instance" "${safeName}" {\n  ami           = data.aws_ami.ubuntu.id\n- instance_type = "${instanceType || "m5.large"}"\n+ instance_type = "${nextType}" # Peak CPU below ${GreenCloudConfig.rightsizingPeakCpuThreshold}%\n}`;
+    }
+    default:
+      return `# Stopped instance audit (${resourceId} in ${region})\n# Verify whether attached root/data EBS volumes can be snapshotted and terminated.`;
+  }
 }
 
 export class RecommendationEngine {
@@ -19,11 +58,6 @@ export class RecommendationEngine {
     this.tenantId = tenantId;
   }
 
-  /**
-   * Generates and writes optimization recommendations for all cloud accounts
-   * under this tenant. All decisions are data-driven from real AWS telemetry
-   * — no hardcoded instance IDs or mock values.
-   */
   async generateRecommendations(): Promise<number> {
     Logger.info("REC", "REC_SWEEP_START", `Evaluating FinOps & GreenOps rules for tenant: ${this.tenantId}`);
     const accounts = await prisma.cloudAccount.findMany({
@@ -33,7 +67,6 @@ export class RecommendationEngine {
     let recommendationCount = 0;
 
     for (const account of accounts) {
-      // Fetch all resources with their latest carbon emissions
       const resources = await prisma.cloudResource.findMany({
         where: { cloudAccountId: account.id },
         include: {
@@ -44,33 +77,37 @@ export class RecommendationEngine {
         },
       });
 
+      const provider = account.provider || "aws";
+
       for (const res of resources) {
         const latestCarbon = res.carbonEmissions[0];
         const dailyOperationalCarbon = latestCarbon?.operationalGco2e || 0;
         const dailyEmbodiedCarbon = latestCarbon?.embodiedGco2e || 0;
-        const monthlyCarbonEmissions =
-          (dailyOperationalCarbon + dailyEmbodiedCarbon) * 30;
+        const monthlyCarbonEmissions = (dailyOperationalCarbon + dailyEmbodiedCarbon) * 30;
 
-        const tags = JSON.parse(res.tags || "[]") as {
-          Key: string;
-          Value: string;
-        }[];
+        let tags: Array<{ Key: string; Value: string }> = [];
+        try {
+          tags = JSON.parse(res.tags || "[]");
+        } catch {
+          tags = [];
+        }
         const nameTag =
-          tags.find((t) => t.Key === "Name")?.Value ||
+          tags.find((t) => t.Key === "Name" || t.Key === "name")?.Value ||
           res.providerResourceId;
 
-        // ─── Recommendation 1: Unattached EBS Volumes ────────────────────────
-        if (res.resourceType === "ebs") {
-          if (res.lifecycleState === "available") {
+        // 1. Storage cleanup (AWS EBS "available", GCP/Azure unattached disks)
+        if (res.resourceType === "ebs" || res.resourceType === "disk") {
+          if (res.lifecycleState === "available" || res.lifecycleState === "unattached") {
             const sizeGb = res.sizeGb || 0;
             const monthlySavings = res.monthlyCost || sizeGb * 0.08;
-
             if (monthlySavings > 0) {
-              const title = `Delete Unattached EBS Volume: ${nameTag}`;
+              const title = `Remove Unattached Volume: ${nameTag}`;
+              const description = `Storage volume ${res.providerResourceId} (${sizeGb} GB in ${res.region}) has been unattached while accruing $${monthlySavings.toFixed(2)}/mo.`;
+              const terraformHcl = buildTerraformBlock("ebs_delete", provider, res.providerResourceId, res.region);
               const evidence = {
-                calculation: `Size: ${sizeGb} GB, Monthly cost: $${monthlySavings.toFixed(2)}/month. Volume state is "available" (unattached).`,
-                reason: `EBS volume "${res.providerResourceId}" is in state "available", meaning it is not attached to any EC2 instance. It is accumulating storage charges with no compute benefit.`,
-                carbonImpact: `Eliminating this volume removes ${(monthlyCarbonEmissions / 1000).toFixed(3)} kg CO2e/month of operational + embodied carbon emissions.`,
+                calculation: `Size: ${sizeGb} GB, Monthly cost: $${monthlySavings.toFixed(2)}/month. Lifecycle: "${res.lifecycleState}".`,
+                reason: `Volume "${res.providerResourceId}" is unattached and incurs continuous block storage billing with zero active compute consumer.`,
+                carbonImpact: `Removing saves ${(monthlyCarbonEmissions / 1000).toFixed(3)} kg CO2e/month.`,
               };
 
               await prisma.recommendation.upsert({
@@ -81,15 +118,19 @@ export class RecommendationEngine {
                   resourceId: res.id,
                   category: "idle_cleanup",
                   title,
+                  description,
+                  terraformHcl,
                   status: "active",
                   estimatedMonthlySavings: monthlySavings,
                   estimatedGco2eSavings: monthlyCarbonEmissions,
-                  riskScore: 0.1,
+                  riskScore: 1,
                   confidence: 0.95,
                   evidence: JSON.stringify(evidence),
                 },
                 update: {
-                  status: "active",
+                  title,
+                  description,
+                  terraformHcl,
                   estimatedMonthlySavings: monthlySavings,
                   estimatedGco2eSavings: monthlyCarbonEmissions,
                   evidence: JSON.stringify(evidence),
@@ -98,21 +139,21 @@ export class RecommendationEngine {
               recommendationCount++;
             }
           } else {
-            await prisma.recommendation.deleteMany({
-              where: { id: `rec_ebs_${res.id}` },
-            });
+            await prisma.recommendation.deleteMany({ where: { id: `rec_ebs_${res.id}` } });
           }
         }
 
-        // ─── Recommendation 2: Unassociated Elastic IPs ──────────────────────
+        // 2. Network IP cleanup
         if (res.resourceType === "eip") {
           if (res.lifecycleState === "unassociated") {
             const monthlySavings = res.monthlyCost || 3.6;
             const title = `Release Unassociated Elastic IP: ${res.providerResourceId}`;
+            const description = `Static public IPv4 ${res.providerResourceId} in ${res.region} is idle and incurs hourly unassociated IPv4 charges.`;
+            const terraformHcl = buildTerraformBlock("eip_release", provider, res.providerResourceId, res.region);
             const evidence = {
-              calculation: `Rate: $0.005/hr idle charge × 730 hours/month = $${monthlySavings.toFixed(2)}/month.`,
-              reason: `Elastic IP "${res.providerResourceId}" is allocated but not associated with any running EC2 instance. AWS charges for idle public IPv4 addresses.`,
-              carbonImpact: `Negligible direct carbon impact, but releasing unused network allocations reduces infrastructure footprint.`,
+              calculation: `Idle IPv4 rate: $0.005/hr x 730 hrs = $${monthlySavings.toFixed(2)}/month.`,
+              reason: `Address "${res.providerResourceId}" is allocated without an attached ENI or NAT gateway.`,
+              carbonImpact: `Reduces unused control-plane allocation footprint.`,
             };
 
             await prisma.recommendation.upsert({
@@ -123,45 +164,43 @@ export class RecommendationEngine {
                 resourceId: res.id,
                 category: "idle_cleanup",
                 title,
+                description,
+                terraformHcl,
                 status: "active",
                 estimatedMonthlySavings: monthlySavings,
                 estimatedGco2eSavings: 0,
-                riskScore: 0.05,
+                riskScore: 1,
                 confidence: 1.0,
                 evidence: JSON.stringify(evidence),
               },
               update: {
-                status: "active",
+                title,
+                description,
+                terraformHcl,
                 estimatedMonthlySavings: monthlySavings,
-                estimatedGco2eSavings: 0,
                 evidence: JSON.stringify(evidence),
               },
             });
             recommendationCount++;
           } else {
-            await prisma.recommendation.deleteMany({
-              where: { id: `rec_eip_${res.id}` },
-            });
+            await prisma.recommendation.deleteMany({ where: { id: `rec_eip_${res.id}` } });
           }
         }
 
-        // ─── Recommendation 3 & 4: EC2 Instance Optimizations ─────────────────
-        if (res.resourceType === "ec2") {
+        // 3. Compute (EC2 / GCE / Azure VM)
+        if (res.resourceType === "ec2" || res.resourceType === "gce_vm" || res.resourceType === "azure_vm") {
           if (res.lifecycleState === "stopped") {
-            // Instance is STOPPED:
-            // 1. Purge obsolete "Stop Idle EC2" and "Rightsize" recommendations
             await prisma.recommendation.deleteMany({
-              where: {
-                id: { in: [`rec_ec2_idle_${res.id}`, `rec_ec2_rightsize_${res.id}`] },
-              },
+              where: { id: { in: [`rec_ec2_idle_${res.id}`, `rec_ec2_rightsize_${res.id}`] } },
             });
 
-            // 2. Recommend reviewing stopped instance to avoid unneeded EBS storage charges
-            const title = `Review Stopped EC2 Instance: ${nameTag}`;
+            const title = `Audit Stopped Compute Instance: ${nameTag}`;
+            const description = `Instance ${res.providerResourceId} (${res.instanceType || "unknown"}) in ${res.region} is stopped while attached storage remains billable.`;
+            const terraformHcl = buildTerraformBlock("stopped_review", provider, res.providerResourceId, res.region, res.instanceType);
             const evidence = {
-              calculation: `Instance "${res.providerResourceId}" (${res.instanceType || "unknown"}) is stopped. While compute costs are $0, any attached EBS volumes continue to accrue storage charges.`,
-              reason: `Stopped instances do not incur compute charges, but their attached EBS volumes and any Elastic IPs remain billable. Consider creating an AMI and terminating if no longer needed.`,
-              carbonImpact: `Minimal operational carbon while stopped, but embodied carbon from reserved hardware capacity remains allocated.`,
+              calculation: `Instance "${res.providerResourceId}" (${res.instanceType || "unknown"}) is stopped ($0 compute, ongoing attached volume billing).`,
+              reason: `Snapshot and decommission if permanently unused to stop EBS retention charges.`,
+              carbonImpact: `Removes reserved hardware embodied allocation when terminated.`,
             };
 
             await prisma.recommendation.upsert({
@@ -172,27 +211,28 @@ export class RecommendationEngine {
                 resourceId: res.id,
                 category: "idle_cleanup",
                 title,
+                description,
+                terraformHcl,
                 status: "active",
                 estimatedMonthlySavings: 0,
                 estimatedGco2eSavings: 0,
-                riskScore: 0.15,
+                riskScore: 2,
                 confidence: 0.8,
                 evidence: JSON.stringify(evidence),
               },
               update: {
-                status: "active",
+                title,
+                description,
+                terraformHcl,
                 evidence: JSON.stringify(evidence),
               },
             });
             recommendationCount++;
           } else if (res.lifecycleState === "running") {
-            // Instance is RUNNING:
-            // 1. Purge "Review Stopped EC2" recommendation
             await prisma.recommendation.deleteMany({
               where: { id: `rec_ec2_stopped_${res.id}` },
             });
 
-            // 2. Check CloudWatch telemetry for idle or rightsizing
             if (res.telemetryMetrics) {
               let telemetry: TelemetryMetrics;
               try {
@@ -203,22 +243,21 @@ export class RecommendationEngine {
 
               const cpuSeries = telemetry.cpuDailyAverages || [];
               if (cpuSeries.length > 0) {
-                const avgCpu =
-                  cpuSeries.reduce((a, b) => a + b, 0) / cpuSeries.length;
+                const avgCpu = cpuSeries.reduce((a, b) => a + b, 0) / cpuSeries.length;
                 const peakCpu = telemetry.peakCpu || Math.max(...cpuSeries);
                 const idleThreshold = GreenCloudConfig.idleCpuThreshold;
-                const rightsizingThreshold =
-                  GreenCloudConfig.rightsizingPeakCpuThreshold;
+                const rightsizingThreshold = GreenCloudConfig.rightsizingPeakCpuThreshold;
 
-                // Idle compute detection:
                 if (avgCpu < idleThreshold) {
                   const monthlySavings = res.monthlyCost || 0;
                   if (monthlySavings > 0) {
-                    const title = `Stop Idle EC2 Instance: ${nameTag} (${res.instanceType || "unknown"})`;
+                    const title = `Stop Idle Instance: ${nameTag} (${res.instanceType || "compute"})`;
+                    const description = `Average CPU of ${avgCpu.toFixed(1)}% over ${telemetry.lookbackDays || cpuSeries.length} days is below ${idleThreshold}%; stopping or scheduling saves $${monthlySavings.toFixed(2)}/mo.`;
+                    const terraformHcl = buildTerraformBlock("ec2_stop", provider, res.providerResourceId, res.region, res.instanceType);
                     const evidence = {
-                      calculation: `Instance Type: ${res.instanceType || "unknown"}, Monthly cost: $${monthlySavings.toFixed(2)}/month. Average CPU over ${telemetry.lookbackDays} days: ${avgCpu.toFixed(1)}%, Peak: ${peakCpu.toFixed(1)}%.`,
-                      reason: `Instance "${res.providerResourceId}" average CPU utilization is ${avgCpu.toFixed(1)}%, which is below the idle threshold of ${idleThreshold}%. The instance appears to be underutilized or idle.`,
-                      carbonImpact: `Stopping saves ${(monthlyCarbonEmissions / 1000).toFixed(3)} kg CO2e/month (${dailyOperationalCarbon.toFixed(1)}g operational + ${dailyEmbodiedCarbon.toFixed(1)}g embodied carbon daily).`,
+                      calculation: `SKU: ${res.instanceType || "unknown"}, Cost: $${monthlySavings.toFixed(2)}/mo. Avg CPU: ${avgCpu.toFixed(1)}%, Peak: ${peakCpu.toFixed(1)}%.`,
+                      reason: `Utilization stayed below idle threshold (${idleThreshold}%).`,
+                      carbonImpact: `Saves ${(monthlyCarbonEmissions / 1000).toFixed(3)} kg CO2e/month.`,
                     };
 
                     await prisma.recommendation.upsert({
@@ -229,15 +268,19 @@ export class RecommendationEngine {
                         resourceId: res.id,
                         category: "idle_cleanup",
                         title,
+                        description,
+                        terraformHcl,
                         status: "active",
                         estimatedMonthlySavings: monthlySavings,
                         estimatedGco2eSavings: monthlyCarbonEmissions,
-                        riskScore: 0.35,
+                        riskScore: 4,
                         confidence: cpuSeries.length >= 7 ? 0.9 : 0.7,
                         evidence: JSON.stringify(evidence),
                       },
                       update: {
-                        status: "active",
+                        title,
+                        description,
+                        terraformHcl,
                         estimatedMonthlySavings: monthlySavings,
                         estimatedGco2eSavings: monthlyCarbonEmissions,
                         confidence: cpuSeries.length >= 7 ? 0.9 : 0.7,
@@ -247,24 +290,19 @@ export class RecommendationEngine {
                     recommendationCount++;
                   }
                 } else {
-                  await prisma.recommendation.deleteMany({
-                    where: { id: `rec_ec2_idle_${res.id}` },
-                  });
+                  await prisma.recommendation.deleteMany({ where: { id: `rec_ec2_idle_${res.id}` } });
                 }
 
-                // Rightsizing detection:
-                if (
-                  avgCpu >= idleThreshold &&
-                  peakCpu < rightsizingThreshold &&
-                  peakCpu > 0
-                ) {
+                if (avgCpu >= idleThreshold && peakCpu < rightsizingThreshold && peakCpu > 0) {
                   const monthlySavings = (res.monthlyCost || 0) * 0.4;
                   if (monthlySavings > 0) {
-                    const title = `Rightsize EC2 Instance: ${nameTag} (${res.instanceType || "unknown"})`;
+                    const title = `Rightsize Compute: ${nameTag} (${res.instanceType || "compute"})`;
+                    const description = `Peak CPU reached only ${peakCpu.toFixed(1)}% over ${telemetry.lookbackDays || cpuSeries.length} days; downsizing one family tier saves ~$${monthlySavings.toFixed(2)}/mo.`;
+                    const terraformHcl = buildTerraformBlock("ec2_rightsize", provider, res.providerResourceId, res.region, res.instanceType);
                     const evidence = {
-                      calculation: `Current type: ${res.instanceType || "unknown"}, Monthly cost: $${(res.monthlyCost || 0).toFixed(2)}/month. Peak CPU: ${peakCpu.toFixed(1)}% (below ${rightsizingThreshold}% threshold). Estimated ~40% savings from downsizing: $${monthlySavings.toFixed(2)}/month.`,
-                      reason: `Instance "${res.providerResourceId}" peak CPU utilization over ${telemetry.lookbackDays} days is only ${peakCpu.toFixed(1)}%, suggesting it can safely run on a smaller instance type.`,
-                      carbonImpact: `Rightsizing reduces energy consumption proportionally, saving approximately ${((monthlyCarbonEmissions * 0.4) / 1000).toFixed(3)} kg CO2e/month.`,
+                      calculation: `SKU: ${res.instanceType || "unknown"}, Monthly cost: $${(res.monthlyCost || 0).toFixed(2)}/mo. Peak CPU: ${peakCpu.toFixed(1)}% (<${rightsizingThreshold}%).`,
+                      reason: `Substantial compute headroom remains across peak traffic windows.`,
+                      carbonImpact: `Cuts emissions ~${((monthlyCarbonEmissions * 0.4) / 1000).toFixed(3)} kg CO2e/month.`,
                     };
 
                     await prisma.recommendation.upsert({
@@ -275,25 +313,21 @@ export class RecommendationEngine {
                         resourceId: res.id,
                         category: "rightsizing",
                         title,
+                        description,
+                        terraformHcl,
                         status: "active",
-                        estimatedMonthlySavings: parseFloat(
-                          monthlySavings.toFixed(2)
-                        ),
-                        estimatedGco2eSavings: parseFloat(
-                          (monthlyCarbonEmissions * 0.4).toFixed(2)
-                        ),
-                        riskScore: 0.25,
+                        estimatedMonthlySavings: parseFloat(monthlySavings.toFixed(2)),
+                        estimatedGco2eSavings: parseFloat((monthlyCarbonEmissions * 0.4).toFixed(2)),
+                        riskScore: 3,
                         confidence: cpuSeries.length >= 7 ? 0.85 : 0.65,
                         evidence: JSON.stringify(evidence),
                       },
                       update: {
-                        status: "active",
-                        estimatedMonthlySavings: parseFloat(
-                          monthlySavings.toFixed(2)
-                        ),
-                        estimatedGco2eSavings: parseFloat(
-                          (monthlyCarbonEmissions * 0.4).toFixed(2)
-                        ),
+                        title,
+                        description,
+                        terraformHcl,
+                        estimatedMonthlySavings: parseFloat(monthlySavings.toFixed(2)),
+                        estimatedGco2eSavings: parseFloat((monthlyCarbonEmissions * 0.4).toFixed(2)),
                         confidence: cpuSeries.length >= 7 ? 0.85 : 0.65,
                         evidence: JSON.stringify(evidence),
                       },
@@ -301,28 +335,20 @@ export class RecommendationEngine {
                     recommendationCount++;
                   }
                 } else {
-                  await prisma.recommendation.deleteMany({
-                    where: { id: `rec_ec2_rightsize_${res.id}` },
-                  });
+                  await prisma.recommendation.deleteMany({ where: { id: `rec_ec2_rightsize_${res.id}` } });
                 }
               }
             }
           } else {
-            // Other states (terminated, etc.): purge all recommendations
-            await prisma.recommendation.deleteMany({
-              where: { resourceId: res.id },
-            });
+            await prisma.recommendation.deleteMany({ where: { resourceId: res.id } });
           }
         }
       }
     }
 
-    Logger.success(
-      "REC",
-      "REC_SWEEP_COMPLETE",
-      `Generated ${recommendationCount} evidence-backed optimization recommendations.`,
-      { recommendationCount }
-    );
+    Logger.success("REC", "REC_SWEEP_COMPLETE", `Evaluated ${recommendationCount} recommendations.`, {
+      recommendationCount,
+    });
     return recommendationCount;
   }
 }

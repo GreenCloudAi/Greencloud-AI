@@ -1,3 +1,5 @@
+import { getRegionMeta } from "./cloudMetadata";
+
 export interface CarbonCalculationResult {
   energyKwh: number;
   operationalGco2e: number;
@@ -6,22 +8,6 @@ export interface CarbonCalculationResult {
 }
 
 export class CarbonEngine {
-  // Region Grid Carbon Intensity Factors in gCO2e/kWh (CEA / Electricity Maps baseline)
-  private static gridIntensity: Record<string, number> = {
-    "ap-south-1": 680.0, // Mumbai / India (High thermal & coal grid mix)
-    "us-east-1": 420.0, // Virginia (Gas & coal grid mix)
-    "us-east-2": 410.0, // Ohio (Coal & gas mix)
-    "us-west-1": 210.0, // N. California (Renewables & gas)
-    "us-west-2": 80.0,  // Oregon (High hydroelectric mix - low carbon!)
-    "eu-central-1": 340.0, // Frankfurt / Germany (Wind, coal & solar)
-    "eu-west-1": 310.0, // Ireland (Wind + Gas mix)
-    "eu-west-2": 220.0, // London / UK (Wind & nuclear)
-    "eu-north-1": 45.0,  // Stockholm / Sweden (Hydro & nuclear - ultra clean!)
-    "ap-southeast-1": 480.0, // Singapore (High fossil fuel mix)
-    "ap-northeast-1": 470.0, // Tokyo / Japan (LNG & coal mix)
-    "default": 350.0
-  };
-
   // Hardware Manufacturing/Lifespan constants for Embodied Carbon
   // Server lifespans are standard 4 years (35,040 hours)
   private static physicalServerEmbodiedGco2e = 1200000; // 1.2 metric tonnes of CO2e
@@ -29,10 +15,10 @@ export class CarbonEngine {
   private static physicalServerVcpus = 64;
 
   /**
-   * Returns regional grid carbon intensity (gCO2e/kWh)
+   * Returns regional grid carbon intensity (gCO2e/kWh) across AWS, GCP, and Azure
    */
   static getCarbonIntensity(region: string): number {
-    return this.gridIntensity[region] || this.gridIntensity.default;
+    return getRegionMeta(region).gridIntensity;
   }
 
   /**

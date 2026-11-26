@@ -29,7 +29,7 @@ export class TicketService {
     const ticketId = `GC-${Math.floor(1000 + Math.random() * 9000)}`;
     const ticketPath = path.join(ticketsDir, `ticket_${ticketId}.md`);
 
-    const markdown = `# Jira Ticket [${ticketId}] — ${payload.title}
+    const markdown = `# Jira Ticket [${ticketId}] - ${payload.title}
 
 * **Status:** TO DO
 * **Priority:** ${payload.riskScore < 0.2 ? "Medium" : "High"}
@@ -109,7 +109,7 @@ index 548c7bb..b210abf 100644
 `;
     }
 
-    const prHeader = `# Pull Request [${prId}] — Cost & Carbon Remediation
+    const prHeader = `# Pull Request [${prId}] - Cost & Carbon Remediation
 **Target Branch:** \`main\`
 **Author:** \`GreenCloud AI\`
 

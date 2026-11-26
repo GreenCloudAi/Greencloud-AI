@@ -20,7 +20,7 @@ import { Logger } from "./logger";
 
 // ─── Shared Resource Interfaces ────────────────────────────────────────────────
 // These define the normalized shape that the ingestion pipeline expects.
-// Every field is sourced from real AWS API responses — no hardcoded values.
+// Every field is sourced from real AWS API responses - no hardcoded values.
 
 export interface EC2InstanceResource {
   InstanceId: string;
@@ -628,7 +628,7 @@ export class AwsCloudConnector {
 
   /**
    * Fetches real billing data from AWS Cost Explorer.
-   * Cost Explorer is a global service — always called from us-east-1.
+   * Cost Explorer is a global service - always called from us-east-1.
    * Note: Cost Explorer API calls are billed at $0.01 per request.
    */
   async fetchBillingSummary(
@@ -704,7 +704,7 @@ export class AwsCloudConnector {
         "Enable Cost Explorer in AWS Console (Billing -> Cost Explorer) and attach 'ce:GetCostAndUsage' permission."
       );
       this.logPermissionHint(error, "ce:GetCostAndUsage");
-      throw error; // Do not swallow billing errors — they are critical
+      throw error; // Do not swallow billing errors; they are critical
     }
   }
 

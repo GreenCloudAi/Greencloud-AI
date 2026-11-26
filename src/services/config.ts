@@ -1,7 +1,7 @@
 import "./dnsFallback";
 
 /**
- * GreenCloud AI — Centralized Configuration
+ * GreenCloud AI - Centralized Configuration
  * All tunable parameters are driven from environment variables.
  * Never hardcode AWS credentials, regions, or thresholds in service files.
  */

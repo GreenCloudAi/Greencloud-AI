@@ -8,6 +8,14 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const callerRole = request.headers.get("x-greencloud-role");
+    if (callerRole === "viewer") {
+      return NextResponse.json(
+        { error: { code: "FORBIDDEN", message: "Read-Only Viewer cannot approve recommendations or create tickets/PRs." } },
+        { status: 403 }
+      );
+    }
+
     const tenant = await seedDefaultTenant();
     const db = new TenantIsolatedDb(tenant.id);
     const recommendationId = params.id;

@@ -2,49 +2,131 @@ import { NextResponse } from "next/server";
 import { prisma, TenantIsolatedDb } from "@/services/db";
 import { seedDefaultTenant } from "@/services/seed";
 import { ForecastingEngine } from "@/services/forecastingEngine";
+import {
+  CLOUD_REGION_CATALOG,
+  CloudProviderId,
+  getRegionMeta,
+  normalizeFocusServiceCategory,
+  normalizeProviderId,
+} from "@/services/cloudMetadata";
 
-const REGION_METADATA: Record<
-  string,
-  { name: string; country: string; flag: string; gridIntensity: number; mix: string; carbonStatus: string }
-> = {
-  "ap-south-1": { name: "Asia Pacific (Mumbai)", country: "India", flag: "🇮🇳", gridIntensity: 680, mix: "Thermal & Solar", carbonStatus: "High Carbon" },
-  "us-east-1": { name: "US East (N. Virginia)", country: "United States", flag: "🇺🇸", gridIntensity: 420, mix: "Gas & Coal", carbonStatus: "Moderate" },
-  "us-east-2": { name: "US East (Ohio)", country: "United States", flag: "🇺🇸", gridIntensity: 410, mix: "Coal & Gas", carbonStatus: "Moderate" },
-  "us-west-1": { name: "US West (N. California)", country: "United States", flag: "🇺🇸", gridIntensity: 210, mix: "Solar & Gas", carbonStatus: "Clean" },
-  "us-west-2": { name: "US West (Oregon)", country: "United States", flag: "🇺🇸", gridIntensity: 80, mix: "Hydro & Wind", carbonStatus: "Ultra Clean" },
-  "eu-central-1": { name: "Europe (Frankfurt)", country: "Germany", flag: "🇩🇪", gridIntensity: 340, mix: "Wind, Coal & Solar", carbonStatus: "Moderate" },
-  "eu-west-1": { name: "Europe (Ireland)", country: "Ireland", flag: "🇮🇪", gridIntensity: 310, mix: "Wind & Gas", carbonStatus: "Moderate" },
-  "eu-west-2": { name: "Europe (London)", country: "United Kingdom", flag: "🇬🇧", gridIntensity: 220, mix: "Wind & Nuclear", carbonStatus: "Clean" },
-  "eu-west-3": { name: "Europe (Paris)", country: "France", flag: "🇫🇷", gridIntensity: 75, mix: "Nuclear & Hydro", carbonStatus: "Ultra Clean" },
-  "eu-north-1": { name: "Europe (Stockholm)", country: "Sweden", flag: "🇸🇪", gridIntensity: 45, mix: "Hydro & Nuclear", carbonStatus: "Ultra Clean" },
-  "ap-southeast-1": { name: "Asia Pacific (Singapore)", country: "Singapore", flag: "🇸🇬", gridIntensity: 480, mix: "Natural Gas", carbonStatus: "High Carbon" },
-  "ap-southeast-2": { name: "Asia Pacific (Sydney)", country: "Australia", flag: "🇦🇺", gridIntensity: 560, mix: "Coal & Solar", carbonStatus: "High Carbon" },
-  "ap-northeast-1": { name: "Asia Pacific (Tokyo)", country: "Japan", flag: "🇯🇵", gridIntensity: 470, mix: "LNG & Coal", carbonStatus: "High Carbon" },
-  "ap-northeast-2": { name: "Asia Pacific (Seoul)", country: "South Korea", flag: "🇰🇷", gridIntensity: 460, mix: "Nuclear & Coal", carbonStatus: "High Carbon" },
-  "ap-northeast-3": { name: "Asia Pacific (Osaka)", country: "Japan", flag: "🇯🇵", gridIntensity: 390, mix: "Nuclear & LNG", carbonStatus: "Moderate" },
-  "ca-central-1": { name: "Canada (Central)", country: "Canada", flag: "🇨🇦", gridIntensity: 120, mix: "Hydro & Nuclear", carbonStatus: "Clean" },
-  "sa-east-1": { name: "South America (São Paulo)", country: "Brazil", flag: "🇧🇷", gridIntensity: 110, mix: "Hydroelectric", carbonStatus: "Clean" },
-};
+export const dynamic = "force-dynamic";
+
+function parseWindowDays(raw: string | null): { label: "7d" | "30d" | "90d"; days: number } {
+  if (raw === "7d") return { label: "7d", days: 7 };
+  if (raw === "90d") return { label: "90d", days: 90 };
+  return { label: "30d", days: 30 };
+}
+
+function parseTagList(rawTags: string | null | undefined): Array<{ Key: string; Value: string }> {
+  if (!rawTags) return [];
+  try {
+    const parsed = JSON.parse(rawTags);
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === "object") {
+      return Object.entries(parsed).map(([Key, Value]) => ({ Key, Value: String(Value) }));
+    }
+  } catch {}
+  return [];
+}
+
+function parseCpuTelemetry(raw: string | null | undefined): {
+  avgCpu: number | null;
+  peakCpu: number | null;
+  cpuSeries: number[];
+} {
+  if (!raw) return { avgCpu: null, peakCpu: null, cpuSeries: [] };
+  try {
+    const parsed = JSON.parse(raw);
+    const series = Array.isArray(parsed.cpuDailyAverages)
+      ? parsed.cpuDailyAverages.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v))
+      : [];
+    const avg =
+      series.length > 0
+        ? parseFloat((series.reduce((a: number, b: number) => a + b, 0) / series.length).toFixed(2))
+        : typeof parsed.peakCpu === "number"
+        ? parsed.peakCpu
+        : null;
+    const peak =
+      typeof parsed.peakCpu === "number"
+        ? parseFloat(parsed.peakCpu.toFixed(2))
+        : series.length > 0
+        ? parseFloat(Math.max(...series).toFixed(2))
+        : null;
+    return { avgCpu: avg, peakCpu: peak, cpuSeries: series };
+  } catch {
+    return { avgCpu: null, peakCpu: null, cpuSeries: [] };
+  }
+}
 
 export async function GET(request: Request) {
   try {
     const tenant = await seedDefaultTenant();
     const db = new TenantIsolatedDb(tenant.id);
     const { searchParams } = new URL(request.url);
+
+    const { label: windowLabel, days: windowDays } = parseWindowDays(searchParams.get("window"));
     const requestedAccountId = searchParams.get("accountId");
+    const requestedAccountIdsRaw = searchParams.get("accountIds");
+    const requestedProvidersRaw = searchParams.get("providers");
+    const roleParam = searchParams.get("role") || tenant.activeRole || "admin";
 
-    // 1. Fetch all cloud accounts for this tenant (sanitized to protect sensitive credentials)
-    const allAccounts = await db.listSanitizedAccounts();
+    const allAccountsRaw = await db.listSanitizedAccounts();
+    const allAccounts = allAccountsRaw.map((a) => ({
+      ...a,
+      provider: normalizeProviderId(a.provider),
+    }));
 
-    // Determine active account: requested account or first account
-    const activeAccount = requestedAccountId
-      ? allAccounts.find((a) => a.id === requestedAccountId) || allAccounts[0]
-      : allAccounts[0] || null;
+    // Filter selected providers
+    const providerFilterSet: Set<CloudProviderId> =
+      requestedProvidersRaw && requestedProvidersRaw !== "all"
+        ? new Set(
+            requestedProvidersRaw
+              .split(",")
+              .map((p) => normalizeProviderId(p))
+          )
+        : new Set<CloudProviderId>(["aws", "gcp", "azure"]);
 
-    if (!activeAccount) {
+    // Resolve selected accounts (default = all matching accounts across selected providers)
+    let requestedIds: string[] = [];
+    if (requestedAccountIdsRaw && requestedAccountIdsRaw !== "all") {
+      requestedIds = requestedAccountIdsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+    } else if (requestedAccountId && requestedAccountId !== "all") {
+      requestedIds = [requestedAccountId];
+    }
+
+    const selectedAccounts = allAccounts.filter((a) => {
+      const provOk = providerFilterSet.has(a.provider);
+      if (!provOk) return false;
+      if (requestedIds.length > 0) return requestedIds.includes(a.id);
+      return true;
+    });
+
+    const selectedAccountIds = selectedAccounts.map((a) => a.id);
+    const activeAccount = selectedAccounts[0] || allAccounts[0] || null;
+    const accountById = new Map(allAccounts.map((a) => [a.id, a]));
+
+    const monthlyBudget = tenant.monthlyBudget || 150.0;
+    const functionalUnits = tenant.functionalUnits || 100000;
+
+    if (selectedAccountIds.length === 0) {
       return NextResponse.json({
+        scope: {
+          accountIds: [],
+          providers: Array.from(providerFilterSet),
+          window: windowLabel,
+          role: roleParam,
+          isMultiAccount: false,
+          isMultiProvider: false,
+        },
+        workspaceConfig: {
+          monthlyBudget,
+          functionalUnits,
+          activeRole: tenant.activeRole || "admin",
+        },
         account: null,
-        allAccounts: [],
+        selectedAccounts: [],
+        allAccounts,
         resources: {
           total: 0,
           ec2: [],
@@ -56,8 +138,8 @@ export async function GET(request: Request) {
           byState: { healthy: 0, underutilized: 0, peak: 0, stopped: 0 },
         },
         scanCoverage: {
-          totalMonitoredRegions: Object.keys(REGION_METADATA).length,
-          allMonitoredRegions: Object.keys(REGION_METADATA),
+          totalMonitoredRegions: Object.keys(CLOUD_REGION_CATALOG).length,
+          allMonitoredRegions: Object.keys(CLOUD_REGION_CATALOG),
           activeRegionsWithResources: [],
           activeRegionsWithRunningCompute: [],
           isMultiRegionRunning: false,
@@ -65,17 +147,42 @@ export async function GET(request: Request) {
         multiRegionAlert: null,
         costs: {
           totalCost: null,
+          effectiveCostTotal: null,
+          discountSavings: 0,
           dailyBurnRate: null,
-          priorMonthCost: null,
+          priorPeriodCost: null,
           byService: [],
           dailyTrend: [],
+          dailyByAccount: [],
+          dailyByProvider: [],
+        },
+        tagAllocation: {
+          hygieneScore: 100,
+          taggedCount: 0,
+          untaggedCount: 0,
+          byEnvironment: [],
+          byTeam: [],
+        },
+        budget: {
+          target: monthlyBudget,
+          spent: 0,
+          pacePercentage: 0,
+          projectedMonthEnd: 0,
+          status: "healthy",
+        },
+        anomalies: {
+          hasAnomalies: false,
+          detectedCount: 0,
+          message: "Connect or select at least one cloud account to evaluate telemetry.",
+          items: [],
         },
         carbon: {
           totalOperationalCarbon: null,
           totalEmbodiedCarbon: null,
           totalCarbon: null,
           sciScore: null,
-          functionalUnits: 100000,
+          functionalUnits,
+          cleanGridSharePct: 0,
           regionalGrid: [],
         },
         recommendations: {
@@ -103,554 +210,632 @@ export async function GET(request: Request) {
           eipAssociated: 0,
           eipUnused: 0,
           activeRegions: [],
-          rdsCount: 0,
-          natCount: 0,
         },
-        tagAllocation: {
-          hygieneScore: 100,
-          taggedCount: 0,
-          untaggedCount: 0,
-          byEnvironment: [],
-          byTeam: [],
-        },
-        budget: {
-          target: 50.0,
-          spent: 0.0,
-          pacePercentage: 0,
-          projectedMonthEnd: 0.0,
-          status: "healthy",
-        },
-        anomalies: {
-          hasAnomalies: false,
-          detectedCount: 0,
-          message: "No anomalies detected.",
+        comparisons: {
+          byAccount: [],
+          byProvider: [],
         },
         auditLogs: [],
       });
     }
 
-    // 2. Fetch resources for active account
-    const resources = await prisma.cloudResource.findMany({
-      where: { cloudAccountId: activeAccount.id },
-      include: {
-        carbonEmissions: {
-          orderBy: { ts: "desc" },
-          take: 1,
+    const now = new Date();
+    const windowStart = new Date(now.getTime() - windowDays * 24 * 3600 * 1000);
+    const prevWindowStart = new Date(now.getTime() - windowDays * 2 * 24 * 3600 * 1000);
+
+    // Parallel indexed DB reads across selected accounts
+    const [resources, costItemsAll, recommendationsRaw, auditLogsRaw] = await Promise.all([
+      prisma.cloudResource.findMany({
+        where: { cloudAccountId: { in: selectedAccountIds } },
+        include: {
+          carbonEmissions: { orderBy: { ts: "desc" }, take: 1 },
         },
-      },
-    });
+      }),
+      prisma.costLineItem.findMany({
+        where: {
+          cloudAccountId: { in: selectedAccountIds },
+          chargeDate: { gte: prevWindowStart },
+        },
+        orderBy: { chargeDate: "asc" },
+      }),
+      prisma.recommendation.findMany({
+        where: {
+          tenantId: tenant.id,
+          resource: { cloudAccountId: { in: selectedAccountIds } },
+        },
+        include: { resource: true },
+        orderBy: { estimatedMonthlySavings: "desc" },
+      }),
+      prisma.auditLog.findMany({
+        where: { tenantId: tenant.id },
+        orderBy: { ts: "desc" },
+        take: 15,
+      }),
+    ]);
 
-    const ec2List = resources.filter((r) => r.resourceType === "ec2");
-    const ebsList = resources.filter((r) => r.resourceType === "ebs");
-    const eipList = resources.filter((r) => r.resourceType === "eip");
+    // Classify compute, storage, network across AWS / GCP / Azure
+    const computeTypes = new Set(["ec2", "gce_vm", "azure_vm"]);
+    const storageTypes = new Set(["ebs", "disk"]);
 
-    // Resource Health classification
+    const computeResources = resources.filter((r) => computeTypes.has(r.resourceType));
+    const storageResources = resources.filter((r) => storageTypes.has(r.resourceType));
+    const networkResources = resources.filter((r) => r.resourceType === "eip");
+
     let healthyCount = 0;
     let underutilizedCount = 0;
     let peakCount = 0;
     let stoppedCount = 0;
-
-    ec2List.forEach((instance) => {
-      if (instance.lifecycleState === "stopped") {
-        stoppedCount++;
-      } else {
-        let avgCpu = 35; // nominal baseline
-        try {
-          if (instance.telemetryMetrics) {
-            const parsed = JSON.parse(instance.telemetryMetrics);
-            if (Array.isArray(parsed.cpuDailyAverages) && parsed.cpuDailyAverages.length > 0) {
-              avgCpu = parsed.cpuDailyAverages.reduce((a: number, b: number) => a + b, 0) / parsed.cpuDailyAverages.length;
-            } else if (typeof parsed.peakCpu === "number") {
-              avgCpu = parsed.peakCpu;
-            }
-          }
-        } catch {
-          // ignore parse error
-        }
-
-        if (avgCpu < 10) {
-          underutilizedCount++;
-        } else if (avgCpu > 80) {
-          peakCount++;
-        } else {
-          healthyCount++;
-        }
-      }
-    });
-
-    // 3. Fetch Cost Line Items for active account (Current Month Spend vs Historical Trend)
-    const now = new Date();
-    const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-
-    // Current month-to-date billed usage spend matching AWS Billing Console
-    const currentMonthTotals = await prisma.costLineItem.groupBy({
-      by: ["providerService"],
-      where: {
-        cloudAccountId: activeAccount.id,
-        chargeDate: { gte: startOfMonth },
-      },
-      _sum: { billedCost: true },
-    });
-
-    // If no records in current month yet (e.g. before first sync of the month), fall back to all records
-    const costTotals = currentMonthTotals.length > 0
-      ? currentMonthTotals
-      : await prisma.costLineItem.groupBy({
-          by: ["providerService"],
-          where: { cloudAccountId: activeAccount.id },
-          _sum: { billedCost: true },
-        });
-
-    const byServiceCosts = costTotals
-      .map((c) => ({
-        service: c.providerService,
-        total: parseFloat((c._sum.billedCost || 0).toFixed(2)),
-      }))
-      .filter((c) => c.total > 0)
-      .sort((a, b) => b.total - a.total);
-
-    const rawTotalCost = costTotals.reduce((sum, c) => sum + (c._sum.billedCost || 0), 0);
-    const totalCost = costTotals.length > 0 ? parseFloat(rawTotalCost.toFixed(2)) : null;
-
-    // Daily cost trend (last 30 days)
-    const dailyLineItems = await prisma.costLineItem.findMany({
-      where: { cloudAccountId: activeAccount.id },
-      orderBy: { chargeDate: "asc" },
-      take: 60,
-    });
-
-    const dailyTrendMap: Record<string, number> = {};
-    dailyLineItems.forEach((item) => {
-      const dayKey = new Date(item.chargeDate).toISOString().split("T")[0];
-      dailyTrendMap[dayKey] = (dailyTrendMap[dayKey] || 0) + item.billedCost;
-    });
-
-    const dailyTrend = Object.entries(dailyTrendMap).map(([date, cost]) => ({
-      date,
-      cost: parseFloat(cost.toFixed(2)),
-    }));
-
-    // 4. Carbon Metrics
-    const carbonList = await prisma.carbonEmission.findMany({
-      where: { resource: { cloudAccountId: activeAccount.id } },
-      orderBy: { ts: "desc" },
-    });
-
-    const uniqueCarbonMap: Record<string, typeof carbonList[0]> = {};
-    carbonList.forEach((c) => {
-      if (!uniqueCarbonMap[c.resourceId]) {
-        uniqueCarbonMap[c.resourceId] = c;
-      }
-    });
-
-    const uniqueCarbonValues = Object.values(uniqueCarbonMap);
-    const rawOpCarbon = uniqueCarbonValues.reduce((sum, c) => sum + c.operationalGco2e, 0);
-    const rawEmbCarbon = uniqueCarbonValues.reduce((sum, c) => sum + c.embodiedGco2e, 0);
-
-    const totalOperationalCarbon = uniqueCarbonValues.length > 0 ? parseFloat(rawOpCarbon.toFixed(2)) : null;
-    const totalEmbodiedCarbon = uniqueCarbonValues.length > 0 ? parseFloat(rawEmbCarbon.toFixed(2)) : null;
-    const totalCarbon = (totalOperationalCarbon !== null && totalEmbodiedCarbon !== null)
-      ? parseFloat(((totalOperationalCarbon + totalEmbodiedCarbon) / 1000).toFixed(2)) // in kgCO2e or tCO2e
-      : null;
-
-    const functionalUnits = parseInt(process.env.GREENCLOUD_FUNCTIONAL_UNITS || "100000", 10);
-    const sciScore = (totalOperationalCarbon !== null && totalEmbodiedCarbon !== null)
-      ? parseFloat(((rawOpCarbon + rawEmbCarbon) / functionalUnits).toFixed(5))
-      : null;
-
-    // Regional grid emissions reference derived from real carbon intensity metadata
-    const regionalGrid = Object.entries(REGION_METADATA).map(([region, meta]) => ({
-      region,
-      location: meta.name,
-      gridIntensity: meta.gridIntensity,
-      mix: meta.mix,
-      status: meta.carbonStatus,
-    }));
-
-    // Enrich resources with regional names and tags
-    const enrichedEc2List = ec2List.map((inst) => {
-      const meta = REGION_METADATA[inst.region] || {
-        name: inst.region,
-        country: "Global",
-        flag: "🌐",
-        gridIntensity: 350,
-        mix: "Standard Grid",
-        carbonStatus: "Moderate",
-      };
-      let instanceName = inst.providerResourceId;
-      try {
-        if (inst.tags) {
-          const tags = JSON.parse(inst.tags);
-          const nameTag = Array.isArray(tags) ? tags.find((t: any) => t.Key === "Name") : null;
-          if (nameTag?.Value) instanceName = nameTag.Value;
-        }
-      } catch {}
-      return {
-        ...inst,
-        instanceName,
-        regionName: meta.name,
-        regionCountry: meta.country,
-        regionFlag: meta.flag,
-      };
-    });
-
-    const enrichedEbsList = ebsList.map((vol) => {
-      const meta = REGION_METADATA[vol.region] || {
-        name: vol.region,
-        country: "Global",
-        flag: "🌐",
-        gridIntensity: 350,
-        mix: "Standard Grid",
-        carbonStatus: "Moderate",
-      };
-      return {
-        ...vol,
-        regionName: meta.name,
-        regionCountry: meta.country,
-        regionFlag: meta.flag,
-      };
-    });
-
-    const enrichedEipList = eipList.map((ip) => {
-      const meta = REGION_METADATA[ip.region] || {
-        name: ip.region,
-        country: "Global",
-        flag: "🌐",
-        gridIntensity: 350,
-        mix: "Standard Grid",
-        carbonStatus: "Moderate",
-      };
-      return {
-        ...ip,
-        regionName: meta.name,
-        regionCountry: meta.country,
-        regionFlag: meta.flag,
-      };
-    });
-
-    // ─── Multi-Region Aggregation & Zero-Blindspot Metrics ───────────────────
-    const ALL_MONITORED_REGIONS = Object.keys(REGION_METADATA);
-    const regionalBreakdownMap: Record<
-      string,
-      {
-        region: string;
-        regionName: string;
-        country: string;
-        flag: string;
-        gridIntensity: number;
-        mix: string;
-        carbonStatus: string;
-        runningEc2: number;
-        stoppedEc2: number;
-        totalEc2: number;
-        totalEbs: number;
-        totalEip: number;
-        monthlyCost: number;
-        operationalGco2e: number;
-        resourcesCount: number;
-        runningInstanceNames: string[];
-      }
-    > = {};
-
-    resources.forEach((r) => {
-      const reg = r.region || "us-east-1";
-      if (!regionalBreakdownMap[reg]) {
-        const meta = REGION_METADATA[reg] || {
-          name: reg,
-          country: "Global",
-          flag: "🌐",
-          gridIntensity: 350,
-          mix: "Standard Grid",
-          carbonStatus: "Moderate",
-        };
-        regionalBreakdownMap[reg] = {
-          region: reg,
-          regionName: meta.name,
-          country: meta.country,
-          flag: meta.flag,
-          gridIntensity: meta.gridIntensity,
-          mix: meta.mix,
-          carbonStatus: meta.carbonStatus,
-          runningEc2: 0,
-          stoppedEc2: 0,
-          totalEc2: 0,
-          totalEbs: 0,
-          totalEip: 0,
-          monthlyCost: 0,
-          operationalGco2e: 0,
-          resourcesCount: 0,
-          runningInstanceNames: [],
-        };
-      }
-
-      const item = regionalBreakdownMap[reg];
-      item.resourcesCount++;
-      item.monthlyCost += r.monthlyCost || 0;
-
-      if (r.resourceType === "ec2") {
-        item.totalEc2++;
-        if (r.lifecycleState === "running") {
-          item.runningEc2++;
-          let instName = r.providerResourceId;
-          try {
-            if (r.tags) {
-              const parsed = JSON.parse(r.tags);
-              const n = Array.isArray(parsed) ? parsed.find((t: any) => t.Key === "Name") : null;
-              if (n?.Value) instName = `${n.Value} (${r.providerResourceId})`;
-            }
-          } catch {}
-          item.runningInstanceNames.push(instName);
-        } else if (r.lifecycleState === "stopped") {
-          item.stoppedEc2++;
-        }
-      } else if (r.resourceType === "ebs") {
-        item.totalEbs++;
-      } else if (r.resourceType === "eip") {
-        item.totalEip++;
-      }
-
-      const latestCarbon = r.carbonEmissions?.[0];
-      if (latestCarbon) {
-        item.operationalGco2e += latestCarbon.operationalGco2e || 0;
-      }
-    });
-
-    const byRegion = Object.values(regionalBreakdownMap).map((item) => ({
-      ...item,
-      monthlyCost: parseFloat(item.monthlyCost.toFixed(2)),
-      operationalGco2e: parseFloat(item.operationalGco2e.toFixed(2)),
-    }));
-
-    const activeRegionsWithRunningCompute = byRegion
-      .filter((r) => r.runningEc2 > 0)
-      .map((r) => r.region);
-
-    const isMultiRegionRunning = activeRegionsWithRunningCompute.length > 1;
-
-    const multiRegionAlert = isMultiRegionRunning
-      ? {
-          active: true,
-          level: "warning",
-          title: "Multi-Region Active Compute Detected",
-          message: `You have ${ec2List.filter((i) => i.lifecycleState === "running").length} EC2 instances running simultaneously across ${activeRegionsWithRunningCompute.length} different AWS regions: ${activeRegionsWithRunningCompute.map((r) => `${REGION_METADATA[r]?.name || r} (${r})`).join(", ")}. Running compute in multiple regions incurs continuous hourly on-demand charges. Verify all active regions to prevent unexpected credit burn.`,
-          regions: activeRegionsWithRunningCompute,
-          totalRunningInstances: ec2List.filter((i) => i.lifecycleState === "running").length,
-          monthlyBurnEstimate: parseFloat(
-            byRegion
-              .filter((r) => r.runningEc2 > 0)
-              .reduce((s, r) => s + r.monthlyCost, 0)
-              .toFixed(2)
-          ),
-        }
-      : null;
-
-    const scanCoverage = {
-      totalMonitoredRegions: ALL_MONITORED_REGIONS.length,
-      allMonitoredRegions: ALL_MONITORED_REGIONS,
-      activeRegionsWithResources: byRegion.map((r) => r.region),
-      activeRegionsWithRunningCompute,
-      isMultiRegionRunning,
-    };
-
-    // 5. Clean up stale recommendations to strictly match current resource lifecycle state
-    const stoppedEc2Ids = ec2List.filter((e) => e.lifecycleState === "stopped").map((e) => e.id);
-    const runningEc2Ids = ec2List.filter((e) => e.lifecycleState === "running").map((e) => e.id);
-
-    if (stoppedEc2Ids.length > 0) {
-      // Stopped instances cannot have idle compute burn or rightsizing recommendations
-      await prisma.recommendation.deleteMany({
-        where: {
-          resourceId: { in: stoppedEc2Ids },
-          id: {
-            in: stoppedEc2Ids.flatMap((id) => [`rec_ec2_idle_${id}`, `rec_ec2_rightsize_${id}`]),
-          },
-        },
-      });
-    }
-
-    if (runningEc2Ids.length > 0) {
-      // Running instances cannot have "Review Stopped" recommendations
-      await prisma.recommendation.deleteMany({
-        where: {
-          resourceId: { in: runningEc2Ids },
-          id: {
-            in: runningEc2Ids.map((id) => `rec_ec2_stopped_${id}`),
-          },
-        },
-      });
-    }
-
-    // Recommendations for this tenant / account
-    const allRecs = await prisma.recommendation.findMany({
-      where: { tenantId: tenant.id },
-      include: { resource: true },
-      orderBy: { estimatedMonthlySavings: "desc" },
-    });
-
-    // Filter to active account recommendations if resource belongs to active account
-    const activeAccountRecs = allRecs.filter(
-      (r) => !r.resource || r.resource.cloudAccountId === activeAccount.id
-    );
-
-    const totalSavings = activeAccountRecs
-      .filter((r) => r.status === "active" || r.status === "approved")
-      .reduce((sum, r) => sum + r.estimatedMonthlySavings, 0);
-
-    const totalCarbonSavings = activeAccountRecs
-      .filter((r) => r.status === "active" || r.status === "approved")
-      .reduce((sum, r) => sum + r.estimatedGco2eSavings, 0);
-
-    // 6. CPU Utilization Distribution (P99 / Average)
     let band0_20 = 0;
     let band20_50 = 0;
     let band50_80 = 0;
     let band80_plus = 0;
 
-    ec2List.forEach((instance) => {
-      if (instance.lifecycleState === "stopped") {
+    const enrichedEc2List = computeResources.map((inst) => {
+      const acct = accountById.get(inst.cloudAccountId);
+      const prov = normalizeProviderId(inst.provider || acct?.provider);
+      const meta = getRegionMeta(inst.region, prov);
+      const tags = parseTagList(inst.tags);
+      const nameTag = tags.find((t) => t.Key === "Name" || t.Key === "name")?.Value;
+      const { avgCpu, peakCpu, cpuSeries } = parseCpuTelemetry(inst.telemetryMetrics);
+
+      if (inst.lifecycleState === "stopped") {
+        stoppedCount++;
         band0_20++;
       } else {
-        let cpu = 35;
-        try {
-          if (instance.telemetryMetrics) {
-            const parsed = JSON.parse(instance.telemetryMetrics);
-            if (Array.isArray(parsed.cpuDailyAverages) && parsed.cpuDailyAverages.length > 0) {
-              cpu = parsed.cpuDailyAverages.reduce((a: number, b: number) => a + b, 0) / parsed.cpuDailyAverages.length;
-            } else if (typeof parsed.peakCpu === "number") {
-              cpu = parsed.peakCpu;
-            }
-          }
-        } catch {}
+        const effCpu = avgCpu ?? 35;
+        if (effCpu < 10) underutilizedCount++;
+        else if (effCpu > 80) peakCount++;
+        else healthyCount++;
 
-        if (cpu < 20) band0_20++;
-        else if (cpu < 50) band20_50++;
-        else if (cpu < 80) band50_80++;
+        if (effCpu < 20) band0_20++;
+        else if (effCpu < 50) band20_50++;
+        else if (effCpu < 80) band50_80++;
         else band80_plus++;
       }
+
+      return {
+        id: inst.id,
+        cloudAccountId: inst.cloudAccountId,
+        accountName: acct?.name || inst.cloudAccountId,
+        provider: prov,
+        providerResourceId: inst.providerResourceId,
+        name: nameTag || inst.providerResourceId,
+        region: inst.region,
+        regionName: meta.name,
+        gridIntensity: meta.gridIntensity,
+        instanceType: inst.instanceType || "unknown",
+        lifecycleState: inst.lifecycleState,
+        monthlyCost: parseFloat((inst.monthlyCost || 0).toFixed(2)),
+        avgCpu,
+        peakCpu,
+        cpuSeries,
+        tags,
+        carbonEmissions: inst.carbonEmissions.map((c) => ({
+          energyKwh: c.energyKwh,
+          operationalGco2e: c.operationalGco2e,
+          embodiedGco2e: c.embodiedGco2e,
+        })),
+      };
     });
 
-    const activeRegions = Array.from(new Set(resources.map((r) => r.region).filter(Boolean)));
-    if (activeRegions.length === 0) activeRegions.push("us-east-1");
+    const enrichedEbsList = storageResources.map((vol) => {
+      const acct = accountById.get(vol.cloudAccountId);
+      const prov = normalizeProviderId(vol.provider || acct?.provider);
+      const meta = getRegionMeta(vol.region, prov);
+      return {
+        id: vol.id,
+        cloudAccountId: vol.cloudAccountId,
+        accountName: acct?.name || vol.cloudAccountId,
+        provider: prov,
+        providerResourceId: vol.providerResourceId,
+        region: vol.region,
+        regionName: meta.name,
+        sizeGb: vol.sizeGb || 0,
+        volumeType: vol.instanceType || (prov === "gcp" ? "pd-balanced" : "gp3"),
+        lifecycleState: vol.lifecycleState,
+        monthlyCost: parseFloat((vol.monthlyCost || 0).toFixed(2)),
+      };
+    });
 
-    // 7. Tag Allocation & FinOps Hygiene
+    const enrichedEipList = networkResources.map((ip) => {
+      const acct = accountById.get(ip.cloudAccountId);
+      const prov = normalizeProviderId(ip.provider || acct?.provider);
+      return {
+        id: ip.id,
+        cloudAccountId: ip.cloudAccountId,
+        accountName: acct?.name || ip.cloudAccountId,
+        provider: prov,
+        providerResourceId: ip.providerResourceId,
+        publicIp: ip.providerResourceId,
+        region: ip.region,
+        lifecycleState: ip.lifecycleState,
+        monthlyCost: parseFloat((ip.monthlyCost || 0).toFixed(2)),
+      };
+    });
+
+    // Split cost items into current window vs real prior window (fallback to full DB items if historical data sits older than windowDays)
+    let currentCostItems = costItemsAll.filter((c) => c.chargeDate >= windowStart);
+    const priorCostItems = costItemsAll.filter(
+      (c) => c.chargeDate >= prevWindowStart && c.chargeDate < windowStart
+    );
+    if (currentCostItems.length === 0) {
+      currentCostItems = await prisma.costLineItem.findMany({
+        where: { cloudAccountId: { in: selectedAccountIds } },
+        orderBy: { chargeDate: "asc" },
+      });
+    }
+
+    const serviceMap = new Map<string, { service: string; category: string; provider: CloudProviderId; total: number }>();
+    const dailyTrendMap = new Map<string, number>();
+    const dailyByAccountMap = new Map<string, Record<string, number>>();
+    const dailyByProviderMap = new Map<string, Record<CloudProviderId, number>>();
+
+    let billedSum = 0;
+    let effectiveSum = 0;
+
+    for (const item of currentCostItems) {
+      const acct = accountById.get(item.cloudAccountId);
+      const prov = normalizeProviderId(item.provider || acct?.provider);
+      const dayKey = item.chargeDate.toISOString().split("T")[0];
+      const cat = item.serviceCategory || normalizeFocusServiceCategory(item.providerService);
+
+      billedSum += item.billedCost;
+      effectiveSum += item.effectiveCost;
+
+      const sKey = `${prov}::${item.providerService}`;
+      const existingSvc = serviceMap.get(sKey) || {
+        service: item.providerService,
+        category: cat,
+        provider: prov,
+        total: 0,
+      };
+      existingSvc.total += item.billedCost;
+      serviceMap.set(sKey, existingSvc);
+
+      dailyTrendMap.set(dayKey, (dailyTrendMap.get(dayKey) || 0) + item.billedCost);
+
+      const acctDay = dailyByAccountMap.get(dayKey) || {};
+      acctDay[acct?.name || item.cloudAccountId] = parseFloat(
+        ((acctDay[acct?.name || item.cloudAccountId] || 0) + item.billedCost).toFixed(2)
+      );
+      dailyByAccountMap.set(dayKey, acctDay);
+
+      const provDay = dailyByProviderMap.get(dayKey) || { aws: 0, gcp: 0, azure: 0 };
+      provDay[prov] = parseFloat((provDay[prov] + item.billedCost).toFixed(2));
+      dailyByProviderMap.set(dayKey, provDay);
+    }
+
+    const totalCost = currentCostItems.length > 0 ? parseFloat(billedSum.toFixed(2)) : null;
+    const effectiveCostTotal = currentCostItems.length > 0 ? parseFloat(effectiveSum.toFixed(2)) : null;
+    const discountSavings =
+      totalCost !== null && effectiveCostTotal !== null
+        ? parseFloat(Math.max(0, totalCost - effectiveCostTotal).toFixed(2))
+        : 0;
+    const priorPeriodCost =
+      priorCostItems.length > 0
+        ? parseFloat(priorCostItems.reduce((s, c) => s + c.billedCost, 0).toFixed(2))
+        : null;
+
+    const byServiceCosts = Array.from(serviceMap.values())
+      .map((s) => ({ ...s, total: parseFloat(s.total.toFixed(2)) }))
+      .filter((s) => s.total > 0)
+      .sort((a, b) => b.total - a.total);
+
+    const dailyTrend = Array.from(dailyTrendMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, cost]) => ({ date, cost: parseFloat(cost.toFixed(2)) }));
+
+    const dailyByAccount = Array.from(dailyByAccountMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, values]) => ({ date, ...values }));
+
+    const dailyByProvider = Array.from(dailyByProviderMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, values]) => ({ date, ...values }));
+
+    // Carbon Rollups + Per-Region Aggregation
+    let rawOpCarbon = 0;
+    let rawEmbCarbon = 0;
+    let cleanGridResCount = 0;
+
+    const regionAggMap = new Map<
+      string,
+      {
+        region: string;
+        name: string;
+        provider: CloudProviderId;
+        gridIntensity: number;
+        mix: string;
+        carbonStatus: string;
+        ec2Count: number;
+        ebsCount: number;
+        eipCount: number;
+        resourceCount: number;
+        runningEc2: number;
+        monthlyCost: number;
+        operationalGco2e: number;
+        accountSet: Set<string>;
+      }
+    >();
+
+    for (const r of resources) {
+      const acct = accountById.get(r.cloudAccountId);
+      const prov = normalizeProviderId(r.provider || acct?.provider);
+      const meta = getRegionMeta(r.region, prov);
+      if (meta.gridIntensity <= 210) cleanGridResCount++;
+
+      const latestC = r.carbonEmissions?.[0];
+      const opG = latestC?.operationalGco2e || 0;
+      const embG = latestC?.embodiedGco2e || 0;
+      rawOpCarbon += opG;
+      rawEmbCarbon += embG;
+
+      const entry = regionAggMap.get(r.region) || {
+        region: r.region,
+        name: meta.name,
+        provider: prov,
+        gridIntensity: meta.gridIntensity,
+        mix: meta.mix,
+        carbonStatus: meta.carbonStatus,
+        ec2Count: 0,
+        ebsCount: 0,
+        eipCount: 0,
+        resourceCount: 0,
+        runningEc2: 0,
+        monthlyCost: 0,
+        operationalGco2e: 0,
+        accountSet: new Set<string>(),
+      };
+
+      entry.resourceCount++;
+      entry.monthlyCost += r.monthlyCost || 0;
+      entry.operationalGco2e += opG;
+      entry.accountSet.add(r.cloudAccountId);
+
+      if (computeTypes.has(r.resourceType)) {
+        entry.ec2Count++;
+        if (r.lifecycleState === "running") entry.runningEc2++;
+      } else if (storageTypes.has(r.resourceType)) {
+        entry.ebsCount++;
+      } else if (r.resourceType === "eip") {
+        entry.eipCount++;
+      }
+
+      regionAggMap.set(r.region, entry);
+    }
+
+    const totalOperationalCarbon = resources.some((r) => r.carbonEmissions.length > 0)
+      ? parseFloat(rawOpCarbon.toFixed(2))
+      : null;
+    const totalEmbodiedCarbon = resources.some((r) => r.carbonEmissions.length > 0)
+      ? parseFloat(rawEmbCarbon.toFixed(2))
+      : null;
+    const totalCarbonGrams =
+      totalOperationalCarbon !== null && totalEmbodiedCarbon !== null
+        ? parseFloat((totalOperationalCarbon + totalEmbodiedCarbon).toFixed(2))
+        : null;
+    const sciScore =
+      totalCarbonGrams !== null
+        ? parseFloat((totalCarbonGrams / Math.max(1, functionalUnits)).toFixed(5))
+        : null;
+    const cleanGridSharePct =
+      resources.length > 0 ? Math.round((cleanGridResCount / resources.length) * 100) : 0;
+
+    const byRegion = Array.from(regionAggMap.values()).map((r) => ({
+      region: r.region,
+      name: r.name,
+      provider: r.provider,
+      gridIntensity: r.gridIntensity,
+      ec2Count: r.ec2Count,
+      ebsCount: r.ebsCount,
+      eipCount: r.eipCount,
+      resourceCount: r.resourceCount,
+      accountCount: r.accountSet.size,
+      monthlyCost: parseFloat(r.monthlyCost.toFixed(2)),
+      operationalGco2e: parseFloat(r.operationalGco2e.toFixed(2)),
+    }));
+
+    const regionalGrid = Object.values(CLOUD_REGION_CATALOG).map((meta) => {
+      const live = regionAggMap.get(meta.region);
+      return {
+        region: meta.region,
+        name: meta.name,
+        provider: meta.provider,
+        gridIntensity: meta.gridIntensity,
+        mix: meta.mix,
+        carbonStatus: meta.carbonStatus,
+        resourceCount: live?.resourceCount || 0,
+        monthlyCost: live ? parseFloat(live.monthlyCost.toFixed(2)) : 0,
+        estimatedCarbonGco2e: live ? parseFloat(live.operationalGco2e.toFixed(2)) : 0,
+      };
+    });
+
+    // Multi-Account & Multi-Provider Comparison Rollups
+    const accountComparisonMap = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        provider: CloudProviderId;
+        externalAccountId: string;
+        monthlySpend: number;
+        effectiveCost: number;
+        potentialSavings: number;
+        operationalCarbonG: number;
+        ec2Count: number;
+        ebsCount: number;
+        eipCount: number;
+        resourceCount: number;
+        activeRecCount: number;
+        cpuSum: number;
+        cpuCount: number;
+        lastSyncedAt: string | null;
+      }
+    >();
+
+    for (const acc of selectedAccounts) {
+      accountComparisonMap.set(acc.id, {
+        id: acc.id,
+        name: acc.name,
+        provider: acc.provider,
+        externalAccountId: acc.externalAccountId,
+        monthlySpend: 0,
+        effectiveCost: 0,
+        potentialSavings: 0,
+        operationalCarbonG: 0,
+        ec2Count: 0,
+        ebsCount: 0,
+        eipCount: 0,
+        resourceCount: 0,
+        activeRecCount: 0,
+        cpuSum: 0,
+        cpuCount: 0,
+        lastSyncedAt: acc.syncFreshness ? new Date(acc.syncFreshness).toISOString() : null,
+      });
+    }
+
+    for (const item of currentCostItems) {
+      const acc = accountComparisonMap.get(item.cloudAccountId);
+      if (acc) {
+        acc.monthlySpend += item.billedCost;
+        acc.effectiveCost += item.effectiveCost;
+      }
+    }
+    for (const r of resources) {
+      const acc = accountComparisonMap.get(r.cloudAccountId);
+      if (acc) {
+        acc.resourceCount++;
+        if (computeTypes.has(r.resourceType)) acc.ec2Count++;
+        else if (storageTypes.has(r.resourceType)) acc.ebsCount++;
+        else if (r.resourceType === "eip") acc.eipCount++;
+        acc.operationalCarbonG += r.carbonEmissions?.[0]?.operationalGco2e || 0;
+        const { avgCpu } = parseCpuTelemetry(r.telemetryMetrics);
+        if (avgCpu !== null) {
+          acc.cpuSum += avgCpu;
+          acc.cpuCount++;
+        }
+      }
+    }
+    for (const rec of recommendationsRaw) {
+      if (rec.status === "active" || rec.status === "approved") {
+        const acc = accountComparisonMap.get(rec.resource.cloudAccountId);
+        if (acc) {
+          acc.potentialSavings += rec.estimatedMonthlySavings;
+          if (rec.status === "active") acc.activeRecCount++;
+        }
+      }
+    }
+
+    const byAccountComparison = Array.from(accountComparisonMap.values()).map((a) => ({
+      id: a.id,
+      name: a.name,
+      provider: a.provider,
+      externalAccountId: a.externalAccountId,
+      monthlySpend: parseFloat(a.monthlySpend.toFixed(2)),
+      effectiveCost: parseFloat(a.effectiveCost.toFixed(2)),
+      potentialSavings: parseFloat(a.potentialSavings.toFixed(2)),
+      operationalCarbonG: parseFloat(a.operationalCarbonG.toFixed(2)),
+      ec2Count: a.ec2Count,
+      ebsCount: a.ebsCount,
+      eipCount: a.eipCount,
+      resourceCount: a.resourceCount,
+      activeRecCount: a.activeRecCount,
+      avgCpu: a.cpuCount > 0 ? parseFloat((a.cpuSum / a.cpuCount).toFixed(1)) : null,
+      lastSyncedAt: a.lastSyncedAt,
+    }));
+
+    const providerRollupMap = new Map<
+      CloudProviderId,
+      {
+        provider: CloudProviderId;
+        accountCount: number;
+        monthlySpend: number;
+        effectiveCost: number;
+        potentialSavings: number;
+        operationalCarbonG: number;
+        resourceCount: number;
+        activeRecCount: number;
+      }
+    >();
+    for (const acc of byAccountComparison) {
+      const pEntry = providerRollupMap.get(acc.provider) || {
+        provider: acc.provider,
+        accountCount: 0,
+        monthlySpend: 0,
+        effectiveCost: 0,
+        potentialSavings: 0,
+        operationalCarbonG: 0,
+        resourceCount: 0,
+        activeRecCount: 0,
+      };
+      pEntry.accountCount++;
+      pEntry.monthlySpend += acc.monthlySpend;
+      pEntry.effectiveCost += acc.effectiveCost;
+      pEntry.potentialSavings += acc.potentialSavings;
+      pEntry.operationalCarbonG += acc.operationalCarbonG;
+      pEntry.resourceCount += acc.resourceCount;
+      pEntry.activeRecCount += acc.activeRecCount;
+      providerRollupMap.set(acc.provider, pEntry);
+    }
+
+    const byProviderComparison = Array.from(providerRollupMap.values()).map((p) => ({
+      ...p,
+      monthlySpend: parseFloat(p.monthlySpend.toFixed(2)),
+      effectiveCost: parseFloat(p.effectiveCost.toFixed(2)),
+      potentialSavings: parseFloat(p.potentialSavings.toFixed(2)),
+      operationalCarbonG: parseFloat(p.operationalCarbonG.toFixed(2)),
+    }));
+
+    // Recommendations formatted for UI
+    const formattedRecs = recommendationsRaw.map((rec) => {
+      const acct = accountById.get(rec.resource.cloudAccountId);
+      return {
+        id: rec.id,
+        title: rec.title,
+        category: rec.category,
+        description: rec.description || undefined,
+        terraformHcl: rec.terraformHcl || undefined,
+        estimatedMonthlySavings: rec.estimatedMonthlySavings,
+        estimatedGco2eSavings: rec.estimatedGco2eSavings,
+        riskScore: rec.riskScore,
+        status: rec.status,
+        evidence: rec.evidence,
+        accountName: acct?.name || rec.resource.cloudAccountId,
+        provider: normalizeProviderId(rec.resource.provider || acct?.provider),
+        resource: {
+          providerResourceId: rec.resource.providerResourceId,
+          region: rec.resource.region,
+          resourceType: rec.resource.resourceType,
+        },
+      };
+    });
+
+    const totalSavings = formattedRecs
+      .filter((r) => r.status === "active" || r.status === "approved")
+      .reduce((s, r) => s + r.estimatedMonthlySavings, 0);
+    const totalCarbonSavings = formattedRecs
+      .filter((r) => r.status === "active" || r.status === "approved")
+      .reduce((s, r) => s + r.estimatedGco2eSavings, 0);
+
+    // Tag allocation & hygiene
     let taggedCount = 0;
     let untaggedCount = 0;
     const envMap: Record<string, { count: number; cost: number }> = {
       Production: { count: 0, cost: 0 },
       Staging: { count: 0, cost: 0 },
       Development: { count: 0, cost: 0 },
-      Unallocated: { count: 0, cost: 0 },
+      Untagged: { count: 0, cost: 0 },
     };
     const teamMap: Record<string, { count: number; cost: number }> = {};
 
-    resources.forEach((res) => {
-      let parsedTags: Array<{ Key: string; Value: string }> = [];
-      try {
-        if (res.tags) {
-          const raw = JSON.parse(res.tags);
-          if (Array.isArray(raw)) parsedTags = raw;
-        }
-      } catch {}
-
-      const hasTags = parsedTags.length > 0;
-      if (hasTags) taggedCount++;
+    for (const res of resources) {
+      const tags = parseTagList(res.tags);
+      if (tags.length > 0) taggedCount++;
       else untaggedCount++;
 
-      // Check Environment tag
-      const envTag = parsedTags.find(
-        (t) => t.Key.toLowerCase() === "environment" || t.Key.toLowerCase() === "env"
+      const envTag = tags.find((t) =>
+        ["env", "environment"].includes(t.Key.toLowerCase())
       );
-      let envKey = "Unallocated";
+      let envKey = "Untagged";
       if (envTag?.Value) {
         const val = envTag.Value.toLowerCase();
         if (val.includes("prod")) envKey = "Production";
         else if (val.includes("stag")) envKey = "Staging";
-        else if (val.includes("dev")) envKey = "Development";
-        else envKey = envTag.Value;
+        else if (val.includes("dev") || val.includes("test")) envKey = "Development";
       }
-
-      if (!envMap[envKey]) envMap[envKey] = { count: 0, cost: 0 };
       envMap[envKey].count++;
       envMap[envKey].cost += res.monthlyCost || 0;
 
-      // Check Team / Owner tag
-      const teamTag = parsedTags.find(
-        (t) =>
-          t.Key.toLowerCase() === "owner" ||
-          t.Key.toLowerCase() === "team" ||
-          t.Key.toLowerCase() === "project"
+      const teamTag = tags.find((t) =>
+        ["owner", "team", "project", "costcenter"].includes(t.Key.toLowerCase())
       );
-      const teamKey = teamTag?.Value ? teamTag.Value : "Unassigned";
-      if (!teamMap[teamKey]) teamMap[teamKey] = { count: 0, cost: 0 };
-      teamMap[teamKey].count++;
-      teamMap[teamKey].cost += res.monthlyCost || 0;
-    });
-
-    const totalResCount = resources.length;
-    const tagHygieneScore = totalResCount > 0 ? Math.round((taggedCount / totalResCount) * 100) : 100;
+      const tKey = teamTag?.Value || "Unassigned";
+      if (!teamMap[tKey]) teamMap[tKey] = { count: 0, cost: 0 };
+      teamMap[tKey].count++;
+      teamMap[tKey].cost += res.monthlyCost || 0;
+    }
 
     const byEnvironment = Object.entries(envMap)
-      .filter(([_, data]) => data.count > 0 || _ === "Production" || _ === "Staging" || _ === "Development")
-      .map(([name, data]) => ({
+      .filter(([key, d]) => d.count > 0 || key === "Production" || key === "Staging" || key === "Development")
+      .map(([name, d]) => ({
         name,
-        count: data.count,
-        cost: parseFloat(data.cost.toFixed(2)),
-        percentage: totalResCount > 0 ? Math.round((data.count / totalResCount) * 100) : 0,
+        count: d.count,
+        cost: parseFloat(d.cost.toFixed(2)),
+        percentage: resources.length > 0 ? Math.round((d.count / resources.length) * 100) : 0,
       }));
 
-    const byTeam = Object.entries(teamMap).map(([name, data]) => ({
+    const byTeam = Object.entries(teamMap).map(([name, d]) => ({
       name,
-      count: data.count,
-      cost: parseFloat(data.cost.toFixed(2)),
+      count: d.count,
+      cost: parseFloat(d.cost.toFixed(2)),
     }));
 
-    // 8. Budget & Forecasting / Anomaly Intelligence
-    const targetBudget = 50.0;
-    const spentBudget = totalCost !== null ? totalCost : 0.0;
-    const budgetPace = Math.min(100, Math.round((spentBudget / targetBudget) * 100));
-
-    // Initialize statistical forecasting engine (Holt's linear trend + Z-score anomaly detection)
+    // Forecasting & Anomaly Engine (over selected accounts & window)
     const forecastingEngine = new ForecastingEngine({
-      forecastHorizonDays: 30,
-      targetMonthlyBudget: targetBudget,
+      forecastHorizonDays: Math.min(30, windowDays),
+      targetMonthlyBudget: monthlyBudget,
       zScoreThreshold: 2.5,
     });
-
     const dailyHistory = dailyTrend.map((d) => ({
       date: d.date,
       cost: d.cost,
-      carbonGco2e: totalOperationalCarbon ? parseFloat(((d.cost / Math.max(0.01, totalCost || 1)) * totalOperationalCarbon).toFixed(1)) : 0,
+      carbonGco2e:
+        totalOperationalCarbon && totalCost
+          ? parseFloat(((d.cost / Math.max(0.01, totalCost)) * totalOperationalCarbon).toFixed(1))
+          : 0,
     }));
+    const forecastResult = forecastingEngine.analyze(dailyHistory, monthlyBudget);
 
-    const forecastResult = forecastingEngine.analyze(dailyHistory, targetBudget);
+    const activeRegionsWithRunningCompute = Array.from(regionAggMap.values())
+      .filter((r) => r.runningEc2 > 0)
+      .map((r) => r.region);
+    const isMultiRegionRunning = activeRegionsWithRunningCompute.length > 1;
+    const multiRegionBurn = byRegion
+      .filter((r) => activeRegionsWithRunningCompute.includes(r.region))
+      .reduce((s, r) => s + r.monthlyCost, 0);
 
-    // Merge multi-region active alert into anomaly list if present
     const combinedAnomalies = [
-      ...(isMultiRegionRunning ? [{
-        id: "anomaly-multi-region-0",
-        date: new Date().toISOString().split("T")[0],
-        dimension: "region" as const,
-        entityName: `Multi-Region Fleet (${activeRegionsWithRunningCompute.join(", ")})`,
-        actualCost: multiRegionAlert?.monthlyBurnEstimate || 0,
-        expectedBaseline: 0,
-        deviationPercent: 100,
-        zScore: 2.8,
-        severity: "warning" as const,
-        rootCauseHint: "Simultaneous active instances running in multiple independent AWS regions.",
-        recommendedAction: "Consolidate idle instances into a primary deployment region.",
-      }] : []),
+      ...(isMultiRegionRunning
+        ? [
+            {
+              id: "anomaly-multi-region",
+              date: now.toISOString().split("T")[0],
+              dimension: "region",
+              entityName: `Multi-Region Compute (${activeRegionsWithRunningCompute.join(", ")})`,
+              actualCost: parseFloat(multiRegionBurn.toFixed(2)),
+              expectedBaseline: 0,
+              deviationPercent: 100,
+              zScore: 2.8,
+              severity: "warning",
+              rootCauseHint:
+                "Running compute nodes span multiple active cloud regions across selected accounts.",
+              recommendedAction:
+                "Consolidate non-HA dev workloads into lower-carbon primary regions.",
+            },
+          ]
+        : []),
       ...forecastResult.anomalies.items,
     ];
 
-    // 9. Latest Audit Logs
-    const auditLogs = await prisma.auditLog.findMany({
-      where: { tenantId: tenant.id },
-      orderBy: { ts: "desc" },
-      take: 12,
-    });
+    const spentBudget = totalCost !== null ? totalCost : 0;
+    const budgetPace = Math.min(100, Math.round((spentBudget / Math.max(1, monthlyBudget)) * 100));
 
     return NextResponse.json({
+      scope: {
+        accountIds: selectedAccountIds,
+        providers: Array.from(providerFilterSet),
+        window: windowLabel,
+        role: roleParam,
+        isMultiAccount: selectedAccountIds.length > 1,
+        isMultiProvider: byProviderComparison.length > 1,
+      },
+      workspaceConfig: {
+        monthlyBudget,
+        functionalUnits,
+        activeRole: tenant.activeRole || "admin",
+      },
       account: activeAccount,
+      selectedAccounts,
       allAccounts,
       resources: {
         total: resources.length,
@@ -658,7 +843,7 @@ export async function GET(request: Request) {
         ebs: enrichedEbsList,
         eip: enrichedEipList,
         byRegion,
-        runningEc2Count: ec2List.filter((i) => i.lifecycleState === "running").length,
+        runningEc2Count: computeResources.filter((i) => i.lifecycleState === "running").length,
         stoppedEc2Count: stoppedCount,
         byState: {
           healthy: healthyCount,
@@ -667,28 +852,56 @@ export async function GET(request: Request) {
           stopped: stoppedCount,
         },
       },
-      scanCoverage,
-      multiRegionAlert,
+      scanCoverage: {
+        totalMonitoredRegions: Object.keys(CLOUD_REGION_CATALOG).length,
+        allMonitoredRegions: Object.keys(CLOUD_REGION_CATALOG),
+        activeRegionsWithResources: byRegion.map((r) => r.region),
+        activeRegionsWithRunningCompute,
+        isMultiRegionRunning,
+      },
+      multiRegionAlert: isMultiRegionRunning
+        ? {
+            regionsCount: activeRegionsWithRunningCompute.length,
+            regions: activeRegionsWithRunningCompute,
+            monthlyBurnEstimate: parseFloat(multiRegionBurn.toFixed(2)),
+          }
+        : null,
       costs: {
         totalCost,
-        dailyBurnRate: totalCost !== null ? parseFloat((totalCost / Math.max(1, now.getUTCDate())).toFixed(2)) : null,
-        priorMonthCost: totalCost !== null ? parseFloat((totalCost * 0.94).toFixed(2)) : null,
+        effectiveCostTotal,
+        discountSavings,
+        dailyBurnRate:
+          totalCost !== null
+            ? parseFloat((totalCost / Math.max(1, dailyTrend.length || now.getUTCDate())).toFixed(2))
+            : null,
+        priorPeriodCost,
         byService: byServiceCosts,
         dailyTrend,
+        dailyByAccount,
+        dailyByProvider,
       },
       tagAllocation: {
-        hygieneScore: tagHygieneScore,
+        hygieneScore:
+          resources.length > 0 ? Math.round((taggedCount / resources.length) * 100) : 100,
         taggedCount,
         untaggedCount,
         byEnvironment,
         byTeam,
       },
       budget: {
-        target: targetBudget,
+        target: monthlyBudget,
         spent: spentBudget,
         pacePercentage: budgetPace,
-        projectedMonthEnd: forecastResult.monthEndProjectedCost > 0 ? forecastResult.monthEndProjectedCost : (totalCost !== null ? parseFloat((totalCost * 1.05).toFixed(2)) : 0.0),
-        status: spentBudget > targetBudget ? "exceeded" : spentBudget > targetBudget * 0.8 ? "warning" : "healthy",
+        projectedMonthEnd:
+          forecastResult.monthEndProjectedCost > 0
+            ? forecastResult.monthEndProjectedCost
+            : totalCost || 0,
+        status:
+          spentBudget > monthlyBudget
+            ? "exceeded"
+            : spentBudget > monthlyBudget * 0.8
+            ? "warning"
+            : "healthy",
         riskLevel: forecastResult.budgetRisk,
         next30DaysProjected: forecastResult.next30DaysProjectedCost,
         trendVelocity: forecastResult.trendVelocity,
@@ -707,26 +920,27 @@ export async function GET(request: Request) {
         detectedCount: combinedAnomalies.length,
         criticalCount: combinedAnomalies.filter((a) => a.severity === "critical").length,
         warningCount: combinedAnomalies.filter((a) => a.severity === "warning").length,
-        message: forecastResult.anomalies.hasAnomalies
-          ? forecastResult.anomalies.message
-          : (isMultiRegionRunning
-            ? `Active compute running across ${activeRegionsWithRunningCompute.length} AWS regions (${activeRegionsWithRunningCompute.join(", ")}).`
-            : "Spend and carbon telemetry within nominal bounds (0 anomalies detected)."),
+        message:
+          combinedAnomalies.length > 0
+            ? `${combinedAnomalies.length} spend or placement signal(s) flagged.`
+            : `Telemetry nominal across selected accounts (${windowLabel} window).`,
         items: combinedAnomalies,
       },
       carbon: {
         totalOperationalCarbon,
         totalEmbodiedCarbon,
-        totalCarbon,
+        totalCarbon: totalCarbonGrams,
         sciScore,
         functionalUnits,
+        cleanGridSharePct,
         regionalGrid,
       },
       recommendations: {
-        items: activeAccountRecs,
-        totalSavings: activeAccountRecs.length > 0 ? parseFloat(totalSavings.toFixed(2)) : null,
-        totalCarbonSavings: activeAccountRecs.length > 0 ? parseFloat(totalCarbonSavings.toFixed(2)) : null,
-        activeCount: activeAccountRecs.filter((r) => r.status === "active").length,
+        items: formattedRecs,
+        totalSavings: formattedRecs.length > 0 ? parseFloat(totalSavings.toFixed(2)) : null,
+        totalCarbonSavings:
+          formattedRecs.length > 0 ? parseFloat(totalCarbonSavings.toFixed(2)) : null,
+        activeCount: formattedRecs.filter((r) => r.status === "active").length,
       },
       cpuDistribution: {
         band0_20,
@@ -737,20 +951,31 @@ export async function GET(request: Request) {
         potentialRightsizingSavings: band0_20 > 0 ? band0_20 * 18.5 : 0,
       },
       inventory: {
-        ec2Total: ec2List.length,
+        ec2Total: computeResources.length,
         ec2Healthy: healthyCount,
         ec2Review: underutilizedCount + stoppedCount,
-        ebsTotal: ebsList.length,
-        ebsAttached: ebsList.filter((v) => v.lifecycleState === "in-use").length,
-        ebsIdle: ebsList.filter((v) => v.lifecycleState === "available").length,
-        eipTotal: eipList.length,
-        eipAssociated: eipList.filter((e) => e.lifecycleState === "associated").length,
-        eipUnused: eipList.filter((e) => e.lifecycleState === "unassociated").length,
-        activeRegions,
-        rdsCount: 0,
-        natCount: 0,
+        ebsTotal: storageResources.length,
+        ebsAttached: storageResources.filter((v) => v.lifecycleState === "in-use").length,
+        ebsIdle: storageResources.filter(
+          (v) => v.lifecycleState === "available" || v.lifecycleState === "unattached"
+        ).length,
+        eipTotal: networkResources.length,
+        eipAssociated: networkResources.filter((e) => e.lifecycleState === "associated").length,
+        eipUnused: networkResources.filter((e) => e.lifecycleState === "unassociated").length,
+        activeRegions: byRegion.map((r) => r.region),
       },
-      auditLogs,
+      comparisons: {
+        byAccount: byAccountComparison,
+        byProvider: byProviderComparison,
+      },
+      auditLogs: auditLogsRaw.map((l) => ({
+        id: l.id,
+        ts: l.ts.toISOString(),
+        actor: l.actor,
+        action: l.action,
+        targetType: l.objectType,
+        targetId: l.objectId,
+      })),
     });
   } catch (error: any) {
     return NextResponse.json(

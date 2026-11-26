@@ -11,48 +11,73 @@ model Tenant {
   id                 String               @id @default(uuid())
   name               String
   plan               String               @default("standard")
+  monthlyBudget      Float                @default(150.0)
+  functionalUnits    Int                  @default(100000)
+  activeRole         String               @default("admin")
   createdAt          DateTime             @default(now())
   cloudAccounts      CloudAccount[]
   recommendations    Recommendation[]
   auditLogs          AuditLog[]
+  users              User[]
+  roles              Role[]
+  roleAssignments    RoleAssignment[]
+  syncJobs           SyncJob[]
+  dataQualityReports DataQualityReport[]
+  workloads          Workload[]
+  k8sAllocations     K8sWorkloadAllocation[]
 }
 
 model CloudAccount {
-  id                 String               @id @default(uuid())
+  id                 String                  @id @default(uuid())
   tenantId           String
-  tenant             Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  provider           String               // e.g. "aws"
+  tenant             Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider           String                  // "aws" | "gcp" | "azure" | "kubernetes"
   externalAccountId  String
   name               String
-  status             String               // "pending_validation", "active", "sync_failed"
+  status             String                  // "pending_validation", "active", "sync_failed"
+  primaryRegion      String                  @default("us-east-1")
+  providerConfig     String?                 // Optional JSON for GCP/Azure dataset/subscription metadata
   roleArn            String?
-  externalId         String?              // STS AssumeRole ExternalId for confused deputy protection
-  encryptedAccessKey String?              // AES-256-GCM encrypted
-  encryptedSecretKey String?              // AES-256-GCM encrypted
+  externalId         String?                 // STS AssumeRole ExternalId for confused deputy protection
+  encryptedAccessKey String?                 // AES-256-GCM encrypted
+  encryptedSecretKey String?                 // AES-256-GCM encrypted
   syncFreshness      DateTime?
   syncError          String?
   resources          CloudResource[]
   costLineItems      CostLineItem[]
+  syncJobs           SyncJob[]
+  dataQualityReports DataQualityReport[]
+  k8sAllocations     K8sWorkloadAllocation[]
+
+  @@index([tenantId, provider])
 }
 
 model CloudResource {
   id                 String               @id @default(uuid())
   cloudAccountId     String
   cloudAccount       CloudAccount         @relation(fields: [cloudAccountId], references: [id], onDelete: Cascade)
+  provider           String               @default("aws")
   providerResourceId String
-  resourceType       String               // e.g. "ec2", "ebs", "eip"
+  resourceType       String               // e.g. "ec2", "ebs", "eip", "gce_vm", "azure_vm", "disk"
+  serviceCategory    String               @default("Compute") // FOCUS ServiceCategory
+  serviceName        String?              // FOCUS ServiceName
   region             String
-  lifecycleState     String               // e.g. "running", "available", "unassociated"
+  lifecycleState     String               // e.g. "running", "available", "unassociated", "stopped"
   tags               String               // Store JSON string of tags
-  instanceType       String?              // EC2 instance type (e.g. "t3.medium", "m5.large")
-  sizeGb             Float?               // EBS volume size in GB
+  instanceType       String?              // Instance / machine SKU
+  sizeGb             Float?               // Storage size in GB
   monthlyCost        Float?               // Estimated monthly cost in USD
-  telemetryMetrics   String?              // JSON: CloudWatch CPU/Memory time series
+  telemetryMetrics   String?              // JSON: CPU/Memory time series
   firstSeenAt        DateTime             @default(now())
   lastSeenAt         DateTime             @default(now())
   costLineItems      CostLineItem[]
   carbonEmissions    CarbonEmission[]
   recommendations    Recommendation[]
+  workloadResources  WorkloadResource[]
+
+  @@index([cloudAccountId, resourceType])
+  @@index([provider, region])
+  @@index([serviceCategory])
 }
 
 model CostLineItem {
@@ -61,11 +86,22 @@ model CostLineItem {
   cloudAccount       CloudAccount         @relation(fields: [cloudAccountId], references: [id], onDelete: Cascade)
   resourceId         String?
   resource           CloudResource?       @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  workloadId         String?
+  workload           Workload?            @relation(fields: [workloadId], references: [id], onDelete: SetNull)
+  provider           String               @default("aws")
+  region             String               @default("global")
   chargeDate         DateTime
-  providerService    String               // e.g. "AmazonEC2"
+  providerService    String               // FOCUS ServiceName
+  serviceCategory    String               @default("Compute") // FOCUS ServiceCategory
+  chargeCategory     String               @default("Usage")   // "Usage" | "Purchase" | "Tax" | "Adjustment"
   billedCost         Float
   effectiveCost      Float
   currency           String               @default("USD")
+
+  @@index([cloudAccountId, chargeDate])
+  @@index([provider, region, chargeDate])
+  @@index([providerService])
+  @@index([workloadId])
 }
 
 model CarbonEmission {
@@ -88,7 +124,18 @@ model Recommendation {
   resource                CloudResource        @relation(fields: [resourceId], references: [id], onDelete: Cascade)
   category                String               // "idle_cleanup", "rightsizing"
   title                   String
+  description             String?
+  terraformHcl            String?
   status                  String               // "active", "approved", "dismissed", "executed"
+  lifecycleState          String               @default("recommended")
+  targetSku               String?
+  targetConfig            String?
+  isParetoOptimal         Boolean              @default(false)
+  overlapGroupId          String?
+  requestedByUserId       String?
+  approvedByUserId        String?
+  executedByUserId        String?
+  externalChangeId        String?
   estimatedMonthlySavings Float
   estimatedGco2eSavings   Float
   riskScore               Float
@@ -96,6 +143,11 @@ model Recommendation {
   evidence                String               // JSON string of calculations
   createdAt               DateTime             @default(now())
   approvals               Approval[]
+  lifecycleTransitions    LifecycleTransition[]
+  verificationOutcomes    VerificationOutcome[]
+
+  @@index([tenantId, lifecycleState])
+  @@index([overlapGroupId])
 }
 
 model Approval {
@@ -118,4 +170,239 @@ model AuditLog {
   objectId           String
   ts                 DateTime             @default(now())
   metadata           String?              // JSON metadata string
+}
+
+// ─── Milestone 2: Security, Organization, and Database-Backed RBAC ─────────────
+
+model User {
+  id                  String           @id @default(uuid())
+  tenantId            String
+  tenant              Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email               String
+  displayName         String
+  status              String           @default("active") // "active" | "disabled"
+  externalAuthSubject String?
+  createdAt           DateTime         @default(now())
+  roleAssignments     RoleAssignment[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId, status])
+}
+
+model Role {
+  id              String           @id @default(uuid())
+  tenantId        String?
+  tenant          Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  slug            String           @unique
+  name            String
+  description     String
+  isSystem        Boolean          @default(true)
+  permissions     RolePermission[]
+  roleAssignments RoleAssignment[]
+}
+
+model Permission {
+  id              String           @id @default(uuid())
+  key             String           @unique
+  category        String
+  description     String
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  effect       String     @default("allow") // "allow" | "deny"
+
+  @@unique([roleId, permissionId])
+}
+
+model RoleAssignment {
+  id         String   @id @default(uuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId     String
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  scopeType  String   @default("organization") // "organization" | "provider" | "account" | "region" | "service" | "resource" | "workload"
+  scopeId    String   @default("*")
+  effect     String   @default("allow") // "allow" | "deny"
+  assignedBy String
+  createdAt  DateTime @default(now())
+
+  @@unique([tenantId, userId, roleId, scopeType, scopeId])
+  @@index([tenantId, userId])
+  @@index([scopeType, scopeId])
+}
+
+// ─── Milestone 3 & 4: Multi-Account Sync Jobs, Data Quality, Workloads ────────
+
+model SyncJob {
+  id                 String              @id @default(uuid())
+  tenantId           String
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cloudAccountId     String?
+  cloudAccount       CloudAccount?       @relation(fields: [cloudAccountId], references: [id], onDelete: Cascade)
+  provider           String
+  triggerType        String              // "manual" | "scheduled" | "webhook" | "focus_import"
+  status             String              // "queued" | "running" | "completed" | "partial" | "failed"
+  startedAt          DateTime            @default(now())
+  finishedAt         DateTime?
+  subSourceStatuses  String              @default("{}") // JSON map of sub-source statuses
+  recordsIngested    Int                 @default(0)
+  errorSummary       String?
+  cursor             String?
+  attemptCount       Int                 @default(1)
+  dataQualityReports DataQualityReport[]
+
+  @@index([tenantId, startedAt])
+  @@index([cloudAccountId, status])
+}
+
+model DataQualityReport {
+  id                 String        @id @default(uuid())
+  tenantId           String
+  tenant             Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cloudAccountId     String?
+  cloudAccount       CloudAccount? @relation(fields: [cloudAccountId], references: [id], onDelete: Cascade)
+  syncJobId          String?
+  syncJob            SyncJob?      @relation(fields: [syncJobId], references: [id], onDelete: SetNull)
+  completenessPct    Float
+  freshnessMinutes   Int
+  tagCoveragePct     Float
+  unallocatedCostPct Float
+  billingReconciled  Boolean       @default(false)
+  sourceMode         String        // "live_api" | "focus_import" | "sandbox_fixture"
+  missingSignals     String        @default("[]") // JSON array
+  createdAt          DateTime      @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([cloudAccountId])
+}
+
+model Workload {
+  id                   String                  @id @default(uuid())
+  tenantId             String
+  tenant               Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                 String
+  environment          String                  @default("production")
+  owner                String
+  criticality          String                  @default("standard") // "critical" | "high" | "standard" | "low"
+  latencySloMs         Float?
+  minAvailabilityPct   Float?
+  requiredArchitecture String?
+  requiredRegion       String?
+  cpuHeadroomPct       Float                   @default(20.0)
+  memoryHeadroomPct    Float                   @default(20.0)
+  createdAt            DateTime                @default(now())
+  workloadResources    WorkloadResource[]
+  costLineItems        CostLineItem[]
+  k8sAllocations       K8sWorkloadAllocation[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, environment])
+}
+
+model WorkloadResource {
+  id              String        @id @default(uuid())
+  workloadId      String
+  workload        Workload      @relation(fields: [workloadId], references: [id], onDelete: Cascade)
+  resourceId      String
+  resource        CloudResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  allocationRatio Float         @default(1.0)
+
+  @@unique([workloadId, resourceId])
+}
+
+// ─── Milestone 11: Kubernetes / OpenCost Allocations ──────────────────────────
+
+model K8sWorkloadAllocation {
+  id                String        @id @default(uuid())
+  tenantId          String
+  tenant            Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cloudAccountId    String?
+  cloudAccount      CloudAccount? @relation(fields: [cloudAccountId], references: [id], onDelete: Cascade)
+  workloadId        String?
+  workload          Workload?     @relation(fields: [workloadId], references: [id], onDelete: SetNull)
+  clusterName       String
+  namespace         String
+  deployment        String
+  podName           String
+  cpuRequested      Float
+  cpuLimit          Float
+  cpuP95            Float
+  memoryRequestedGb Float
+  memoryP95Gb       Float
+  monthlyCost       Float
+  idleSlackCost     Float
+  energyKwh         Float
+  operationalGco2e  Float
+  sourceMode        String        // "live_api" | "sandbox_fixture"
+  ts                DateTime      @default(now())
+
+  @@index([tenantId, clusterName, namespace])
+  @@index([workloadId])
+}
+
+// ─── Milestones 7-10: Compatibility Catalog, Lifecycle, Billing Verification ──
+
+model CompatibilitySku {
+  id              String   @id @default(uuid())
+  provider        String
+  serviceType     String   // "ec2" | "ebs" | "eip" | "rds" | "s3" | "azure_vm" | "managed_disk" | "azure_sql" | "gce_vm" | "persistent_disk" | "cloud_sql" | "k8s_pod" | "k8s_node"
+  skuName         String
+  region          String
+  vcpu            Float
+  memoryGb        Float
+  architecture    String   // "x86_64" | "arm64"
+  availabilityPct Float
+  hourlyPriceUsd  Float
+  monthlyPriceUsd Float
+  iops            Int?
+  effectiveDate   DateTime
+  sourceVersion   String
+
+  @@unique([provider, serviceType, skuName, region, sourceVersion])
+  @@index([provider, serviceType, region])
+}
+
+model LifecycleTransition {
+  id               String         @id @default(uuid())
+  recommendationId String
+  recommendation   Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  fromState        String
+  toState          String
+  actorUserId      String
+  actorRole        String
+  reason           String?
+  artifactPath     String?
+  metadata         String         @default("{}")
+  ts               DateTime       @default(now())
+
+  @@index([recommendationId, ts])
+}
+
+model VerificationOutcome {
+  id                   String         @id @default(uuid())
+  recommendationId     String
+  recommendation       Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  baselineStart        DateTime
+  baselineEnd          DateTime
+  postChangeStart      DateTime
+  postChangeEnd        DateTime
+  expectedBaselineCost Float
+  actualPostChangeCost Float
+  verifiedSavings      Float
+  verifiedSavingsPct   Float?
+  uncertaintyPct       Float
+  guardrailPassed      Boolean
+  confounders          String         @default("[]")
+  verdict              String         // "verified" | "partial" | "inconclusive" | "failed"
+  verifiedAt           DateTime       @default(now())
+
+  @@index([recommendationId, verifiedAt])
 }

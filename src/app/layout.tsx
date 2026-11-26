@@ -23,7 +23,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GreenCloud AI — Cloud Optimization Platform",
+  title: "GreenCloud AI | Cloud Optimization Platform",
   description: "Cloud cost and carbon optimization workspace connecting infrastructure telemetry, billing, and auditable governance.",
 };
 

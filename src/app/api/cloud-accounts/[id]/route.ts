@@ -32,6 +32,12 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    if (request.headers.get("x-greencloud-role") === "viewer") {
+      return NextResponse.json(
+        { error: { code: "FORBIDDEN", message: "Read-Only Viewer cannot disconnect accounts." } },
+        { status: 403 }
+      );
+    }
     const tenant = await seedDefaultTenant();
     const db = new TenantIsolatedDb(tenant.id);
 
