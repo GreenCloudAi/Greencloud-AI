@@ -1,0 +1,1054 @@
+==========================================================================================
+
+                              PROJECT ID: [To be filled]
+
+                                       REPORT ON
+                                MINI PROJECT "GREENCLOUD AI"
+                 An Intelligent FinOps and GreenOps Platform for Reducing Cloud
+                                Cost and Carbon Emissions
+
+                Submitted in partial fulfillment of the requirement for the degree of
+                                 BACHELOR OF TECHNOLOGY
+                                    IN [Branch]
+
+                                      PRESENTED BY
+                     Anshul Yadav          |    Roll No.: [To be filled]
+                     Anjishnu Srivastava   |    Roll No.: [To be filled]
+                     Anubhav Bansal        |    Roll No.: [To be filled]
+                     Aru Pandey            |    Roll No.: [To be filled]
+
+                                UNDER THE SUPERVISION OF
+                                   [Supervisor Name]
+
+                                   [INSTITUTE NAME]
+                       Affiliated to [University], [City, State]
+                                   SESSION 2026-27
+
+==========================================================================================
+
+
+------------------------------------------------------------------------------------------
+                                       CERTIFICATE
+------------------------------------------------------------------------------------------
+
+This is to certify that the mini-project report entitled "GreenCloud AI" is submitted by
+Anshul Yadav ([Roll No.]), Anjishnu Srivastava ([Roll No.]), Anubhav Bansal ([Roll No.]),
+and Aru Pandey ([Roll No.]), students of the Department of [Department], [Institute Name].
+
+The work presented in this report has been prepared as part of the academic mini-project
+requirements for the Bachelor of Technology programme. The report describes the problem,
+objectives, literature background, methodology, system architecture, implementation, and
+validation status of a FinOps and GreenOps platform that connects to a cloud account,
+discovers resources, measures cost and carbon, and produces evidence-backed optimization
+recommendations.
+
+The final approval and certification are subject to review and signature by the project
+supervisor and the institute.
+
+    Project Supervisor                    Head of Department                    Date
+    Name: [Supervisor Name]               Name: [HOD Name]                      [DD/MM/YYYY]
+    Signature: _______________            Signature: _______________
+
+
+------------------------------------------------------------------------------------------
+                                       DECLARATION
+------------------------------------------------------------------------------------------
+
+We hereby declare that the mini-project report entitled "GreenCloud AI" is prepared by our
+team as part of the academic requirements of the Bachelor of Technology programme at
+[Institute Name].
+
+The material included in this report is based on the GreenCloud AI source code repository,
+its design documents, and the technical and research sources cited in the references.
+Wherever external ideas, documentation, or research findings have been used, the
+corresponding sources have been acknowledged.
+
+We understand that the implementation details and results in this report are described as
+planned design and planned validation wherever working code, test logs, or measured
+experimental results are not available in the repository.
+
+    Name                      Roll Number            Signature
+    ----------------------    -------------------    ----------------
+    Anshul Yadav              [To be filled]         ________________
+    Anjishnu Srivastava       [To be filled]         ________________
+    Anubhav Bansal            [To be filled]         ________________
+    Aru Pandey                [To be filled]         ________________
+
+
+------------------------------------------------------------------------------------------
+                                     ACKNOWLEDGEMENT
+------------------------------------------------------------------------------------------
+
+We express our sincere gratitude to [Institute Name] for providing the academic environment
+and opportunity to undertake the mini-project "GreenCloud AI".
+
+We are thankful to our project supervisor and the faculty members of the Department of
+[Department] for their guidance, feedback, and encouragement during the planning and
+development of this project.
+
+We also acknowledge the researchers, standards bodies, open-source communities, and cloud
+providers whose publications and documentation helped us understand cloud cost management
+(FinOps), the Green Software Foundation's Software Carbon Intensity (SCI) specification,
+cloud carbon estimation, time-series forecasting, and safe cloud automation.
+
+Finally, we thank our teammates and everyone who contributed suggestions and support toward
+the completion of this project report.
+
+
+------------------------------------------------------------------------------------------
+                                          INDEX
+------------------------------------------------------------------------------------------
+
+    Chapter   Section                                              Page No.
+    -------   --------------------------------------------------   --------
+       1      PROBLEM STATEMENT AND OBJECTIVES                     [  ]
+       2      ABSTRACT                                             [  ]
+       3      INTRODUCTION                                         [  ]
+       4      LITERATURE REVIEW                                    [  ]
+       5      PROPOSED METHODOLOGY                                 [  ]
+       6      IMPLEMENTATION AND RESULTS                           [  ]
+       7      MAPPING WITH SUSTAINABLE DEVELOPMENT GOALS           [  ]
+       8      CONCLUSION AND FUTURE SCOPE                          [  ]
+       9      REFERENCES                                           [  ]
+              APPENDIX A - REPORT PREPARATION NOTES                [  ]
+
+
+==========================================================================================
+1. PROBLEM STATEMENT AND OBJECTIVES
+==========================================================================================
+
+1.1 Problem Statement
+---------------------
+Public cloud platforms make it easy to start computing resources and easy to forget them.
+Engineers launch virtual machines, storage volumes, static IP addresses, and other
+resources for testing or temporary workloads, and those resources keep billing after they
+are no longer needed. Instances are also commonly over-provisioned "to be safe", so a
+machine that peaks at 15-20% CPU continues to be billed at the price of a much larger size.
+
+Cost information arrives late. Cloud bills typically become visible 24-48 hours after
+usage, which means waste is often discovered only at month-end. Native provider tools are
+scoped to one provider and mostly advisory: they show dashboards and recommendations but do
+not close the loop with evidence, approval, and safe execution.
+
+Cloud usage also has an environmental cost. Every running server draws electricity, and the
+carbon emitted per kilowatt-hour depends heavily on the region's electricity grid. The same
+workload can produce many times more emissions in a coal-heavy region than in a
+hydro-powered one. Carbon reports differ between providers in scope, granularity, and
+method, and are rarely connected to the specific resources a team can change.
+
+During development, the team also observed a practical visibility problem: when an AWS
+account was scanned only in the default region (us-east-1), an EC2 instance actively
+running in ap-south-1 (Mumbai) was not reported correctly. Incomplete visibility leads to
+wrong conclusions, which is worse than having no optimization tool at all.
+
+Therefore, the problem addressed by GreenCloud AI is the need for a single platform that
+(a) connects securely to a cloud account with read-only access, (b) discovers resources in
+every enabled region, (c) reconciles cost with the provider's billing data, (d) estimates
+operational and embodied carbon per resource, (e) detects idle and oversized resources,
+and (f) presents ranked, evidence-backed recommendations that people can review, approve,
+and act on with an audit trail.
+
+1.2 Objectives
+--------------
+  * Build a secure onboarding flow through which a user can connect an AWS account using a
+    cross-account IAM role (STS AssumeRole with External ID) or encrypted access keys,
+    without the platform holding shared static credentials.
+  * Discover EC2 instances, EBS volumes, and Elastic IP addresses across all enabled AWS
+    regions, and record each resource with its region, lifecycle state, and monthly cost.
+  * Collect CPU utilization telemetry from Amazon CloudWatch for running instances.
+  * Reconcile billed spend with AWS Cost Explorer so the dashboard reflects actual charges.
+  * Estimate operational and embodied carbon emissions per resource using region-specific
+    grid carbon intensity, and compute a Software Carbon Intensity (SCI) score.
+  * Generate rule-based recommendations for idle instances, unattached volumes, unused
+    Elastic IPs, and rightsizing to smaller or Graviton (Arm64) machines, each with risk
+    score, confidence, savings estimate, and calculation evidence.
+  * Forecast cost and carbon 30 days ahead with confidence bounds, and detect spending
+    anomalies statistically.
+  * Provide a human-in-the-loop approval workflow, ticket/PR blueprints, and an audit log
+    of every connection, sync, and approval action.
+  * Provide a dashboard for cost, sustainability, optimization, and executive reporting.
+
+1.3 Scope of the Project
+------------------------
+The project scope is a college mini-project that demonstrates a working FinOps + GreenOps
+pipeline for Amazon Web Services (AWS). It covers secure account connection, multi-region
+resource discovery, CloudWatch telemetry, Cost Explorer reconciliation, carbon estimation,
+recommendation generation, forecasting and anomaly detection, an approval workflow, audit
+logging, and a web dashboard. Azure, Google Cloud, Kubernetes cost allocation, live grid
+carbon APIs, enterprise authentication, and automatic infrastructure changes are described
+as future scope. The project does not claim that its carbon figures are audited emissions
+or that its heuristics identify the optimal configuration for every workload.
+
+1.4 Expected Outcome
+--------------------
+The intended outcome is a prototype in which a user connects an AWS account through the
+onboarding wizard, triggers a telemetry sync, and sees on the dashboard: billed spend
+reconciled with Cost Explorer, a multi-region resource inventory, per-resource carbon
+estimates, ranked recommendations with evidence, cost/carbon forecasts with anomaly flags,
+and an exportable executive report. Approving or dismissing a recommendation is recorded in
+the audit history.
+
+
+==========================================================================================
+2. ABSTRACT
+==========================================================================================
+
+Cloud computing costs and cloud-related carbon emissions both grow when resources are left
+idle or over-provisioned, yet most teams discover waste only after the bill arrives.
+GreenCloud AI addresses this problem with a FinOps and GreenOps platform that connects to
+an AWS account using read-only access, discovers resources across all enabled regions, and
+turns raw billing and telemetry data into evidence-backed optimization recommendations. The
+system is built with Next.js 14, React 18, and TypeScript for the frontend and API routes,
+Prisma ORM with SQLite for persistence, and the AWS SDK v3 (STS, EC2, CloudWatch, Cost
+Explorer) for cloud integration. Credentials provided by users are encrypted at rest with
+AES-256-GCM. A carbon engine estimates operational emissions from vCPU power draw and
+region-specific grid intensity (gCO2e/kWh), adds an embodied-hardware share, and computes a
+Green Software Foundation SCI score. A rule-based recommendation engine flags idle
+instances (average CPU below 5%), unattached EBS volumes, unassociated Elastic IPs, and
+rightsizing opportunities (peak CPU below 40%), mapping each instance to a smaller x86 or
+AWS Graviton target from a built-in machine catalogue, with a risk score, confidence value,
+and calculation evidence. A forecasting engine applies damped Holt's linear trend smoothing
+to project cost and carbon for 30 days with 95% confidence bounds, and detects anomalies
+using rolling Z-scores (>= 2.5 sigma) and the interquartile range. Recommendations follow a
+human-in-the-loop approval workflow, and every action is written to an audit log. The
+dashboard provides Overview, Cost & Usage, Sustainability, Optimization, and Executive
+Report sections. The project is partially implemented: the AWS pipeline, forecasting,
+recommendations, and dashboard are working, while multi-cloud connectors, live grid-carbon
+APIs, enterprise authentication, and real infrastructure execution remain future work.
+
+Keywords: FinOps, GreenOps, Cloud Cost Optimization, Carbon Accounting, Software Carbon
+Intensity, AWS, Rightsizing, Time-Series Forecasting, Anomaly Detection.
+
+
+==========================================================================================
+3. INTRODUCTION
+==========================================================================================
+
+3.1 Background
+--------------
+Cloud computing lets organizations rent compute, storage, and networking on demand instead
+of buying hardware. Billing is usage-based: each running instance, attached volume, and
+reserved IP address accrues charges by the hour or by the gigabyte. This flexibility is
+valuable, but it also means that every forgotten or oversized resource keeps costing money.
+
+FinOps is the operating practice of making cloud spending visible, attributable, and
+optimizable. The FinOps Foundation framework groups this work into domains such as
+understanding usage and cost, quantifying business value, optimizing usage and cost, and
+managing the FinOps practice, with capabilities including data ingestion, allocation,
+forecasting, anomaly management, and automation.
+
+GreenOps extends FinOps with carbon measurement and reduction. The Green Software
+Foundation's Software Carbon Intensity (SCI) specification states that software emissions
+come from the energy consumed by hardware and from the emissions associated with
+manufacturing that hardware, and recommends energy efficiency, hardware efficiency, and
+carbon-aware actions.
+
+3.2 Need for a Combined FinOps + GreenOps Platform
+--------------------------------------------------
+Cost and carbon are closely linked. An idle instance wastes money and electricity at the
+same time; moving a workload to a more efficient processor (for example, AWS Graviton Arm64)
+or to a cleaner region can reduce both. Yet cost tools and carbon tools are typically
+separate, and carbon reports are rarely tied to specific resources that an engineer can
+change. GreenCloud AI is designed as a decision system rather than only a dashboard. It
+aims to answer:
+
+  1. What are we spending, and on what?
+  2. Which resources are idle, oversized, or carbon-intensive?
+  3. What will spending and emissions look like over the next month?
+  4. Which action saves the most money and gCO2e with the lowest risk?
+  5. What evidence supports each recommendation, and who approved it?
+
+3.3 GreenCloud AI Overview
+--------------------------
+GreenCloud AI is a web application in which a user connects a cloud account, triggers a
+sync, and reviews results on a dashboard. Internally, an ingestion pipeline validates the
+account, assumes a read-only role, scans all enabled regions for compute, storage, and
+network resources, fetches CloudWatch CPU telemetry, reconciles cost with Cost Explorer,
+calculates carbon emissions, generates recommendations, and records every step in an audit
+log. The dashboard presents the results in cost, sustainability, optimization, and
+executive-report views.
+
+3.4 Challenges in Existing Workflows
+------------------------------------
+  * Late cost feedback: bills appear after 24-48 hours, so waste is discovered at month-end.
+  * Incomplete visibility: scanning one default region can miss resources in other regions.
+  * Advisory-only tools: native advisors suggest changes but do not provide an approval,
+    evidence, and audit workflow.
+  * Provider-specific carbon data: carbon reports differ in scope, granularity, and method,
+    and are not linked to individual resources.
+  * Credential risk: sharing static access keys with a third-party tool, or storing one
+    shared role in a hosted environment, exposes administrative access.
+  * Trust: recommendations without visible calculations are hard to approve.
+
+3.5 Motivation
+--------------
+The motivation behind GreenCloud AI is to make cloud waste visible quickly and to make
+each recommendation explainable. The team adopted a "zero fake data" rule during
+development: placeholder accounts, static savings banners, and fabricated figures were
+removed from the product, and the dashboard spend was reconciled against the AWS Billing
+Console of a live test account (the dashboard matched the console's month-to-date spend to
+within the live accrual difference). The goal is a tool whose numbers can be traced back to
+the cloud provider's own data.
+
+3.6 Technology Environment
+--------------------------
+
+    Layer                   Project technology                 Purpose
+    ----------------------  ---------------------------------  ----------------------------------
+    Frontend                Next.js 14 (App Router), React 18, Landing, onboarding, dashboard,
+                            TypeScript, Tailwind CSS           audit-history and info pages
+    Backend / API           Next.js API routes (Node.js)       REST endpoints for accounts, sync,
+                                                               dashboard, recommendations, agent
+    Database                SQLite via Prisma ORM 5            Tenants, accounts, resources, cost,
+                                                               carbon, recommendations, audit log
+    Cloud integration       AWS SDK v3: STS, EC2, CloudWatch,  Role assumption, resource discovery,
+                            Cost Explorer                      CPU telemetry, cost reconciliation
+    Security                AES-256-GCM (Node crypto)          Encrypt user-provided access keys
+    Carbon engine           Rule-based model (TypeScript)      Operational + embodied gCO2e, SCI
+    Forecasting engine      Damped Holt's linear trend,        30-day forecast, 95% bounds,
+                            Z-score + IQR                      anomaly detection
+    Recommendation engine   Threshold rules + machine catalog  Idle, unattached, rightsizing
+    Icons                   Lucide React                       Interface icons
+    Deployment target       Vercel (documented)                Hosted demo environment
+
+All tunable thresholds (idle CPU %, rightsizing peak CPU %, CloudWatch lookback days,
+regions to scan, retry limits) are read from environment variables in
+src/services/config.ts rather than hardcoded in the services.
+
+
+==========================================================================================
+3. INTRODUCTION (CONTINUED)
+==========================================================================================
+
+3.7 Read-Only, Multi-Tenant Cloud Connection
+--------------------------------------------
+GreenCloud AI is designed so that the standard connector needs no write permission. The
+preferred method is a cross-account IAM role: the user creates a role in their AWS account
+that trusts GreenCloud AI, and the platform calls STS AssumeRole with an External ID. The
+External ID protects against the "confused deputy" problem, where a third party tricks a
+service into acting on the wrong account. As an alternative, a user may supply access
+keys; these are encrypted with AES-256-GCM before storage, with a random IV and an
+authentication tag, so tampering is detected on decryption. Each cloud account belongs to a
+tenant, and database access goes through a TenantIsolatedDb abstraction so that one
+tenant's data is not returned to another.
+
+3.8 Multi-Region Resource Discovery
+-----------------------------------
+When GREENCLOUD_SCAN_REGIONS is set to "all" (the default), the AWS connector calls EC2
+DescribeRegions to find every region enabled for the account, falling back to a list of 17
+standard regions if that call is unavailable. In each region it runs DescribeInstances,
+DescribeVolumes (to find unattached EBS volumes), and DescribeAddresses (to find
+unassociated Elastic IPs). Every resource is stored with its region, lifecycle state,
+instance type or size, estimated monthly cost, tags, and first/last-seen timestamps.
+
+3.9 Carbon Estimation
+---------------------
+The carbon engine follows the structure of the SCI specification:
+
+    SCI = (O + M) / R
+
+where O is operational emissions (energy x grid carbon intensity), M is the embodied
+emissions share of the hardware, and R is the functional unit.
+
+For an EC2 instance over a period of hours:
+
+    Power (W)        = vCPUs x (15 + (45 - 15) x avgCPU%)
+    Energy (kWh)     = Power / 1000 x hours
+    Operational gCO2e = Energy x grid intensity of the region (gCO2e/kWh)
+    Embodied gCO2e   = (1,200,000 gCO2e / 35,040 h) x (vCPUs / 64) x hours
+
+The idle (15 W) and peak (45 W) per-vCPU figures follow Cloud Carbon Footprint style
+coefficients; the embodied model assumes a 64-vCPU host with 1.2 tCO2e manufacturing
+emissions and a 4-year life. For EBS volumes, energy is estimated at 0.0005 Wh per GB-hour
+and embodied emissions at 0.0002 gCO2e per GB-hour. Regional grid intensities are a static
+baseline table, for example:
+
+    Region           Grid intensity (gCO2e/kWh)   Notes
+    --------------   --------------------------   -------------------------------
+    eu-north-1       45                           Stockholm - hydro and nuclear
+    us-west-2        80                           Oregon - high hydro share
+    us-west-1        210                          N. California
+    eu-west-1        310                          Ireland
+    us-east-1        420                          Virginia
+    ap-southeast-1   480                          Singapore
+    ap-south-1       680                          Mumbai - coal-heavy grid
+    default          350                          Used for unlisted regions
+
+These are average, not hourly marginal, intensities, and they are estimates rather than
+provider-reported emissions. Each emission record stores its method and a confidence
+value so estimates can be distinguished from measured data.
+
+3.10 Recommendation Logic
+-------------------------
+The recommendation engine evaluates each discovered resource against configurable rules:
+
+    Rule                      Condition                                 Category       Risk
+    ------------------------  ----------------------------------------  -------------  -----
+    Unattached EBS volume     Volume state "available" (not attached)   idle_cleanup   0.10
+    Unassociated Elastic IP   Address not associated with an instance   idle_cleanup   0.05
+    Stopped instance review   Instance stopped; attached EBS/EIP still  idle_cleanup   0.15
+                              billed (review, create AMI, terminate)
+    Idle running instance     Average CPU < 5% over lookback window     idle_cleanup   0.35
+    Rightsizing               Avg CPU >= 5% and peak CPU < 40%          rightsizing    0.20
+
+Confidence is 0.9 when at least 7 days of CloudWatch data are available and 0.7 otherwise.
+Each recommendation stores a JSON "evidence" record containing the calculation (instance
+type, monthly cost, average and peak CPU, lookback days) and a plain-language reason.
+
+For rightsizing, a machine catalogue of about 40 EC2 instance types (t2, t3, t4g, m5, m7g,
+c5, c7g, r5 families) with vCPU, memory, architecture, and on-demand monthly price is used
+to choose a target. For each current type, the engine picks an AWS Graviton (Arm64) target
+and a same-family x86 alternative based on peak CPU (for example, an m5.xlarge with peak CPU
+below 25% maps to t4g.medium, with t3.medium as the x86 alternative). It then computes
+monthly and annual savings, a projected peak CPU on the target, and a safety headroom of at
+least 25%. It also produces the matching AWS CLI command and a Terraform snippet.
+
+3.11 Report Organization
+------------------------
+The report is organized into chapters covering the problem statement and objectives,
+abstract, introduction, literature review, methodology, implementation and results, SDG
+mapping, conclusion and future scope, and references.
+
+
+==========================================================================================
+4. LITERATURE REVIEW
+==========================================================================================
+
+The literature review focuses on research and standards related to energy-efficient cloud
+resource management, workload forecasting, carbon-aware computing, cost optimization, and
+grounded AI assistants. These works provide conceptual foundations for GreenCloud AI. They
+do not imply that the prototype implements the same algorithms.
+
+4.1 Review of Related Research
+------------------------------
+
+[1] Beloglazov & Buyya (2010) - Energy Efficient Resource Management in Virtualized Cloud
+    Data Centers
+    Approach   : Dynamic VM consolidation and live migration heuristics, evaluated in
+                 simulation.
+    Strengths  : Shows that consolidation can save substantial energy while preserving QoS.
+    Limitations: Simulation-based; live-migration overhead in real systems.
+
+[2] Verma et al. (2015) - Large-scale cluster management at Google with Borg
+    Approach   : Production cluster manager using admission control, bin-packing,
+                 overcommitment, and isolation.
+    Strengths  : Demonstrates high utilization in production at very large scale.
+    Limitations: Google-internal system; not directly transferable to customer accounts.
+
+[3] Rzadca et al. (2020) - Autopilot: Workload Autoscaling at Google
+    Approach   : Automatic horizontal and vertical scaling using sliding windows and an ML
+                 recommender.
+    Strengths  : Autopiloted jobs had 23% slack versus 46% for manually managed jobs, and
+                 severe out-of-memory impact was reduced about 10x.
+    Limitations: Internal data; adoption required organizational effort.
+
+[4] Moreno-Vozmediano et al. (2019) - Efficient Resource Provisioning for Elastic Cloud
+    Services Based on Machine Learning Techniques
+    Approach   : SVM time-series forecasting combined with queuing theory for predictive
+                 autoscaling.
+    Strengths  : Better forecasting accuracy than simple moving-average baselines.
+    Limitations: Evaluated on a single service pattern; not multi-cloud.
+
+[5] Kumar & Singh (2020) - Performance Assessment of Time Series Forecasting Models for
+    Cloud Datacenter Workload Prediction
+    Approach   : Comparison of six forecasting approaches on real server traces.
+    Strengths  : Auto-ARIMA achieved the best statistical rank, showing that classical
+                 statistical baselines remain competitive.
+    Limitations: Does not cover modern container workloads.
+
+[6] Rossi et al. (2025) - Forecasting Workload in Cloud Computing: Uncertainty-Aware
+    Predictions and Transfer Learning
+    Approach   : Bayesian deep learning and transfer learning on Google and Alibaba traces.
+    Strengths  : Shows the value of prediction intervals for service-level decisions.
+    Limitations: More complex and compute-intensive than statistical methods.
+
+[7] Goiri et al. (2011) - GreenSlot
+    Approach   : Scheduling batch jobs to match solar energy availability within deadlines.
+    Strengths  : Increased green energy use by up to 117% and reduced energy cost by up to
+                 39% compared with a conventional scheduler.
+    Limitations: Solar-powered datacenter setting; not a generic public cloud.
+
+[8] Radovanovic et al. (2021) - Carbon-Aware Computing for Datacenters
+    Approach   : Day-ahead carbon-intensity forecasts and virtual capacity curves to shift
+                 flexible workloads to lower-carbon hours.
+    Strengths  : Demonstrates temporal carbon shifting in a production fleet.
+    Limitations: Google-specific; preprint.
+
+[9] Hanafy et al. (2023) - CarbonScaler
+    Approach   : Carbon-aware elastic scaling of batch workloads on Kubernetes.
+    Strengths  : 51% carbon savings versus a carbon-agnostic baseline.
+    Limitations: Applies only to elastic or batch workloads.
+
+[10] Chen, Lei & Moinzadeh (2024) - Cost Optimization in Cloud Computing: Capacity
+     Reservation for Intermittent Random Demand Surges
+    Approach   : Stochastic operations model for reserved-capacity decisions.
+    Strengths  : Shows commitment planning is an optimization under uncertainty.
+    Limitations: Analytical assumptions; not provider-specific.
+
+[11] Yao et al. (2023) - ReAct; Lewis et al. (2020) - Retrieval-Augmented Generation
+    Approach   : LLMs that combine reasoning with tool actions (ReAct) and ground answers in
+                 retrieved documents (RAG).
+    Strengths  : Basis for an evidence-grounded cloud assistant.
+    Limitations: Hallucination and tool-safety risks; require approval gates and audit logs.
+
+4.2 Standards and Industry Tools
+--------------------------------
+  * Green Software Foundation SCI: defines SCI = (O + M) per R, where O = E x I and
+    embodied emissions are allocated by time share and resource share.
+  * Cloud Carbon Footprint (open source): multi-cloud estimator using billing data, power
+    coefficients, PUE, and grid factors; uses point estimates without confidence intervals.
+  * Google Cloud Carbon Footprint: machine-level energy allocation with location-based
+    (hourly) and market-based reporting; customer reports are not third-party assured.
+  * FinOps Framework and FOCUS: an operating framework and a normalized cost and usage
+    data specification across vendors.
+  * Native advisors (AWS Compute Optimizer, AWS Trusted Advisor, Azure Advisor, Google
+    Recommender): provider-specific recommendations, mostly advisory.
+  * Commercial platforms (CloudHealth, CloudZero, Kubecost/OpenCost, CAST AI, Harness,
+    Flexera, IBM Turbonomic): strong cost visibility and, in some cases, automation; public
+    evidence of resource-level SCI or combined cost + carbon ranking was not found.
+
+4.3 Key Findings from the Literature
+------------------------------------
+  * Idle resources and over-provisioning are major sources of both cost and energy waste;
+    consolidation and rightsizing reduce both.
+  * Forecasts should include confidence intervals, because a wrong downsizing decision can
+    break service levels. Statistical baselines remain strong for cloud workloads.
+  * Carbon depends on where and when a workload runs; region and time choices matter.
+  * Automation should be conservative: thresholds, approvals, change windows, rollback, and
+    audit logs are needed before actions are executed.
+  * Explainability is a product requirement; recommendations must carry their evidence.
+
+4.4 Research Gap and Project Positioning
+----------------------------------------
+Public evidence shows gaps in (1) ranking actions by cost savings, carbon impact, and risk
+together, (2) resource-level SCI reporting, (3) transparent carbon data-quality scoring, and
+(4) evidence-backed, approval-gated remediation. GreenCloud AI is positioned as a compact
+application-level prototype that combines read-only multi-region discovery, cost
+reconciliation, resource-level carbon estimation, evidence-backed recommendations, and a
+human-in-the-loop workflow. Its contribution is integration and transparency at the
+mini-project scale, not a new state-of-the-art optimization algorithm.
+
+4.5 Comparison with GreenCloud AI
+---------------------------------
+
+    Existing approach            Primary focus                     How GreenCloud AI relates
+    ---------------------------  --------------------------------  ------------------------------
+    Native advisors (AWS/Azure/  Provider-specific cost advice     GreenCloud adds carbon, evidence,
+    GCP)                                                           approval, and audit trail
+    Cloud Carbon Footprint       Multi-cloud carbon estimation     Similar coefficient approach;
+                                                                   GreenCloud links it to actions
+    Kubecost / OpenCost          Kubernetes cost allocation        Planned future integration
+    CAST AI / Turbonomic         Automated optimization            GreenCloud keeps humans in the
+                                                                   loop by default
+    Autopilot / forecasting      Predictive scaling                Motivates the forecasting
+    research                                                       engine with confidence bounds
+    Carbon-aware scheduling      Shift load in time/location       Motivates the regional grid
+    (GreenSlot, CarbonScaler)                                      matrix and future scheduling
+
+
+==========================================================================================
+5. PROPOSED METHODOLOGY
+==========================================================================================
+
+5.1 System Overview
+-------------------
+The methodology follows a sequential pipeline. A user connects an account through the
+onboarding wizard. On sync, the backend validates the account, assumes the read-only role,
+discovers resources in all enabled regions, collects telemetry, reconciles cost, estimates
+carbon, generates recommendations, and writes audit entries. The dashboard API aggregates
+the stored data, runs the forecasting engine, and returns KPIs, inventory, carbon,
+forecast, anomaly, and recommendation data to the frontend.
+
+5.2 Overall Workflow
+--------------------
+  1. Admin connects an AWS account (IAM role ARN + External ID, or encrypted access keys).
+  2. The system validates the connection with STS and records the account as active.
+  3. User triggers "Sync Telemetry" (POST /api/cloud-accounts/{id}/sync).
+  4. The connector discovers enabled regions and scans EC2, EBS, and Elastic IPs.
+  5. CloudWatch GetMetricData returns CPU utilization for each running instance over the
+     configured lookback window (default 7 days, daily period).
+  6. Cost Explorer GetCostAndUsage reconciles billed spend by service.
+  7. The carbon engine computes energy, operational, and embodied emissions per resource.
+  8. The recommendation engine applies rules and stores recommendations with evidence.
+  9. Sync freshness, any sync error, and audit entries are stored.
+ 10. The dashboard API runs forecasting and anomaly detection and returns aggregated data.
+ 11. A user reviews a recommendation, approves or dismisses it, and the decision is logged.
+
+5.3 Architecture
+----------------
+
+    Component                Responsibilities                           Input / Output
+    -----------------------  -----------------------------------------  -------------------------
+    Frontend (Next.js +      Landing, Why, How-it-works, Onboarding,    User actions / rendered
+    React)                   Dashboard, Audit History pages             KPIs, charts, tables
+    API routes               Accounts, credentials, sync, dashboard,    HTTP JSON request /
+                             recommendations, approvals, audit, agent   response
+    Encryption service       AES-256-GCM encrypt/decrypt of keys        Plain key / ciphertext
+    AWS connector            STS, DescribeRegions, EC2, EBS, EIP,       Credentials / resources,
+                             CloudWatch, Cost Explorer; retries         metrics, cost
+    Ingestion orchestrator   Runs full sync pipeline per account        Account ID / stored data
+    Carbon engine            Energy, operational, embodied gCO2e, SCI   Resource + region / gCO2e
+    Recommendation engine    Idle, unattached, rightsizing rules        Resources + telemetry /
+                                                                        recommendations
+    Machine catalogue        EC2 specs, prices, target selection        Current type + CPU /
+                                                                        target machine
+    Forecasting engine       Damped Holt trend, 95% bounds, Z/IQR       Daily series / forecast,
+                             anomalies, month-end projection            anomalies
+    Executive agent          Builds scorecard and ranked action list    Dashboard data / report
+                                                                        payload
+    Ticket service           Jira ticket and GitHub PR blueprints       Recommendation / text
+    Agent deployment         Records optimizations, generates           Recommendation /
+    service                  Terraform + Lambda agent package           result, manifest
+    Prisma + SQLite          Persists all entities                      Records
+    Logger                   Structured JSON logs                       Events / log lines
+
+5.4 Request and Data Flow Diagram
+---------------------------------
+
+    USER (Admin / FinOps / DevOps / Executive)
+          |
+          v
+    NEXT.JS FRONTEND  (Onboarding wizard, Dashboard)
+          |  HTTP
+          v
+    NEXT.JS API ROUTES
+          |
+          +--> /api/cloud-accounts  --> ENCRYPTION (AES-256-GCM) --> SQLite
+          |
+          +--> /api/cloud-accounts/{id}/sync
+          |         |
+          |         v
+          |    INGESTION ORCHESTRATOR
+          |         |
+          |         +--> STS AssumeRole (External ID)
+          |         +--> EC2 DescribeRegions --> per region:
+          |         |       DescribeInstances / DescribeVolumes / DescribeAddresses
+          |         +--> CloudWatch GetMetricData (CPU)
+          |         +--> Cost Explorer GetCostAndUsage
+          |         +--> CARBON ENGINE (O + M, SCI)
+          |         +--> RECOMMENDATION ENGINE + MACHINE CATALOGUE
+          |         +--> AUDIT LOG
+          |         v
+          |       SQLite (Prisma)
+          |
+          +--> /api/dashboard --> FORECASTING ENGINE (Holt + Z/IQR) --> KPIs, charts
+          |
+          +--> /api/recommendations/{id}/approve --> APPROVAL + AUDIT LOG
+          |
+          v
+    DASHBOARD: Overview | Cost & Usage | Sustainability | Optimization | Executive Report
+
+5.5 Forecasting and Anomaly Detection Logic
+-------------------------------------------
+The forecasting engine uses Holt's linear trend method with Gardner-McKenzie trend damping:
+
+    Level : L_t = alpha * Y_t + (1 - alpha) * (L_{t-1} + phi * T_{t-1})
+    Trend : T_t = beta * (L_t - L_{t-1}) + (1 - beta) * phi * T_{t-1}
+
+with default alpha = 0.35, beta = 0.15, and phi = 0.80. It projects daily cost ($/day) and
+operational carbon (gCO2e/day) for 30 days. The 95% confidence band widens with the
+forecast horizon h:
+
+    margin = 1.96 x residual standard error x sqrt(min(h, 9))
+
+Anomalies are flagged when a day's value exceeds the rolling mean by at least 2.5 standard
+deviations (Z-score) or exceeds Q3 + 1.5 x IQR. Each anomaly includes a root-cause hint and
+a suggested action. The engine also produces a calendar-aware month-end run-rate projection
+and a budget-risk level.
+
+5.6 Safety and Approval Strategy
+--------------------------------
+  * The standard connector uses read-only permissions; no write permission is required.
+  * Every recommendation carries a risk score (0.0-1.0), a confidence value, and evidence.
+  * Recommendations move through states: active -> approved / dismissed (-> executed).
+  * Approvals are stored with approver, decision, comment, and timestamp.
+  * Rightsizing targets keep at least 25% CPU headroom on the projected target machine.
+  * AWS API calls use bounded retries (default 3) with exponential backoff (base 1000 ms).
+  * Sync failures are recorded in the account's syncError field rather than hidden.
+
+5.7 Data Management
+-------------------
+Prisma ORM with SQLite (prisma/dev.db) stores eight entities: Tenant, CloudAccount,
+CloudResource, CostLineItem, CarbonEmission, Recommendation, Approval, and AuditLog.
+Credentials are stored only in encrypted form. Telemetry and evidence are stored as JSON
+strings. Cascading deletes keep child records consistent when an account or tenant is
+removed. A cleanup endpoint removes duplicate test accounts created during repeated
+onboarding.
+
+5.8 Security Considerations
+---------------------------
+  * Prefer cross-account IAM roles with External ID over static access keys.
+  * Encrypt any user-provided keys with AES-256-GCM; derive the key from ENCRYPTION_SECRET
+    held in server-side environment variables.
+  * Never expose credentials to frontend code or commit .env.local to Git.
+  * Isolate tenant data through the TenantIsolatedDb abstraction.
+  * Keep short STS session durations (default 900 seconds).
+  * Record every connect, sync, approval, and optimization action in the audit log.
+
+
+==========================================================================================
+6. IMPLEMENTATION AND RESULTS
+==========================================================================================
+
+6.1 Technology Stack
+--------------------
+
+    Technology                        Role in GreenCloud AI
+    --------------------------------  ----------------------------------------------------
+    Next.js 14 + React 18             Pages, dashboard, and API routes
+    TypeScript 5                      Type-safe services and components
+    Tailwind CSS 3                    Styling and responsive layout
+    Prisma 5 + SQLite                 ORM and local database
+    @aws-sdk/client-sts               AssumeRole for cross-account access
+    @aws-sdk/client-ec2               Region, instance, volume, and address discovery
+    @aws-sdk/client-cloudwatch        CPU utilization telemetry
+    @aws-sdk/client-cost-explorer     Billed cost reconciliation
+    Node.js crypto                    AES-256-GCM credential encryption
+    Lucide React                      Interface icons
+
+6.2 Implemented Modules
+-----------------------
+
+    Module                      Description
+    --------------------------  -----------------------------------------------------------
+    Public pages                Landing page with cost/carbon simulator, "Why GreenOps"
+                                page, and "How It Works" architecture walkthrough.
+    Onboarding wizard           Multi-step account connection using IAM role ARN + External
+                                ID, or encrypted access keys.
+    Overview                    Executive KPI bar (billed spend, projected savings, carbon,
+                                opportunities), telemetry chart, optimization queue.
+    Resource inventory          Multi-region list of instances, volumes, and IPs with state,
+                                type, cost, and sync freshness.
+    Cost & Usage (6 views)      Cost Overview, Cost Explorer (search, filter, CSV export),
+                                Cost Allocation (showback, untagged resources), Budgets
+                                (pacing and thresholds), Anomalies (Z-score feed), Forecast
+                                (Holt's trend).
+    Sustainability (5 views)    Sustainability Overview, Carbon Accounting, Resource Carbon,
+                                Regional Grid Matrix, SCI Tuner and Governance.
+    Optimization                Recommendations view and Opportunities view with risk
+                                badges, evidence, Terraform/CLI snippets, approve/dismiss.
+    Agent deployment report     One-click "fast optimization" for one or all opportunities,
+                                and generation of a 24/7 cloud-agent package (Terraform,
+                                Python AWS Lambda, IAM policy, deploy command).
+    Executive report            Scorecard, prioritized remediation actions, machine-shift
+                                ledger; print-to-PDF preview.
+    Audit history               Chronological log of actor, action, object, and metadata.
+
+Note on the agent deployment module: the in-app fast optimization updates GreenCloud AI's
+own records (instance type, cost, lifecycle state), creates approvals, and writes audit
+entries. It does not itself call AWS to modify resources. Real changes are applied either
+by running the generated AWS CLI/Terraform commands or by deploying the generated agent
+package into the user's account.
+
+6.3 REST API Endpoints
+----------------------
+
+    Method   Endpoint                                   Purpose
+    -------  -----------------------------------------  ------------------------------------
+    GET      /api/cloud-accounts                        List connected accounts
+    POST     /api/cloud-accounts                        Connect a new account
+    GET      /api/cloud-accounts/{id}                   Account details
+    DELETE   /api/cloud-accounts/{id}                   Remove an account
+    POST     /api/cloud-accounts/{id}/credentials       Store encrypted access keys
+    DELETE   /api/cloud-accounts/{id}/credentials       Remove stored keys
+    POST     /api/cloud-accounts/{id}/sync              Run the ingestion pipeline
+    POST     /api/cloud-accounts/cleanup-duplicates     Remove duplicate test accounts
+    GET      /api/dashboard                             KPIs, inventory, carbon, forecast,
+                                                        anomalies, recommendations
+    GET      /api/recommendations                       List recommendations
+    POST     /api/recommendations/{id}/approve          Approve or dismiss a recommendation
+    GET      /api/audit-logs                            Audit history
+    GET      /api/agent/deploy                          Get cloud-agent manifest
+    POST     /api/agent/deploy                          Fast-optimize one/all, get manifest
+
+6.4 Database Entities
+---------------------
+
+    Entity           Key fields                                         Purpose
+    ---------------  -------------------------------------------------  ----------------------
+    Tenant           name, plan                                         Isolation container
+    CloudAccount     provider, externalAccountId, status, roleArn,      Connected account and
+                     externalId, encryptedAccessKey/SecretKey,          sync status
+                     syncFreshness, syncError
+    CloudResource    providerResourceId, resourceType, region,          Multi-region inventory
+                     lifecycleState, tags, instanceType, sizeGb,
+                     monthlyCost, telemetryMetrics, first/lastSeenAt
+    CostLineItem     chargeDate, providerService, billedCost,           Reconciled cost
+                     effectiveCost, currency
+    CarbonEmission   ts, energyKwh, operationalGco2e, embodiedGco2e,    Per-resource carbon
+                     method, confidence
+    Recommendation   category, title, status, estimatedMonthlySavings,  Optimization proposal
+                     estimatedGco2eSavings, riskScore, confidence,
+                     evidence
+    Approval         approver, decision, comment, decidedAt             Human decision record
+    AuditLog         actor, action, objectType, objectId, ts, metadata  Traceability
+
+6.5 Implementation Sequence
+---------------------------
+  1. Set up Next.js, TypeScript, Tailwind CSS, and Prisma with SQLite.
+  2. Define the eight-entity schema and the TenantIsolatedDb access layer.
+  3. Implement AES-256-GCM encryption and the onboarding wizard.
+  4. Implement the AWS connector: STS AssumeRole, region discovery, EC2/EBS/EIP scanning,
+     CloudWatch metrics, and Cost Explorer reconciliation, with retries.
+  5. Implement the carbon engine and recommendation engine; add the machine catalogue.
+  6. Build the ingestion orchestrator and audit logging.
+  7. Implement the forecasting and anomaly engine and integrate it into /api/dashboard.
+  8. Build the dashboard sections (Overview, Cost & Usage, Sustainability, Optimization).
+  9. Add the approval workflow, ticket/PR blueprints, and audit history page.
+ 10. Add the executive report, agent deployment service, and PDF preview.
+ 11. Write verification scripts and test against a live AWS account.
+
+6.6 Results and Validation
+--------------------------
+The following results are available from the repository at the time of writing:
+
+  * Forecasting engine unit tests (scripts/test-forecasting.js) were run for this report.
+    All 5 tests passed:
+        Test 1  Empty history                        Passed
+        Test 2  Steady-state series                  Passed
+        Test 3  Synthetic anomaly spike              Passed (spike of $4.85 against a $1
+                                                     baseline detected with Z-score 4.25)
+        Test 4  Forecast bound expansion             Passed
+        Test 5  Budget risk escalation               Passed
+
+  * Cost reconciliation: the team's development notes record that, for a live test AWS
+    account, the AWS Billing Console showed a month-to-date spend of $0.79 and the
+    GreenCloud AI dashboard showed $0.83 after the Cost Explorer integration, the
+    difference being live accrual between readings.
+
+  * Multi-region discovery: the team's development notes record that after the connector
+    was changed to scan all enabled regions, an EC2 instance running in ap-south-1 that had
+    been missed by a us-east-1-only scan was correctly discovered as running.
+
+  * An end-to-end suite (scripts/run-e2e.js) exists covering IAM role access, tenant
+    isolation, sync freshness, recommendation traceability, and approval logic. Its output
+    should be recorded in the final submission (it writes test tenants into the local
+    database, so it was not run while preparing this report).
+
+Planned evaluation for the final submission:
+
+    Test ID   Scenario                                Expected behaviour / measurement
+    -------   --------------------------------------  ------------------------------------------
+    T01       Connect account via IAM role            STS succeeds; account marked active
+    T02       Connect with access keys                Keys stored only in encrypted form
+    T03       Wrong tenant requests data              No data from other tenants returned
+    T04       Sync with resources in many regions     All enabled regions scanned; regions shown
+    T05       Idle instance (avg CPU < 5%)            idle_cleanup recommendation with evidence
+    T06       Oversized instance (peak CPU < 40%)     rightsizing to Graviton/x86 target, >=25%
+                                                      headroom
+    T07       Unattached EBS volume / unused EIP      idle_cleanup recommendations created
+    T08       Cost reconciliation                     Dashboard spend matches Cost Explorer
+    T09       Synthetic cost spike                    Anomaly flagged (Z >= 2.5 or > Q3+1.5 IQR)
+    T10       Approve / dismiss recommendation        Status changes; Approval + AuditLog stored
+    T11       AWS API failure / throttling            Bounded retries; syncError recorded
+    T12       Executive report                        PDF preview prints with correct figures
+
+6.7 Metrics to Report After Testing
+-----------------------------------
+  * Discovery completeness: resources found by GreenCloud AI versus the AWS console.
+  * Cost reconciliation error: difference between dashboard spend and Cost Explorer.
+  * Recommendation precision: share of recommendations judged correct by a reviewer.
+  * Estimated monthly savings and estimated gCO2e reduction for the test account.
+  * Forecast error (for example MAPE) on held-out days.
+  * Sync duration and sync success rate.
+
+
+==========================================================================================
+7. MAPPING WITH SUSTAINABLE DEVELOPMENT GOALS
+==========================================================================================
+
+The United Nations Sustainable Development Goals (SDGs) provide a framework for connecting
+technology projects with broader social, economic, and environmental objectives.
+GreenCloud AI has a more direct environmental link than a typical software tool, because
+it estimates and aims to reduce cloud-related emissions. The figures it produces are
+estimates, so the mapping below describes potential contribution rather than measured
+impact.
+
+7.1 SDG 13 - Climate Action
+---------------------------
+GreenCloud AI estimates operational and embodied emissions for each cloud resource, shows
+regional grid intensity differences, and recommends actions (removing idle resources,
+moving to more efficient Graviton instances) that reduce energy use. This supports
+measurement and reduction of emissions linked to digital infrastructure.
+
+7.2 SDG 12 - Responsible Consumption and Production
+---------------------------------------------------
+Idle and oversized resources represent wasted computing capacity and electricity. By
+finding and removing this waste, the platform encourages more responsible consumption of
+computing services.
+
+7.3 SDG 9 - Industry, Innovation and Infrastructure
+---------------------------------------------------
+The platform provides reusable infrastructure for cost and carbon visibility, secure
+multi-tenant cloud connection, and evidence-backed remediation, supporting more efficient
+and resilient digital infrastructure.
+
+7.4 SDG 7 - Affordable and Clean Energy
+---------------------------------------
+The regional grid matrix highlights the carbon intensity of the electricity behind each
+cloud region (for example 45 gCO2e/kWh in eu-north-1 versus 680 gCO2e/kWh in ap-south-1),
+helping teams consider cleaner regions for flexible workloads.
+
+    SDG      Connection to GreenCloud AI                      Evidence needed for stronger claim
+    -------  -----------------------------------------------  ---------------------------------
+    SDG 13   Per-resource carbon estimates and reduction      Measured gCO2e reduction after
+             recommendations                                  approved changes
+    SDG 12   Detection of idle and oversized resources        Count and cost of waste removed
+    SDG 9    Reusable FinOps/GreenOps platform architecture   Working multi-account deployment
+    SDG 7    Regional grid intensity comparison               Live grid-intensity data and a
+                                                              region-shift case study
+
+
+==========================================================================================
+8. CONCLUSION AND FUTURE SCOPE
+==========================================================================================
+
+8.1 Conclusion
+--------------
+GreenCloud AI addresses a practical problem in cloud operations: waste in cost and carbon
+that stays invisible until the bill arrives. The prototype connects securely to an AWS
+account with read-only access, discovers resources across all enabled regions, reconciles
+spend with Cost Explorer, estimates operational and embodied carbon per resource, and
+generates evidence-backed recommendations with risk and confidence scores. A forecasting
+engine projects cost and carbon with confidence bounds and flags anomalies, and every
+decision is recorded through an approval workflow and audit log.
+
+The literature shows that rightsizing, consolidation, forecasting with uncertainty, and
+carbon-aware placement are effective ways to reduce both cost and emissions, and that
+automation must be conservative and explainable. GreenCloud AI applies these ideas with
+transparent rules and formulas rather than a trained model.
+
+The project is partially implemented. The AWS pipeline, carbon and recommendation engines,
+forecasting, dashboard, approvals, and audit history are in place, and the forecasting
+tests pass. Multi-cloud connectors, live grid-carbon data, enterprise authentication,
+scheduled syncs, real infrastructure execution with rollback, and full measured evaluation
+remain to be completed.
+
+8.2 Limitations
+---------------
+  * Only AWS is supported; Azure and GCP connectors are not yet implemented.
+  * Grid carbon intensities are static regional averages, not live hourly marginal values.
+  * The vCPU estimate in the carbon engine is coarse (derived from the instance-type name),
+    so energy figures are approximate.
+  * Recommendations use CPU only; memory, disk, and network are not yet considered.
+  * Machine-catalogue prices are fixed on-demand rates and do not reflect discounts,
+    Savings Plans, or price changes.
+  * In-app fast optimization updates GreenCloud's records; it does not change AWS resources.
+  * There is no user login or role-based access control yet; a default tenant is used.
+  * Syncs are triggered manually; there are no scheduled background jobs.
+  * SQLite suits a prototype but not a high-concurrency production service.
+
+8.3 Future Scope
+----------------
+  * Azure connector (Resource Graph, Monitor, Cost Management, Advisor) and GCP connector
+    (Compute Engine, Cloud Monitoring, BigQuery billing export, Recommender).
+  * Live grid carbon intensity from Electricity Maps or WattTime, with location-based and
+    market-based reporting.
+  * Kubernetes cost and carbon allocation through OpenCost and Prometheus.
+  * Terraform/OpenTofu pull-request generation through a GitHub App, and two-way Jira sync.
+  * Execution guardrails: pre-flight health checks, snapshots, and an automatic rollback
+    watcher after changes.
+  * Enterprise authentication (NextAuth/Clerk, SSO) with roles: Admin, FinOps Lead,
+    GreenOps Lead, Team Lead/Viewer.
+  * Scheduled ingestion every 6 hours (Vercel Cron or Inngest) and migration to PostgreSQL.
+  * Memory- and network-aware rightsizing, commitment (RI/Savings Plan) simulation, and
+    carbon-aware scheduling.
+  * An evidence-grounded AI assistant (RAG + ReAct) to explain recommendations.
+
+8.4 Final Remark
+----------------
+GreenCloud AI provides a foundation for treating cloud cost and cloud carbon as one
+optimization problem. Its value lies in combining secure discovery, transparent
+calculations, and human-approved actions in one workflow. Further implementation and
+measured evaluation will determine how much cost and carbon it can save in practice.
+
+
+==========================================================================================
+9. REFERENCES
+==========================================================================================
+
+[1]  A. Beloglazov and R. Buyya, "Energy Efficient Resource Management in Virtualized Cloud
+     Data Centers," IEEE/ACM CCGrid, 2010.
+[2]  A. Beloglazov, R. Buyya, Y. C. Lee, and A. Zomaya, "A Taxonomy and Survey of
+     Energy-Efficient Data Centers and Cloud Computing Systems," 2011.
+     Available: https://arxiv.org/abs/1007.0066
+[3]  A. Verma, L. Pedrosa, M. Korupolu, D. Oppenheimer, E. Tune, and J. Wilkes,
+     "Large-scale cluster management at Google with Borg," EuroSys, 2015.
+[4]  K. Rzadca et al., "Autopilot: Workload Autoscaling at Google," EuroSys, 2020.
+[5]  R. Moreno-Vozmediano, R. S. Montero, E. Huedo, and I. M. Llorente, "Efficient resource
+     provisioning for elastic Cloud services based on machine learning techniques," Journal
+     of Cloud Computing, 2019. Available:
+     https://link.springer.com/article/10.1186/s13677-019-0128-9
+[6]  J. Kumar and A. K. Singh, "Performance Assessment of Time Series Forecasting Models for
+     Cloud Datacenter Networks' Workload Prediction," 2020. Available:
+     https://link.springer.com/article/10.1007/s11277-020-07773-6
+[7]  A. Rossi et al., "Forecasting workload in cloud computing: towards uncertainty-aware
+     predictions and transfer learning," 2025. Available:
+     https://link.springer.com/article/10.1007/s10586-024-04933-2
+[8]  S. Chen, J. Lei, and K. Moinzadeh, "Cost Optimization in Cloud Computing: Capacity
+     Reservation for Intermittent Random Demand Surges," 2024. Available:
+     https://journals.sagepub.com/doi/10.1177/10591478241251614
+[9]  I. Goiri et al., "GreenSlot: Scheduling energy consumption in green datacenters," SC,
+     2011.
+[10] A. Radovanovic et al., "Carbon-Aware Computing for Datacenters," 2021.
+[11] W. A. Hanafy, Q. Liang, N. Bashir, D. Irwin, and P. Shenoy, "CarbonScaler," ACM POMACS,
+     2023. Available: https://par.nsf.gov/biblio/10496892
+[12] S. Yao et al., "ReAct: Synergizing Reasoning and Acting in Language Models," ICLR, 2023.
+[13] P. Lewis et al., "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks,"
+     2020.
+[14] Green Software Foundation, "Software Carbon Intensity (SCI) Specification." Available:
+     https://sci.greensoftware.foundation/
+[15] Cloud Carbon Footprint, "Methodology." Available:
+     https://www.cloudcarbonfootprint.org/docs/methodology/
+[16] Google Cloud, "Carbon Footprint methodology." Available:
+     https://docs.cloud.google.com/carbon-footprint/docs/methodology
+[17] Electricity Maps, "API documentation." Available: https://portal.electricitymaps.com/docs
+[18] FinOps Foundation, "FinOps Framework." Available: https://www.finops.org/framework/
+[19] FinOps Foundation, "FOCUS Specification." Available: https://focus.finops.org/
+[20] AWS, "Cost Optimization Hub strategies." Available:
+     https://docs.aws.amazon.com/cost-management/latest/userguide/coh-optimization-strategies.html
+[21] AWS, "Compute Optimizer pricing." Available:
+     https://aws.amazon.com/compute-optimizer/pricing/
+[22] AWS, "Trusted Advisor cost optimization checks." Available:
+     https://docs.aws.amazon.com/awssupport/latest/user/cost-optimization-checks.html
+[23] Microsoft, "Azure Advisor Cost Optimization workbook." Available:
+     https://learn.microsoft.com/en-us/azure/advisor/advisor-workbook-cost-optimization
+[24] Google Cloud, "Recommender key concepts." Available:
+     https://docs.cloud.google.com/recommender/docs/key-concepts
+[25] OpenCost, "Documentation." Available: https://opencost.io/docs/
+[26] Cloud Custodian, "Overview." Available: https://cloudcustodian.io/docs/overview.html
+[27] Green Software Foundation, "Carbon Aware SDK." Available:
+     https://carbon-aware-sdk.greensoftware.foundation/
+[28] Harness, "Cloud Cost Management overview." Available:
+     https://developer.harness.io/docs/cloud-cost-management/get-started/overview/
+
+
+==========================================================================================
+APPENDIX A - REPORT PREPARATION NOTES
+==========================================================================================
+
+This report follows the chapter structure of the supplied mini-project report format
+(API_FORGE_Project_Report_Updated.docx, used as a format reference only). Its content is
+taken only from the GreenCloud AI repository: the source code (src/, prisma/, scripts/),
+README.md, report.md (including its references), PROJECT_PROGRESS_AND_REMAINING_COMPONENTS.md,
+progress.md, and the docs/ folder.
+
+Where the repository's design documents describe planned features (multi-cloud connectors,
+OPA policy-as-code, RAG assistant, PostgreSQL/TimescaleDB, Temporal workflows, etc.), this
+report lists them as future scope and does not present them as implemented.
+
+Before final submission, the project team should:
+  * Fill in the project ID, roll numbers, branch, supervisor, HOD, institute, university,
+    and date.
+  * Insert screenshots of the onboarding wizard, Overview, Cost & Usage, Sustainability,
+    Optimization, Executive Report, and Audit History pages.
+  * Run scripts/run-e2e.js and the evaluation plan in Section 6.6, and insert measured
+    results; do not report expected behaviour as completed results.
+  * Re-verify the cost reconciliation figures against the live AWS account.
+  * Verify final bibliographic details and update the index page numbers after formatting.
+
+Project repository: https://github.com/GreenCloudAi/Greencloud-AI
+
+==========================================================================================
+                                     END OF REPORT
+==========================================================================================

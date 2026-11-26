@@ -11,7 +11,8 @@ import {
   FileText, 
   Download, 
   Info,
-  Sparkles
+  Sparkles,
+  Zap,
 } from "lucide-react";
 
 interface ReportPreviewModalProps {
@@ -20,6 +21,7 @@ interface ReportPreviewModalProps {
   summary: ExecutiveReportSummary;
   onDownloadCsv?: () => void;
   onDownloadJson?: () => void;
+  onDeployAgent?: () => void;
 }
 
 export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
@@ -28,6 +30,7 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
   summary,
   onDownloadCsv,
   onDownloadJson,
+  onDeployAgent,
 }) => {
   const [copied, setCopied] = useState(false);
 
@@ -114,10 +117,22 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
             </button>
           )}
 
+          {onDeployAgent && (
+            <button
+              type="button"
+              onClick={onDeployAgent}
+              className="px-3.5 py-1.5 rounded-xl bg-[#047857] hover:bg-[#065F46] text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+              title="Deploy autonomous agent to fast-optimize cloud fleet"
+            >
+              <Zap className="w-3.5 h-3.5 text-emerald-300" />
+              <span>Deploy Agent Optimization</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handlePrint}
-            className="px-4 py-1.5 rounded-xl bg-[#1F8A70] hover:bg-[#186D58] text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+            className="px-4 py-1.5 rounded-xl bg-[#1F8A70] hover:bg-[#186D58] text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Print / Save as PDF</span>

@@ -19,6 +19,7 @@ import {
   Check,
   ExternalLink,
   Sliders,
+  Zap,
 } from "lucide-react";
 
 interface OpportunitiesViewProps {

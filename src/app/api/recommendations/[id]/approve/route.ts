@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { TenantIsolatedDb, prisma } from "@/services/db";
 import { TicketService } from "@/services/ticketService";
 import { seedDefaultTenant } from "@/services/seed";
+import { AgentDeploymentService } from "@/services/agentDeploymentService";
 
 export async function POST(
   request: Request,
@@ -15,11 +16,25 @@ export async function POST(
 
     const { mode, comment, approver = "user_reviewer" } = body;
 
-    if (!mode || (mode !== "ticket" && mode !== "pull_request")) {
+    if (!mode || (mode !== "ticket" && mode !== "pull_request" && mode !== "agent_execute" && mode !== "direct_agent")) {
       return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Missing or invalid approval mode ('ticket' | 'pull_request')" } },
+        { error: { code: "VALIDATION_ERROR", message: "Missing or invalid approval mode ('ticket' | 'pull_request' | 'agent_execute')" } },
         { status: 400 }
       );
+    }
+
+    if (mode === "agent_execute" || mode === "direct_agent") {
+      const result = await AgentDeploymentService.executeFastOptimization(
+        tenant.id,
+        recommendationId,
+        approver
+      );
+      return NextResponse.json({
+        recommendationId,
+        status: "executed",
+        mode: "agent_execute",
+        result,
+      });
     }
 
     // 1. Get recommendation details

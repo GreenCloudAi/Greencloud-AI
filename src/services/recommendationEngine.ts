@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import { GreenCloudConfig } from "./config";
 import { Logger } from "./logger";
+import { calculateTargetMachine } from "./machineCatalog";
 
 /**
  * Telemetry metrics shape stored in CloudResource.telemetryMetrics JSON field.
@@ -252,19 +253,34 @@ export class RecommendationEngine {
                   });
                 }
 
-                // Rightsizing detection:
+                // Rightsizing detection & Machine Shift Recommendation:
                 if (
                   avgCpu >= idleThreshold &&
                   peakCpu < rightsizingThreshold &&
                   peakCpu > 0
                 ) {
-                  const monthlySavings = (res.monthlyCost || 0) * 0.4;
+                  const shift = calculateTargetMachine(
+                    res.instanceType,
+                    peakCpu,
+                    avgCpu,
+                    res.monthlyCost,
+                    res.providerResourceId,
+                    res.region
+                  );
+
+                  const monthlySavings = shift.monthlySavings > 0
+                    ? shift.monthlySavings
+                    : (res.monthlyCost || 0) * 0.4;
+
                   if (monthlySavings > 0) {
-                    const title = `Rightsize EC2 Instance: ${nameTag} (${res.instanceType || "unknown"})`;
+                    const title = `Shift EC2 Instance: ${nameTag} (${shift.currentMachine} → ${shift.targetMachine})`;
+                    const carbonSavingsMonthly = (monthlyCarbonEmissions * (shift.carbonReductionPercent / 100));
+
                     const evidence = {
-                      calculation: `Current type: ${res.instanceType || "unknown"}, Monthly cost: $${(res.monthlyCost || 0).toFixed(2)}/month. Peak CPU: ${peakCpu.toFixed(1)}% (below ${rightsizingThreshold}% threshold). Estimated ~40% savings from downsizing: $${monthlySavings.toFixed(2)}/month.`,
-                      reason: `Instance "${res.providerResourceId}" peak CPU utilization over ${telemetry.lookbackDays} days is only ${peakCpu.toFixed(1)}%, suggesting it can safely run on a smaller instance type.`,
-                      carbonImpact: `Rightsizing reduces energy consumption proportionally, saving approximately ${((monthlyCarbonEmissions * 0.4) / 1000).toFixed(3)} kg CO2e/month.`,
+                      calculation: `Current machine: ${shift.currentMachine} ($${shift.currentMonthlyCost.toFixed(2)}/mo, ${shift.currentSpecs}). Shift to target machine: ${shift.targetMachine} ($${shift.targetMonthlyCost.toFixed(2)}/mo, ${shift.targetSpecs}). Monthly net saving: $${monthlySavings.toFixed(2)}/mo (-${shift.savingsPercentage}%). Peak CPU: ${peakCpu.toFixed(1)}% (Headroom: ${shift.safetyMarginPercent}%).`,
+                      reason: `Instance "${res.providerResourceId}" peak CPU over ${telemetry.lookbackDays} days is only ${peakCpu.toFixed(1)}%. It can be safely shifted to ${shift.targetMachine} (AWS Graviton3 Arm64) or ${shift.alternativeX86Target} (${shift.alternativeX86Specs}) with zero compute throttling.`,
+                      carbonImpact: `Shifting to ${shift.targetMachine} eliminates ~${shift.carbonReductionPercent}% in operational emissions, saving ${(carbonSavingsMonthly / 1000).toFixed(3)} kg CO2e/month.`,
+                      machineShift: shift,
                     };
 
                     await prisma.recommendation.upsert({
@@ -280,21 +296,22 @@ export class RecommendationEngine {
                           monthlySavings.toFixed(2)
                         ),
                         estimatedGco2eSavings: parseFloat(
-                          (monthlyCarbonEmissions * 0.4).toFixed(2)
+                          carbonSavingsMonthly.toFixed(2)
                         ),
-                        riskScore: 0.25,
-                        confidence: cpuSeries.length >= 7 ? 0.85 : 0.65,
+                        riskScore: 0.20,
+                        confidence: cpuSeries.length >= 7 ? 0.90 : 0.70,
                         evidence: JSON.stringify(evidence),
                       },
                       update: {
                         status: "active",
+                        title,
                         estimatedMonthlySavings: parseFloat(
                           monthlySavings.toFixed(2)
                         ),
                         estimatedGco2eSavings: parseFloat(
-                          (monthlyCarbonEmissions * 0.4).toFixed(2)
+                          carbonSavingsMonthly.toFixed(2)
                         ),
-                        confidence: cpuSeries.length >= 7 ? 0.85 : 0.65,
+                        confidence: cpuSeries.length >= 7 ? 0.90 : 0.70,
                         evidence: JSON.stringify(evidence),
                       },
                     });

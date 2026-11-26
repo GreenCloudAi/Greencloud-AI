@@ -26,6 +26,7 @@ export const ExecutivePdfReport: React.FC<ExecutivePdfReportProps> = ({ summary 
     scorecard,
     serviceLedger,
     prioritizedActions,
+    machineShiftLedger = [],
     modernizationLevers,
     regionalComparison,
     compliance,
@@ -306,6 +307,13 @@ export const ExecutivePdfReport: React.FC<ExecutivePdfReportProps> = ({ summary 
                     &ldquo;{action.reason}&rdquo;
                   </p>
 
+                  {action.targetMachine && (
+                    <div className="flex items-center gap-1.5 text-[9px] bg-[#ECFDF5] text-[#065F46] p-1.5 rounded border border-[#A7F3D0]">
+                      <Zap className="w-3 h-3 text-[#059669]" />
+                      <span>Exact Target Machine: <strong className="font-mono">{action.currentMachine}</strong> &rarr; <strong className="font-mono text-[#047857]">{action.targetMachine}</strong> ({action.targetSpecs})</span>
+                    </div>
+                  )}
+
                   <div className="text-[9px] font-semibold text-[#1E40AF] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE]">
                     Recommended Action: {action.recommendedAction}
                   </div>
@@ -313,6 +321,59 @@ export const ExecutivePdfReport: React.FC<ExecutivePdfReportProps> = ({ summary 
               ))}
             </div>
           </div>
+
+          {/* Exact Machine Migration & Autonomous Agent Deployment Table */}
+          {machineShiftLedger && machineShiftLedger.length > 0 && (
+            <div>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#374151] mb-1.5 flex items-center gap-1.5">
+                <Server className="w-3.5 h-3.5 text-[#1F8A70]" />
+                Exact Machine Migration &amp; Fast Agent Shift Schedule
+              </h3>
+              <table className="w-full text-left border-collapse border border-[#E5E7EB] rounded-lg overflow-hidden text-[9px]">
+                <thead className="bg-[#F3F4F6] text-[#374151] font-semibold border-b border-[#E5E7EB]">
+                  <tr>
+                    <th className="py-1.5 px-2">Workload Instance</th>
+                    <th className="py-1.5 px-2">Current Machine</th>
+                    <th className="py-1.5 px-2 font-bold text-[#1F8A70]">Shift To Machine</th>
+                    <th className="py-1.5 px-2 text-right">Net Savings</th>
+                    <th className="py-1.5 px-2 text-center">Carbon Delta</th>
+                    <th className="py-1.5 px-2">Autonomous Agent CLI</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E5E7EB]">
+                  {machineShiftLedger.map((row, idx) => (
+                    <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-[#F9FAFB]"}>
+                      <td className="py-1.5 px-2 font-medium text-[#111827]">
+                        <div>{row.nameTag}</div>
+                        <code className="text-[8.5px] text-[#6B7280]">{row.resourceId}</code>
+                      </td>
+                      <td className="py-1.5 px-2 font-mono text-[#374151]">
+                        <strong>{row.currentMachine}</strong>
+                        <div className="text-[8.5px] text-[#6B7280]">${row.currentCost.toFixed(2)}/mo</div>
+                      </td>
+                      <td className="py-1.5 px-2 font-mono">
+                        <strong className="text-[#059669] bg-[#ECFDF5] px-1 py-0.2 rounded border border-[#A7F3D0]">
+                          {row.targetMachine}
+                        </strong>
+                        <div className="text-[8.5px] text-[#047857]">{row.targetSpecs}</div>
+                      </td>
+                      <td className="py-1.5 px-2 text-right font-bold text-[#059669] font-mono">
+                        +${row.monthlySavings.toFixed(2)}/mo
+                        <div className="text-[8px] text-[#047857]">(-{row.savingsPercentage}%)</div>
+                      </td>
+                      <td className="py-1.5 px-2 text-center">
+                        <span className="text-[#047857] font-semibold">-{row.carbonReductionPercent}% gCO2e</span>
+                        <div className="text-[8px] text-[#6B7280]">Headroom: {row.safetyMarginPercent}%</div>
+                      </td>
+                      <td className="py-1.5 px-2 font-mono text-[8px] text-[#4B5563] max-w-[180px] truncate" title={row.agentCliCommand}>
+                        {row.agentCliCommand}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Strategic Modernization Matrix */}
           <div>

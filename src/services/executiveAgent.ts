@@ -4,6 +4,8 @@
  * and prioritized 1-2 page report payload from raw cloud telemetry.
  */
 
+import { calculateTargetMachine, TargetMachineShift } from "./machineCatalog";
+
 export interface ExecutiveScorecard {
   billedMonthlySpend: number;
   dailyBurnRate: number;
@@ -31,6 +33,29 @@ export interface PrioritizedRemediationAction {
   riskScore: number;
   confidence: number;
   recommendedAction: string;
+  currentMachine?: string;
+  targetMachine?: string;
+  targetSpecs?: string;
+  savingsPercentage?: number;
+}
+
+export interface MachineShiftLedgerItem {
+  id: string;
+  resourceId: string;
+  nameTag: string;
+  currentMachine: string;
+  currentSpecs: string;
+  currentCost: number;
+  targetMachine: string;
+  targetSpecs: string;
+  targetCost: number;
+  monthlySavings: number;
+  savingsPercentage: number;
+  annualSavings: number;
+  carbonReductionPercent: number;
+  safetyMarginPercent: number;
+  agentCliCommand: string;
+  agentActionDescription: string;
 }
 
 export interface ModernizationLever {
@@ -70,6 +95,7 @@ export interface ExecutiveReportSummary {
   scorecard: ExecutiveScorecard;
   serviceLedger: ServiceSpendLedgerItem[];
   prioritizedActions: PrioritizedRemediationAction[];
+  machineShiftLedger: MachineShiftLedgerItem[];
   modernizationLevers: ModernizationLever[];
   regionalComparison: RegionalGridComparison;
   compliance: {
@@ -147,13 +173,19 @@ export function generateExecutiveBrief(data: any): ExecutiveReportSummary {
   if (rawRecs.length > 0) {
     prioritizedActions = rawRecs.slice(0, 3).map((r, idx) => {
       let evidenceReason = "Continuous CloudWatch CPU P99 and I/O telemetry confirms inactivity.";
+      let shiftInfo: TargetMachineShift | undefined = undefined;
+
       if (typeof r.evidence === "string") {
         try {
           const parsed = JSON.parse(r.evidence);
           if (parsed.reason) evidenceReason = parsed.reason;
+          if (parsed.machineShift) shiftInfo = parsed.machineShift;
         } catch {
           evidenceReason = r.evidence;
         }
+      } else if (r.evidence && typeof r.evidence === "object") {
+        if (r.evidence.reason) evidenceReason = r.evidence.reason;
+        if (r.evidence.machineShift) shiftInfo = r.evidence.machineShift;
       }
 
       const resId = r.resource?.providerResourceId || r.resource?.id || `res-${idx + 1}`;
@@ -173,6 +205,10 @@ export function generateExecutiveBrief(data: any): ExecutiveReportSummary {
         riskScore: Number(r.riskScore ?? 10),
         confidence: Number(r.confidence ?? 0.95),
         recommendedAction: getActionVerb(r.title, resType),
+        currentMachine: shiftInfo?.currentMachine,
+        targetMachine: shiftInfo?.targetMachine,
+        targetSpecs: shiftInfo?.targetSpecs,
+        savingsPercentage: shiftInfo?.savingsPercentage,
       };
     });
   }
@@ -183,16 +219,20 @@ export function generateExecutiveBrief(data: any): ExecutiveReportSummary {
       {
         id: "act-1",
         rank: 1,
-        title: "Stop Idle EC2 Instance: i-0c1f948e5cc96d55c",
+        title: "Shift EC2 Instance: production-api (t3.xlarge → t4g.medium)",
         resourceId: "i-0c1f948e5cc96d55c",
         resourceType: "AWS::EC2::Instance",
         region: "ap-south-1",
-        reason: "P99 CPU utilization remained under 0.8% with zero network ingress for 14 consecutive days.",
-        monthlySavings: 58.40,
-        dailyGco2eReduction: 24.5,
+        reason: "P99 CPU utilization remained under 18% with 68% safety headroom. Shift to Graviton3 t4g.medium eliminates $97.10/mo.",
+        monthlySavings: 97.10,
+        dailyGco2eReduction: 32.5,
         riskScore: 10,
         confidence: 0.95,
-        recommendedAction: "Execute Terraform state decommission or AWS EC2 stop-instances.",
+        recommendedAction: "Execute autonomous agent fast optimization or aws ec2 modify-instance-attribute.",
+        currentMachine: "t3.xlarge",
+        targetMachine: "t4g.medium",
+        targetSpecs: "2 vCPU • 4 GB RAM • AWS Graviton3 (Arm64)",
+        savingsPercentage: 79.8,
       },
       {
         id: "act-2",
@@ -223,6 +263,137 @@ export function generateExecutiveBrief(data: any): ExecutiveReportSummary {
         recommendedAction: "Invoke aws ec2 release-address to eliminate hourly idle surcharge.",
       },
     ];
+  }
+
+  // Machine Shift Ledger (Deterministic Target Sizing)
+  const machineShiftLedger: MachineShiftLedgerItem[] = [];
+
+  // 1. From recommendations
+  rawRecs.forEach((r) => {
+    let parsed: any = null;
+    try {
+      parsed = typeof r.evidence === "string" ? JSON.parse(r.evidence) : r.evidence;
+    } catch {}
+
+    if (parsed?.machineShift) {
+      const ms = parsed.machineShift;
+      machineShiftLedger.push({
+        id: r.id,
+        resourceId: r.resource?.providerResourceId || r.resourceId,
+        nameTag: r.title.replace(/^Shift EC2 Instance:\s*/, "").split("(")[0].trim() || r.resource?.providerResourceId || "EC2 Node",
+        currentMachine: ms.currentMachine,
+        currentSpecs: ms.currentSpecs,
+        currentCost: ms.currentMonthlyCost,
+        targetMachine: ms.targetMachine,
+        targetSpecs: ms.targetSpecs,
+        targetCost: ms.targetMonthlyCost,
+        monthlySavings: ms.monthlySavings,
+        savingsPercentage: ms.savingsPercentage,
+        annualSavings: ms.annualSavings,
+        carbonReductionPercent: ms.carbonReductionPercent,
+        safetyMarginPercent: ms.safetyMarginPercent,
+        agentCliCommand: ms.agentCliCommand,
+        agentActionDescription: ms.agentActionDescription,
+      });
+    }
+  });
+
+  // 2. If no shift recommendations in recommendations table, derive from EC2 inventory
+  if (machineShiftLedger.length === 0 && Array.isArray(data?.resources?.ec2)) {
+    data.resources.ec2
+      .filter((e: any) => e.lifecycleState === "running")
+      .forEach((e: any, idx: number) => {
+        let peakCpu = 18;
+        let avgCpu = 7;
+        try {
+          if (e.telemetryMetrics) {
+            const tm = JSON.parse(e.telemetryMetrics);
+            if (tm.peakCpu) peakCpu = tm.peakCpu;
+            if (Array.isArray(tm.cpuDailyAverages) && tm.cpuDailyAverages.length > 0) {
+              avgCpu = tm.cpuDailyAverages.reduce((a: number, b: number) => a + b, 0) / tm.cpuDailyAverages.length;
+            }
+          }
+        } catch {}
+
+        const ms = calculateTargetMachine(
+          e.instanceType || "t3.large",
+          peakCpu,
+          avgCpu,
+          e.monthlyCost,
+          e.providerResourceId,
+          e.region || "ap-south-1"
+        );
+
+        let nameTag = e.providerResourceId;
+        try {
+          const tags = JSON.parse(e.tags || "[]");
+          const found = tags.find((t: any) => t.Key === "Name");
+          if (found?.Value) nameTag = found.Value;
+        } catch {}
+
+        machineShiftLedger.push({
+          id: `shift-${e.id || idx}`,
+          resourceId: e.providerResourceId,
+          nameTag,
+          currentMachine: ms.currentMachine,
+          currentSpecs: ms.currentSpecs,
+          currentCost: ms.currentMonthlyCost,
+          targetMachine: ms.targetMachine,
+          targetSpecs: ms.targetSpecs,
+          targetCost: ms.targetMonthlyCost,
+          monthlySavings: ms.monthlySavings,
+          savingsPercentage: ms.savingsPercentage,
+          annualSavings: ms.annualSavings,
+          carbonReductionPercent: ms.carbonReductionPercent,
+          safetyMarginPercent: ms.safetyMarginPercent,
+          agentCliCommand: ms.agentCliCommand,
+          agentActionDescription: ms.agentActionDescription,
+        });
+      });
+  }
+
+  // 3. Fallback default machine shift ledger if inventory is empty
+  if (machineShiftLedger.length === 0) {
+    const defaultShift1 = calculateTargetMachine("t3.xlarge", 18, 7, 121.47, "i-0c1f948e5cc96d55c", "ap-south-1");
+    const defaultShift2 = calculateTargetMachine("m5.large", 14, 5, 70.08, "i-0f23280f9e61097b7", "ap-south-1");
+
+    machineShiftLedger.push({
+      id: "shift-default-1",
+      resourceId: "i-0c1f948e5cc96d55c",
+      nameTag: "production-api-gateway",
+      currentMachine: defaultShift1.currentMachine,
+      currentSpecs: defaultShift1.currentSpecs,
+      currentCost: defaultShift1.currentMonthlyCost,
+      targetMachine: defaultShift1.targetMachine,
+      targetSpecs: defaultShift1.targetSpecs,
+      targetCost: defaultShift1.targetMonthlyCost,
+      monthlySavings: defaultShift1.monthlySavings,
+      savingsPercentage: defaultShift1.savingsPercentage,
+      annualSavings: defaultShift1.annualSavings,
+      carbonReductionPercent: defaultShift1.carbonReductionPercent,
+      safetyMarginPercent: defaultShift1.safetyMarginPercent,
+      agentCliCommand: defaultShift1.agentCliCommand,
+      agentActionDescription: defaultShift1.agentActionDescription,
+    });
+
+    machineShiftLedger.push({
+      id: "shift-default-2",
+      resourceId: "i-0f23280f9e61097b7",
+      nameTag: "staging-worker-node",
+      currentMachine: defaultShift2.currentMachine,
+      currentSpecs: defaultShift2.currentSpecs,
+      currentCost: defaultShift2.currentMonthlyCost,
+      targetMachine: defaultShift2.targetMachine,
+      targetSpecs: defaultShift2.targetSpecs,
+      targetCost: defaultShift2.targetMonthlyCost,
+      monthlySavings: defaultShift2.monthlySavings,
+      savingsPercentage: defaultShift2.savingsPercentage,
+      annualSavings: defaultShift2.annualSavings,
+      carbonReductionPercent: defaultShift2.carbonReductionPercent,
+      safetyMarginPercent: defaultShift2.safetyMarginPercent,
+      agentCliCommand: defaultShift2.agentCliCommand,
+      agentActionDescription: defaultShift2.agentActionDescription,
+    });
   }
 
   // Strategic Modernization Levers
@@ -295,6 +466,7 @@ export function generateExecutiveBrief(data: any): ExecutiveReportSummary {
     },
     serviceLedger,
     prioritizedActions,
+    machineShiftLedger,
     modernizationLevers,
     regionalComparison,
     compliance: {
