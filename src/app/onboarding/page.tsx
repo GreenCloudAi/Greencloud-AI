@@ -320,15 +320,15 @@ function OnboardingWizard() {
       return;
     }
 
-    if (!roleArn.trim().startsWith("arn:aws:iam::")) {
-      setError("Role ARN must follow format: arn:aws:iam::<12-digit-account>:role/<role-name>");
+    if (!new RegExp("^arn:aws:iam::" + accountId.trim() + ":role/[A-Za-z0-9+=,.@_/-]+$").test(roleArn.trim())) {
+      setError("Enter an IAM role ARN for the AWS account ID above.");
       return;
     }
 
     setConnecting(true);
 
     try {
-      setConnectionStage("Authenticating AWS IAM Role via STS AssumeRole...");
+      setConnectionStage("Saving AWS connection settings...");
 
       const res = await fetch("/api/cloud-accounts", {
         method: "POST",
@@ -346,7 +346,7 @@ function OnboardingWizard() {
       });
 
       const data = await res.json();
-      if (data.error) throw new Error(data.error.message);
+      if (!res.ok || data.error) throw new Error(data.error?.message ?? "Unable to save the connection.");
 
       setHasAccount(true);
       if (typeof window !== "undefined") {
@@ -357,7 +357,7 @@ function OnboardingWizard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ activeRole: selectedRole }),
       }).catch(() => {});
-      setConnectionStage("Connected successfully. Opening dashboard...");
+      setConnectionStage("Connection saved. Run a sync to validate AWS access.");
       setTimeout(() => {
         router.push("/dashboard");
       }, 700);

@@ -16,6 +16,7 @@ export interface RoleSeed {
 
 export const PERMISSION_SEEDS: PermissionSeed[] = [
   { key: "dashboard:read", category: "dashboard", description: "Read dashboard telemetry and summaries" },
+  { key: "billing:export", category: "billing", description: "Export billing data for permitted accounts" },
   { key: "account:read", category: "accounts", description: "View connected cloud accounts" },
   { key: "account:write", category: "accounts", description: "Connect, update, or disconnect cloud accounts" },
   { key: "credentials:write", category: "accounts", description: "Store or purge encrypted cloud credentials" },
@@ -44,6 +45,7 @@ export const ROLE_SEEDS: RoleSeed[] = [
     name: "Workspace Admin",
     description: "Cross-account governance, RBAC administration, budgets, and approvals without silent infra execution",
     allow: [
+      "billing:export",
       "dashboard:read",
       "account:read",
       "account:write",
@@ -71,6 +73,7 @@ export const ROLE_SEEDS: RoleSeed[] = [
     name: "FinOps Engineer",
     description: "Billed vs. effective cost attribution, commitment savings, budgets, and approval governance",
     allow: [
+      "billing:export",
       "dashboard:read",
       "account:read",
       "sync:trigger",

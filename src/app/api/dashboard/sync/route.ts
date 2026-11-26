@@ -16,12 +16,17 @@ export async function POST(request: Request) {
 
     const tenant = await seedDefaultTenant();
     const db = new TenantIsolatedDb(tenant.id);
-    const body = await request.json().catch(() => ({}));
-    const requestedIds: string[] = Array.isArray(body.accountIds) ? body.accountIds : [];
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)
+      || (body.accountIds !== undefined && (!Array.isArray(body.accountIds)
+        || body.accountIds.some((id: unknown) => typeof id !== "string" || !id.trim())))) {
+      return NextResponse.json({ error: { message: "Provide a valid list of account IDs." } }, { status: 400 });
+    }
+    const requestedIds: string[] | undefined = body.accountIds;
 
     const allAccounts = await db.listAccounts();
     const targetAccounts =
-      requestedIds.length > 0
+      requestedIds !== undefined
         ? allAccounts.filter((a) => requestedIds.includes(a.id))
         : allAccounts;
 
@@ -57,7 +62,7 @@ export async function POST(request: Request) {
     const recommendationCount = await recEngine.generateRecommendations();
 
     return NextResponse.json({
-      syncedAccounts: results.length,
+      syncedAccounts: results.filter((result) => result.success && result.errors.length === 0).length,
       results,
       recommendationCount,
     });

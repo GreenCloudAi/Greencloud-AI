@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, IBM_Plex_Mono } from "next/font/google";
 import { prisma } from "@/services/db";
+import { localDemoEnabled } from "@/services/workspaceAccess";
 import {
   AccountStatusProvider,
   PersistentNavigationShell,
@@ -35,6 +36,7 @@ export const viewport: Viewport = {
 };
 
 async function getInitialHasAccount(): Promise<boolean> {
+  if (!localDemoEnabled()) return false;
   try {
     const count = await prisma.cloudAccount.count();
     return count > 0;

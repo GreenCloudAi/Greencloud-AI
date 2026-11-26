@@ -116,3 +116,14 @@ An automated monitoring mechanism that tracks application health, performance SL
 | **SP** | Savings Plans (AWS) | FinOps |
 | **UML** | Unified Modeling Language | Software Engineering |
 | **WCAG** | Web Content Accessibility Guidelines | Web Standards |
+
+## Workload evidence and optimization
+
+- **Workload** is an application, job, or service with an owner, demand signal, configuration, and operational objectives. It can span multiple resources and cloud accounts.
+- **SLI** is a measured service indicator, such as the fraction of requests under 200 ms. An **SLO** is the target for that indicator over an agreed window.
+- **Percentile** is the value at a specified rank of the sample distribution. p95 of five-minute CPU averages describes those averages. It cannot describe request-level latency or bursts hidden by aggregation.
+- **Coverage** specifies how many eligible resources or expected intervals were observed. **Freshness** specifies the age of the latest usable observation. Stale, absent, unsupported, access denied and confirmed zero are distinct states.
+- **Candidate** is a potential configuration to investigate. An actionable recommendation has passed compatibility and workload evidence checks and has an explicit approval path.
+- **Headroom** is the gap between an operational capacity limit and applicable demand, expressed in the same unit and over a stated window.
+- **Counterfactual** estimates what would likely have happened without a change under comparable conditions. It needs documented assumptions and uncertainty.
+- **Verified saving** is an attributable difference from comparable actual spending after billing has settled, with performance and reliability assessed separately.

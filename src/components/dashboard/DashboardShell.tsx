@@ -37,8 +37,10 @@ interface DashboardShellProps {
   selectedProviders: CloudProviderId[];
   onChangeProviders: (providers: CloudProviderId[]) => void;
   onSync: () => void;
+  canSync: boolean;
   syncing: boolean;
-  onExportJson: () => void;
+  onExportJson?: () => void;
+  restrictMutations: boolean;
   onOpenKeysModal: () => void;
   onOpenSettingsModal: () => void;
   onOpenFocusImport: () => void;
@@ -73,8 +75,10 @@ export function DashboardShell({
   selectedProviders,
   onChangeProviders,
   onSync,
+  canSync,
   syncing,
   onExportJson,
+  restrictMutations,
   onOpenKeysModal,
   onOpenSettingsModal,
   onOpenFocusImport,
@@ -84,7 +88,7 @@ export function DashboardShell({
   const [mobileRailOpen, setMobileRailOpen] = useState(false);
 
   const currentTabMeta = RAIL_TABS.find((t) => t.id === activeTab) ?? RAIL_TABS[0];
-  const isReadOnly = roleFilter === "viewer";
+  const isReadOnly = restrictMutations || roleFilter === "viewer";
 
   const renderRailContent = (compactMobile = false) => (
     <div className="flex flex-col h-full justify-between gap-6">
@@ -191,14 +195,14 @@ export function DashboardShell({
               <span>Budget & SCI Config</span>
             </button>
           )}
-          <Link
+          {!restrictMutations && <Link
             href="/audit-history"
             prefetch={true}
             className="flex items-center gap-2.5 rounded-[14px] px-3.5 py-2 text-[13px] font-semibold text-[#686450] hover:bg-[#F5EED6] hover:text-[#2E2B1A] transition-colors"
           >
             <History className="w-4 h-4 shrink-0" />
             <span>Audit History</span>
-          </Link>
+          </Link>}
           {!isReadOnly && (
             <Link
               href="/onboarding"
@@ -266,15 +270,15 @@ export function DashboardShell({
         ) : (
           <div className="space-y-2">
             <div className="text-[12.5px] font-bold text-[#2E2B1A]">
-              No cloud account linked
+              {allAccounts.length ? "No accounts match this selection" : "No cloud account linked"}
             </div>
-            <Link
+            {!isReadOnly && allAccounts.length === 0 && <Link
               href="/onboarding"
               prefetch={true}
               className="m3-btn m3-btn-compact m3-pastel-sun w-full text-[12px]"
             >
               Connect Cloud
-            </Link>
+            </Link>}
           </div>
         )}
       </div>
@@ -375,7 +379,7 @@ export function DashboardShell({
                 })}
               </div>
 
-              <button
+              {onExportJson && <button
                 type="button"
                 onClick={onExportJson}
                 className="m3-btn m3-btn-compact m3-pastel-oat text-[12.5px]"
@@ -383,9 +387,9 @@ export function DashboardShell({
               >
                 <Download className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Export</span>
-              </button>
+              </button>}
 
-              {allAccounts.length > 0 && !isReadOnly && (
+              {allAccounts.length > 0 && canSync && (
                 <button
                   type="button"
                   onClick={onSync}
@@ -396,7 +400,7 @@ export function DashboardShell({
                   <span>
                     {syncing
                       ? "Syncing..."
-                      : selectedAccountIds.length > 1
+                      : !restrictMutations && selectedAccountIds.length > 1
                       ? `Sync (${selectedAccountIds.length})`
                       : "Sync"}
                   </span>

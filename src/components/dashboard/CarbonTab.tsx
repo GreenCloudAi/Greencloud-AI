@@ -39,6 +39,8 @@ export function CarbonTab({ data, isReadOnly, onSaveUnits }: CarbonTabProps) {
     setSavingUnits(true);
     try {
       await onSaveUnits(unitSlider);
+    } catch {
+      // The dashboard displays the save error.
     } finally {
       setSavingUnits(false);
     }

@@ -9,12 +9,12 @@ import {
   BarChart,
   CartesianGrid,
   ComposedChart,
-  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+import { AccountCoverage } from "./AccountCoverage";
 import { ComparisonSection } from "./ComparisonSection";
 import { DashboardData, DashboardTab, RoleFilter, TimeWindow } from "./types";
 
@@ -67,29 +67,29 @@ export function OverviewTab({
     comparisons,
   } = data;
 
-  const isReadOnly = roleFilter === "viewer";
+  const isReadOnly = data.accessMode === "scoped" || roleFilter === "viewer";
+  const billingCurrencies = new Set(comparisons.byAccount.flatMap((account) =>
+    (account.billingTotals ?? []).map(({ currency }) => currency)
+  ));
+  const hasComparableUsdBilling = billingCurrencies.size === 1 && billingCurrencies.has("USD");
 
   const chartData = useMemo(() => {
     const windowDays = timeWindow === "7d" ? 7 : timeWindow === "90d" ? 90 : 30;
+    if (!hasComparableUsdBilling) return [];
     const trajectory = data.forecast?.trajectory ?? [];
     if (trajectory.length > 0) {
       const historical = trajectory.filter((pt) => !pt.isForecast).slice(-windowDays);
       const projected = trajectory.filter((pt) => pt.isForecast);
       return [...historical, ...projected].map((pt) => ({
         label: pt.date.slice(5),
-        spend: pt.predictedCost ?? pt.actualCost ?? pt.projectedCost ?? 0,
-        carbon: pt.predictedCarbonGco2e ?? pt.actualCarbon ?? pt.projectedCarbon ?? 0,
+        spend: pt.predictedCost ?? pt.actualCost ?? pt.projectedCost ?? null,
       }));
     }
     return (costs.dailyTrend || []).slice(-windowDays).map((d) => ({
       label: d.date.slice(5),
       spend: d.cost,
-      carbon:
-        carbon.totalOperationalCarbon && costs.totalCost
-          ? Number(((d.cost / Math.max(0.01, costs.totalCost)) * carbon.totalOperationalCarbon).toFixed(1))
-          : 0,
     }));
-  }, [carbon.totalOperationalCarbon, costs.dailyTrend, costs.totalCost, data.forecast?.trajectory, timeWindow]);
+  }, [costs.dailyTrend, data.forecast?.trajectory, hasComparableUsdBilling, timeWindow]);
 
   const cpuBandBars = useMemo(
     () => [
@@ -105,6 +105,10 @@ export function OverviewTab({
     () => (recommendations.items || []).filter((r) => r.status === "active").slice(0, 3),
     [recommendations.items]
   );
+
+  if (!account && (data.allAccounts.length > 0 || isReadOnly)) {
+    return <p className="rounded-[24px] bg-[#FAF6E8] p-6">No accounts match the current selection.</p>;
+  }
 
   if (!account) {
     return (
@@ -138,7 +142,7 @@ export function OverviewTab({
   // Role-Tailored 4 KPI Cards (zero hardcoding; computed from real selected accounts)
   const roleKpiCards = (() => {
     const priorDelta =
-      costs.totalCost !== null && costs.priorPeriodCost !== null && costs.priorPeriodCost > 0
+      hasComparableUsdBilling && costs.totalCost !== null && costs.priorPeriodCost !== null && costs.priorPeriodCost > 0
         ? `${(((costs.totalCost - costs.priorPeriodCost) / costs.priorPeriodCost) * 100).toFixed(1)}% vs prior ${timeWindow}`
         : costs.dailyBurnRate !== null
         ? `${formatMoney(costs.dailyBurnRate)}/day burn`
@@ -149,7 +153,7 @@ export function OverviewTab({
         return [
           {
             title: "Consolidated Spend",
-            value: formatMoney(costs.totalCost),
+            value: formatMoney(hasComparableUsdBilling ? costs.totalCost : null),
             sub: priorDelta,
             bg: "bg-[#FBE7CB]/70 hover:bg-[#FBE7CB]",
             ink: "text-[#6B4814]",
@@ -189,7 +193,7 @@ export function OverviewTab({
         return [
           {
             title: "Billed Cloud Spend",
-            value: formatMoney(costs.totalCost),
+            value: formatMoney(hasComparableUsdBilling ? costs.totalCost : null),
             sub: priorDelta,
             bg: "bg-[#FBE7CB]/70 hover:bg-[#FBE7CB]",
             ink: "text-[#6B4814]",
@@ -198,8 +202,8 @@ export function OverviewTab({
           },
           {
             title: "Effective Cost",
-            value: formatMoney(costs.effectiveCostTotal),
-            sub: `${formatMoney(costs.discountSavings)} commitment savings`,
+            value: formatMoney(hasComparableUsdBilling ? costs.effectiveCostTotal : null),
+            sub: hasComparableUsdBilling ? `${formatMoney(costs.discountSavings)} commitment savings` : "See account billing coverage",
             bg: "bg-[#FAF6E8] hover:bg-[#F5EED6]",
             ink: "text-[#686450]",
             icon: "savings",
@@ -207,7 +211,7 @@ export function OverviewTab({
           },
           {
             title: "Budget Pace",
-            value: `${budget.pacePercentage}%`,
+            value: hasComparableUsdBilling && selectedAccounts.length === data.allAccounts.length ? `${budget.pacePercentage}%` : "—",
             sub: `Target: ${formatMoney(budget.target)}/mo`,
             bg: budget.status === "exceeded" ? "bg-[#FEE2E2]" : "bg-[#E2F5EF]",
             ink: budget.status === "exceeded" ? "text-[#991B1B]" : "text-[#155E4B]",
@@ -246,7 +250,7 @@ export function OverviewTab({
             tab: "resources" as DashboardTab,
           },
           {
-            title: "Terraform PR Queue",
+            title: "Recommendations to review",
             value: `${recommendations.activeCount} ready`,
             sub: `${formatMoney(recommendations.totalSavings || 0)}/mo savings`,
             bg: "bg-[#FFF3A8]/80 hover:bg-[#FFF3A8]",
@@ -352,7 +356,7 @@ export function OverviewTab({
         return [
           {
             title: "Monthly Cloud Spend",
-            value: formatMoney(costs.totalCost),
+            value: formatMoney(hasComparableUsdBilling ? costs.totalCost : null),
             sub: priorDelta,
             bg: "bg-[#FBE7CB]/70",
             ink: "text-[#6B4814]",
@@ -455,13 +459,14 @@ export function OverviewTab({
       {/* MODE 1: ROLE-TAILORED OVERVIEW */}
       {viewMode === "overview" && (
         <div className="space-y-6">
+          <AccountCoverage data={data} role={roleFilter} onSelectTab={onSelectTab} />
           <section className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             {/* Shared Trajectory Graph */}
             <div className="lg:col-span-8 rounded-[28px] bg-[#FAF6E8] p-5 sm:p-6 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-[17px] font-bold text-[#2E2B1A]">
-                    Spend & Carbon Trajectory
+                    Spend trajectory
                   </h2>
                   <p className="text-[12.5px] text-[#686450]">
                     Combined across {selectedAccounts.length} account(s) ({timeWindow.toUpperCase()})
@@ -471,10 +476,6 @@ export function OverviewTab({
                   <span className="inline-flex items-center gap-1.5 text-[#9A6B00]">
                     <span className="w-2.5 h-2.5 rounded-full bg-[#9A6B00]" />
                     Spend ($)
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 text-[#1F8A70]">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#1F8A70]" />
-                    Carbon (g CO2e)
                   </span>
                 </div>
               </div>
@@ -492,7 +493,6 @@ export function OverviewTab({
                       <CartesianGrid stroke="#EDE7D2" strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#8D8975" }} axisLine={false} tickLine={false} minTickGap={22} />
                       <YAxis yAxisId="spend" tick={{ fontSize: 11, fill: "#9A6B00" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
-                      <YAxis yAxisId="carbon" orientation="right" tick={{ fontSize: 11, fill: "#1F8A70" }} axisLine={false} tickLine={false} />
                       <Tooltip
                         contentStyle={{
                           backgroundColor: "#2E2B1A",
@@ -503,13 +503,12 @@ export function OverviewTab({
                         }}
                       />
                       <Area yAxisId="spend" type="monotone" dataKey="spend" name="Spend ($)" stroke="#9A6B00" strokeWidth={2} fill="url(#ovSpendGrad)" dot={false} />
-                      <Line yAxisId="carbon" type="monotone" dataKey="carbon" name="Carbon (g CO2e)" stroke="#1F8A70" strokeWidth={1.8} dot={false} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-center gap-3">
                     <p className="text-[13.5px] text-[#686450]">
-                      No billing or CloudWatch telemetry synced for the current selection.
+                      {billingCurrencies.size > 0 ? "See account totals by currency above." : "No billing rows for this period."}
                     </p>
                     {!isReadOnly && (
                       <button type="button" onClick={onSync} disabled={syncing} className="m3-btn m3-btn-compact m3-pastel-sun text-[12.5px]">
@@ -537,7 +536,7 @@ export function OverviewTab({
                           <div className="text-[11px] text-[#8D8975]">{acc.provider.toUpperCase()} · {acc.resourceCount} assets</div>
                         </div>
                         <div className="text-right tabular-nums shrink-0">
-                          <div className="text-[13px] font-extrabold text-[#2E2B1A]">{formatMoney(acc.monthlySpend)}</div>
+                          <div className="text-[13px] font-extrabold text-[#2E2B1A]">{formatMoney(acc.billingTotals?.length === 1 && acc.billingTotals[0].currency === "USD" ? acc.billingTotals[0].amount : null)}</div>
                           <div className="text-[11px] font-bold text-[#155E4B]">-{formatMoney(acc.potentialSavings)}/mo</div>
                         </div>
                       </div>
@@ -552,10 +551,10 @@ export function OverviewTab({
                       <span>Review Optimization Queue</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
-                    <Link href="/audit-history" prefetch={true} className="m3-btn m3-btn-compact m3-pastel-oat w-full justify-between">
+  {data.accessMode === "local_demo" && (                  <Link href="/audit-history" prefetch={true} className="m3-btn m3-btn-compact m3-pastel-oat w-full justify-between">
                       <span>Open Audit History</span>
                       <ArrowRight className="w-4 h-4" />
-                    </Link>
+                    </Link>)}
                   </div>
                 </>
               )}
@@ -567,7 +566,7 @@ export function OverviewTab({
                     <p className="text-[12.5px] text-[#686450]">Largest billed services across selected scope</p>
                   </div>
                   <div className="space-y-2">
-                    {costs.byService.slice(0, 4).map((s) => (
+                    {hasComparableUsdBilling && costs.byService.slice(0, 4).map((s) => (
                       <div key={`${s.provider}-${s.service}`} className="rounded-[16px] bg-[#FFFDF4] px-3.5 py-2.5 flex items-center justify-between gap-2">
                         <div className="min-w-0">
                           <div className="text-[13px] font-bold text-[#2E2B1A] truncate">{s.service}</div>
@@ -576,8 +575,8 @@ export function OverviewTab({
                         <span className="text-[13px] font-extrabold text-[#9A6B00] tabular-nums">{formatMoney(s.total)}</span>
                       </div>
                     ))}
-                    {costs.byService.length === 0 && (
-                      <div className="rounded-[16px] bg-[#FFFDF4] p-4 text-[12.5px] text-[#686450]">No service costs synced yet.</div>
+                    {(!hasComparableUsdBilling || costs.byService.length === 0) && (
+                      <div className="rounded-[16px] bg-[#FFFDF4] p-4 text-[12.5px] text-[#686450]">{billingCurrencies.size > 0 ? "Compare costs within one currency." : "No service costs for this period."}</div>
                     )}
                   </div>
                   <button type="button" onClick={() => onSelectTab("costs")} className="m3-btn m3-btn-compact m3-pastel-oat w-full justify-between">
@@ -595,7 +594,7 @@ export function OverviewTab({
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-[18px] bg-[#E2F5EF] p-3.5">
-                      <div className="text-[11.5px] font-bold text-[#155E4B]">Healthy (20-80%)</div>
+                      <div className="text-[11.5px] font-bold text-[#155E4B]">Measured CPU (20–80%)</div>
                       <div className="text-[22px] font-extrabold text-[#2E2B1A] tabular-nums mt-1">{resources.byState.healthy}</div>
                     </div>
                     <div className="rounded-[18px] bg-[#FFF3A8] p-3.5">
@@ -629,7 +628,7 @@ export function OverviewTab({
                       <div key={r.region} className="rounded-[16px] bg-[#FFFDF4] px-3.5 py-2.5 flex items-center justify-between gap-2">
                         <div>
                           <div className="text-[13px] font-bold text-[#2E2B1A]">{r.region}</div>
-                          <div className="text-[11px] text-[#8D8975]">{r.resourceCount} assets · {formatMoney(r.monthlyCost)}</div>
+                          <div className="text-[11px] text-[#8D8975]">{r.resourceCount} assets · {formatMoney(hasComparableUsdBilling ? r.monthlyCost : null)}</div>
                         </div>
                         <span className={`text-[12px] font-bold tabular-nums ${r.gridIntensity <= 150 ? "text-[#155E4B]" : r.gridIntensity >= 450 ? "text-[#991B1B]" : "text-[#9A6B00]"}`}>
                           {r.gridIntensity} g/kWh

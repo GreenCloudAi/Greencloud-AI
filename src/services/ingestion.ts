@@ -39,6 +39,14 @@ async function withRetry<T>(
   throw new Error("Retry logic failed");
 }
 
+export type SyncSource = "inventory" | "telemetry" | "billing";
+export type SyncSourceResult = {
+  status: "available" | "no_rows" | "partial" | "failed" | "not_run";
+  records: number;
+  error?: string;
+};
+export type SyncSources = Record<SyncSource, SyncSourceResult>;
+
 export class IngestionService {
   private tenantId: string;
   private accountId: string;
@@ -53,7 +61,7 @@ export class IngestionService {
    * Isolates failures in sub-scans (EC2, EBS, EIP, Billing) so that partial
    * failures do not prevent progress.
    */
-  async runSync(): Promise<{ success: boolean; errors: string[] }> {
+  async runSync(): Promise<{ success: boolean; errors: string[]; sources?: SyncSources }> {
     const errors: string[] = [];
 
     // 1. Fetch Cloud Account from DB
@@ -141,6 +149,9 @@ export class IngestionService {
     );
     const syncTime = new Date();
     const syncedResourceIds: string[] = [];
+    let cpuRecords = 0;
+    let missingCpu = 0;
+    let ec2Failed = false;
 
     // --- Sub-scan 1: EC2 Instances ---
     try {
@@ -149,6 +160,7 @@ export class IngestionService {
       Logger.success("INGEST", "EC2_INGEST_FETCHED", `Discovered ${instances.length} EC2 instances in account.`);
 
       for (const inst of instances) {
+        if (inst.State === "running" && inst.CpuUtilizationSeries.length === 0) missingCpu++;
         // Upsert resource into the Resource Graph
         const resource = await prisma.cloudResource.upsert({
           where: { id: `${this.accountId}_${inst.InstanceId}` },
@@ -180,17 +192,18 @@ export class IngestionService {
             tags: JSON.stringify(inst.Tags),
             instanceType: inst.InstanceType,
             monthlyCost: inst.MonthlyCost,
-            telemetryMetrics: JSON.stringify({
+            telemetryMetrics: inst.CpuUtilizationSeries.length ? JSON.stringify({
               cpuDailyAverages: inst.CpuUtilizationSeries,
               peakCpu: inst.PeakCpuUtilization,
               lookbackDays: GreenCloudConfig.cloudwatchLookbackDays,
               collectedAt: syncTime.toISOString(),
-            }),
+            }) : undefined,
             lastSeenAt: syncTime,
           },
         });
 
         syncedResourceIds.push(resource.id);
+        if (inst.CpuUtilizationSeries.length > 0) cpuRecords++;
 
         // Calculate carbon emissions from real CPU data
         const avgCpu =
@@ -217,6 +230,7 @@ export class IngestionService {
         });
       }
     } catch (err: any) {
+      ec2Failed = true;
       const msg = `EC2 Ingestion failed: ${err.message || err}`;
       Logger.error("INGEST", "EC2_INGEST_ERROR", err, "Check 'ec2:DescribeInstances' permission and IAM role trust relationship.");
       errors.push(msg);
@@ -334,89 +348,88 @@ export class IngestionService {
       errors.push(msg);
     }
 
-    // --- Sub-scan 4: Billing (Cost Explorer → FOCUS Normalization) ---
-    try {
-      Logger.info("INGEST", "BILLING_INGEST_START", "Starting Cost Explorer 30-day billing scan...");
-      const thirtyDaysAgo = new Date(
-        syncTime.getTime() - 30 * 24 * 3600 * 1000
-      );
-      const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().slice(0, 10);
-      // Cost Explorer End date is exclusive in UTC, so tomorrow ensures today's spend is included
-      const tomorrow = new Date(syncTime.getTime() + 24 * 3600 * 1000);
-      const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+    // --- Sub-scan 4: Billing ---
+    const dayMs = 24 * 60 * 60 * 1000;
+    const billingEnd = new Date(syncTime.getTime() + dayMs).toISOString().slice(0, 10);
+    const billingStart = new Date(syncTime.getTime() - 30 * dayMs).toISOString().slice(0, 10);
+    const billing = {
+      source: "aws_cost_explorer",
+      metric: "UnblendedCost",
+      start: billingStart,
+      endExclusive: billingEnd,
+      status: "failed",
+      receivedRows: 0,
+      storedRows: 0,
+      estimatedRows: 0,
+    };
 
+    try {
       const billRows = await withRetry(
-        () => connector.fetchBillingSummary(thirtyDaysAgoStr, tomorrowStr),
+        () => connector.fetchBillingSummary(billingStart, billingEnd, account.externalAccountId),
         "Cost Explorer Ingestion"
       );
-      Logger.success("INGEST", "BILLING_INGEST_FETCHED", `Retrieved ${billRows.length} FOCUS-normalized cost records.`);
+      billing.receivedRows = billRows.length;
+      billing.estimatedRows = billRows.filter((row) => row.Estimated).length;
 
-      // Clean up previous cost records for re-sync safety
-      await prisma.costLineItem.deleteMany({
-        where: { cloudAccountId: this.accountId },
-      });
-
-      for (const row of billRows) {
-        // Attempt to match billing service to resource type
-        let matchedResourceId: string | null = null;
-
-        if (
-          row.Service === "Amazon Elastic Compute Cloud - Compute" ||
-          row.Service === "AmazonEC2"
-        ) {
-          const matches = await prisma.cloudResource.findMany({
+      if (billRows.length > 0) {
+        const records = billRows.map((row) => ({
+          cloudAccountId: this.accountId,
+          provider: "aws",
+          region: "global",
+          chargeDate: new Date(row.Date),
+          providerService: row.Service,
+          serviceCategory: normalizeFocusServiceCategory(row.Service),
+          chargeCategory: "Unclassified",
+          billedCost: row.Cost,
+          effectiveCost: row.Cost,
+          currency: row.Currency,
+        }));
+        await prisma.$transaction([
+          prisma.costLineItem.deleteMany({
             where: {
               cloudAccountId: this.accountId,
-              resourceType: "ec2",
+              provider: "aws",
+              region: "global",
+              chargeCategory: { in: ["Usage", "Unclassified"] },
+              chargeDate: { gte: new Date(billingStart), lt: new Date(billingEnd) },
             },
-          });
-          if (matches.length > 0) matchedResourceId = matches[0].id;
-        } else if (
-          row.Service === "Amazon Elastic Block Store" ||
-          row.Service === "AmazonEBS"
-        ) {
-          const matches = await prisma.cloudResource.findMany({
-            where: {
-              cloudAccountId: this.accountId,
-              resourceType: "ebs",
-            },
-          });
-          if (matches.length > 0) matchedResourceId = matches[0].id;
-        } else if (
-          row.Service === "Amazon Virtual Private Cloud" ||
-          row.Service === "AmazonVPC"
-        ) {
-          const matches = await prisma.cloudResource.findMany({
-            where: {
-              cloudAccountId: this.accountId,
-              resourceType: "eip",
-            },
-          });
-          if (matches.length > 0) matchedResourceId = matches[0].id;
-        }
-
-        // Write as FOCUS normalized cost line item
-        await prisma.costLineItem.create({
-          data: {
-            cloudAccountId: this.accountId,
-            resourceId: matchedResourceId,
-            provider: "aws",
-            region: "global",
-            chargeDate: new Date(row.Date),
-            providerService: row.Service,
-            serviceCategory: normalizeFocusServiceCategory(row.Service),
-            chargeCategory: "Usage",
-            billedCost: row.Cost,
-            effectiveCost: row.Cost,
-            currency: "USD",
-          },
-        });
+          }),
+          prisma.costLineItem.createMany({ data: records }),
+        ]);
+        billing.storedRows = records.length;
       }
+
+      billing.status = billRows.length > 0 ? "available" : "no_rows";
+      Logger.success("INGEST", "BILLING_INGEST_COMPLETE", `Billing status: ${billing.status}, rows stored: ${billing.storedRows}.`);
     } catch (err: any) {
       const msg = `Billing Ingestion failed: ${err.message || err}`;
-      Logger.error("INGEST", "BILLING_INGEST_ERROR", err, "Ensure Cost Explorer is enabled in AWS Console and IAM role has 'ce:GetCostAndUsage'.");
+      Logger.error("INGEST", "BILLING_INGEST_ERROR", err, "Ensure Cost Explorer is enabled and the IAM role has ce:GetCostAndUsage.");
       errors.push(msg);
     }
+
+    const inventoryIssues = errors.filter((error) => !error.startsWith("Billing Ingestion")).length
+      + (connector.scanIssues?.inventory ?? 0);
+    const telemetryIssues = ec2Failed || (connector.scanIssues?.telemetry ?? 0) > 0;
+    const sources: SyncSources = {
+      inventory: {
+        status: inventoryIssues ? (syncedResourceIds.length ? "partial" : "failed")
+          : syncedResourceIds.length ? "available" : "no_rows",
+        records: syncedResourceIds.length,
+        ...(inventoryIssues ? { error: "Some AWS inventory reads or writes failed." } : {}),
+      },
+      telemetry: {
+        status: telemetryIssues ? (cpuRecords ? "partial" : "failed")
+          : cpuRecords ? (missingCpu ? "partial" : "available") : "no_rows",
+        records: cpuRecords,
+        ...(telemetryIssues ? { error: "Some CloudWatch CPU reads failed or could not run." }
+          : missingCpu ? { error: "Some running instances had no CPU samples." } : {}),
+      },
+      billing: {
+        status: billing.status === "failed" ? "failed" : billing.storedRows ? "available" : "no_rows",
+        records: billing.storedRows,
+        ...(billing.status === "failed" ? { error: "Cost Explorer billing could not be refreshed." } : {}),
+      },
+    };
 
     // --- Finalize Sync Status ---
     const isSuccess = errors.length < 4; // Resilient: succeeds if at least one sub-scan worked
@@ -442,6 +455,8 @@ export class IngestionService {
         metadata: JSON.stringify({
           success: isSuccess,
           syncedResourceCount: syncedResourceIds.length,
+          billing,
+          sources,
           errors,
         }),
       },
@@ -466,6 +481,7 @@ export class IngestionService {
     return {
       success: isSuccess,
       errors,
+      sources,
     };
   }
 }

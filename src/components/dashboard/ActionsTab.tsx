@@ -52,7 +52,7 @@ export function ActionsTab({ data, roleFilter, onRefresh }: ActionsTabProps) {
       }
       setFeedback({
         type: "ok",
-        text: `${mode === "pull_request" ? "Terraform PR artifact" : "Jira Ticket"} generated for ${rec.title}`,
+        text: `${mode === "pull_request" ? "Terraform proposal file" : "Ticket draft"} generated for ${rec.title}`,
       });
       onRefresh();
     } catch (err: any) {
@@ -93,7 +93,7 @@ export function ActionsTab({ data, roleFilter, onRefresh }: ActionsTabProps) {
 
       {isReadOnly && (
         <div className="rounded-[20px] bg-[#FBE7CB] px-4 py-3 text-[12.5px] font-semibold text-[#6B4814]">
-          Read-Only Viewer mode enabled. Mutations are enforced and blocked at API level until switching to an editor role.
+          Recommendation actions are unavailable in this view.
         </div>
       )}
 
@@ -130,7 +130,7 @@ export function ActionsTab({ data, roleFilter, onRefresh }: ActionsTabProps) {
                         </span>
                       )}
                       <span className={isExecuted ? "text-[#155E4B]" : "text-[#9A6B00]"}>
-                        {isExecuted ? "Executed" : "Pending review"}
+                        {isExecuted ? "Artifact generated" : "Pending review"}
                       </span>
                     </div>
                     <h3 className="text-[17px] font-bold text-[#2E2B1A]">{rec.title}</h3>

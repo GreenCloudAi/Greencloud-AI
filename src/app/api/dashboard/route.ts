@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { parseDashboardScope } from "@/services/dashboardScope";
 import { prisma, TenantIsolatedDb } from "@/services/db";
+import { localDemoEnabled, resolveWorkspaceAccess, workspaceAccessResponse } from "@/services/workspaceAccess";
 import { seedDefaultTenant } from "@/services/seed";
 import { ForecastingEngine } from "@/services/forecastingEngine";
 import {
@@ -11,12 +13,6 @@ import {
 } from "@/services/cloudMetadata";
 
 export const dynamic = "force-dynamic";
-
-function parseWindowDays(raw: string | null): { label: "7d" | "30d" | "90d"; days: number } {
-  if (raw === "7d") return { label: "7d", days: 7 };
-  if (raw === "90d") return { label: "90d", days: 90 };
-  return { label: "30d", days: 30 };
-}
 
 function parseTagList(rawTags: string | null | undefined): Array<{ Key: string; Value: string }> {
   if (!rawTags) return [];
@@ -39,13 +35,13 @@ function parseCpuTelemetry(raw: string | null | undefined): {
   try {
     const parsed = JSON.parse(raw);
     const series = Array.isArray(parsed.cpuDailyAverages)
-      ? parsed.cpuDailyAverages.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v))
+      ? parsed.cpuDailyAverages.filter((v: unknown): v is number =>
+          typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100
+        )
       : [];
     const avg =
       series.length > 0
         ? parseFloat((series.reduce((a: number, b: number) => a + b, 0) / series.length).toFixed(2))
-        : typeof parsed.peakCpu === "number"
-        ? parsed.peakCpu
         : null;
     const peak =
       typeof parsed.peakCpu === "number"
@@ -61,56 +57,67 @@ function parseCpuTelemetry(raw: string | null | undefined): {
 
 export async function GET(request: Request) {
   try {
-    const tenant = await seedDefaultTenant();
-    const db = new TenantIsolatedDb(tenant.id);
+    const access = localDemoEnabled() ? null : await resolveWorkspaceAccess(request);
+    const tenant = access?.tenant ?? await seedDefaultTenant();
     const { searchParams } = new URL(request.url);
 
-    const { label: windowLabel, days: windowDays } = parseWindowDays(searchParams.get("window"));
-    const requestedAccountId = searchParams.get("accountId");
-    const requestedAccountIdsRaw = searchParams.get("accountIds");
-    const requestedProvidersRaw = searchParams.get("providers");
+    const { label: windowLabel, days: windowDays, accountIds: requestedIds, providerSet: providerFilterSet } = parseDashboardScope(searchParams);
     const roleParam = searchParams.get("role") || tenant.activeRole || "admin";
 
-    const allAccountsRaw = await db.listSanitizedAccounts();
+    const allAccountsRaw = access
+      ? (await prisma.cloudAccount.findMany({
+          where: { tenantId: tenant.id },
+          select: { id: true, provider: true, externalAccountId: true, name: true, status: true,
+            primaryRegion: true, roleArn: true, syncFreshness: true, syncError: true, providerConfig: true },
+        })).filter((account) => access.permits("dashboard:read", account.id, account.provider)
+          && access.permits("account:read", account.id, account.provider))
+          .map(({ roleArn, providerConfig, syncError, ...account }) => ({
+            ...account,
+            syncError: syncError ? "Sync needs attention" : null,
+            roleArn: roleArn ? "configured" : null,
+            providerConfig: providerConfig === JSON.stringify({ ingestMode: "focus_import" }) ? providerConfig : null,
+          }))
+      : await new TenantIsolatedDb(tenant.id).listSanitizedAccounts();
+    const accountIds = allAccountsRaw.map(({ id }) => id);
+    const latestJobs = access ? await prisma.syncJob.findMany({
+      where: { tenantId: tenant.id, cloudAccountId: { in: accountIds } },
+      distinct: ["cloudAccountId"],
+      orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+    }) : [];
+    const jobByAccount = new Map(latestJobs.map((job) => [job.cloudAccountId, job]));
     const allAccounts = allAccountsRaw.map((a) => ({
+      canSync: access ? a.provider === "aws" && Boolean(a.roleArn) && access.permits("sync:trigger", a.id, a.provider) : undefined,
+      sync: (() => {
+        const job = jobByAccount.get(a.id);
+        return job ? { status: job.status, attemptedAt: job.startedAt, sources: JSON.parse(job.subSourceStatuses) } : null;
+      })(),
       ...a,
       provider: normalizeProviderId(a.provider),
     }));
 
-    // Filter selected providers
-    const providerFilterSet: Set<CloudProviderId> =
-      requestedProvidersRaw && requestedProvidersRaw !== "all"
-        ? new Set(
-            requestedProvidersRaw
-              .split(",")
-              .map((p) => normalizeProviderId(p))
-          )
-        : new Set<CloudProviderId>(["aws", "gcp", "azure"]);
-
-    // Resolve selected accounts (default = all matching accounts across selected providers)
-    let requestedIds: string[] = [];
-    if (requestedAccountIdsRaw && requestedAccountIdsRaw !== "all") {
-      requestedIds = requestedAccountIdsRaw.split(",").map((s) => s.trim()).filter(Boolean);
-    } else if (requestedAccountId && requestedAccountId !== "all") {
-      requestedIds = [requestedAccountId];
-    }
-
-    const selectedAccounts = allAccounts.filter((a) => {
-      const provOk = providerFilterSet.has(a.provider);
-      if (!provOk) return false;
-      if (requestedIds.length > 0) return requestedIds.includes(a.id);
-      return true;
-    });
+    const selectedAccounts = allAccounts.filter((account) =>
+      providerFilterSet.has(account.provider) && (requestedIds === null || requestedIds.has(account.id))
+    );
 
     const selectedAccountIds = selectedAccounts.map((a) => a.id);
-    const activeAccount = selectedAccounts[0] || allAccounts[0] || null;
+    const activeAccount = selectedAccounts[0] || null;
+    const recommendationAccountIds = selectedAccounts.filter((account) =>
+      !access || access.permits("recommendation:read", account.id, account.provider)
+    ).map((account) => account.id);
     const accountById = new Map(allAccounts.map((a) => [a.id, a]));
 
     const monthlyBudget = tenant.monthlyBudget || 150.0;
     const functionalUnits = tenant.functionalUnits || 100000;
 
+    const accessMode = access ? "scoped" : "local_demo";
+    const canExportBilling = access ? selectedAccounts.some((account) =>
+      access.permits("billing:export", account.id, account.provider)
+    ) : true;
+
     if (selectedAccountIds.length === 0) {
       return NextResponse.json({
+        accessMode,
+        canExportBilling,
         scope: {
           accountIds: [],
           providers: Array.from(providerFilterSet),
@@ -216,7 +223,7 @@ export async function GET(request: Request) {
           byProvider: [],
         },
         auditLogs: [],
-      });
+      }, { headers: { "Cache-Control": "private, no-store" } });
     }
 
     const now = new Date();
@@ -241,12 +248,12 @@ export async function GET(request: Request) {
       prisma.recommendation.findMany({
         where: {
           tenantId: tenant.id,
-          resource: { cloudAccountId: { in: selectedAccountIds } },
+          resource: { cloudAccountId: { in: recommendationAccountIds } },
         },
         include: { resource: true },
         orderBy: { estimatedMonthlySavings: "desc" },
       }),
-      prisma.auditLog.findMany({
+      access ? Promise.resolve([]) : prisma.auditLog.findMany({
         where: { tenantId: tenant.id },
         orderBy: { ts: "desc" },
         take: 15,
@@ -280,9 +287,8 @@ export async function GET(request: Request) {
 
       if (inst.lifecycleState === "stopped") {
         stoppedCount++;
-        band0_20++;
-      } else {
-        const effCpu = avgCpu ?? 35;
+      } else if (inst.lifecycleState === "running" && avgCpu !== null) {
+        const effCpu = avgCpu;
         if (effCpu < 10) underutilizedCount++;
         else if (effCpu > 80) peakCount++;
         else healthyCount++;
@@ -353,17 +359,11 @@ export async function GET(request: Request) {
       };
     });
 
-    // Split cost items into current window vs real prior window (fallback to full DB items if historical data sits older than windowDays)
-    let currentCostItems = costItemsAll.filter((c) => c.chargeDate >= windowStart);
+    const currentCostItems = costItemsAll.filter((c) => c.chargeDate >= windowStart && c.chargeDate <= now);
     const priorCostItems = costItemsAll.filter(
       (c) => c.chargeDate >= prevWindowStart && c.chargeDate < windowStart
     );
-    if (currentCostItems.length === 0) {
-      currentCostItems = await prisma.costLineItem.findMany({
-        where: { cloudAccountId: { in: selectedAccountIds } },
-        orderBy: { chargeDate: "asc" },
-      });
-    }
+
 
     const serviceMap = new Map<string, { service: string; category: string; provider: CloudProviderId; total: number }>();
     const dailyTrendMap = new Map<string, number>();
@@ -594,7 +594,11 @@ export async function GET(request: Request) {
       });
     }
 
+    const billingByAccount = new Map<string, Map<string, number>>();
     for (const item of currentCostItems) {
+      const totals = billingByAccount.get(item.cloudAccountId) ?? new Map<string, number>();
+      totals.set(item.currency, (totals.get(item.currency) ?? 0) + item.billedCost);
+      billingByAccount.set(item.cloudAccountId, totals);
       const acc = accountComparisonMap.get(item.cloudAccountId);
       if (acc) {
         acc.monthlySpend += item.billedCost;
@@ -642,6 +646,9 @@ export async function GET(request: Request) {
       activeRecCount: a.activeRecCount,
       avgCpu: a.cpuCount > 0 ? parseFloat((a.cpuSum / a.cpuCount).toFixed(1)) : null,
       lastSyncedAt: a.lastSyncedAt,
+      billingTotals: Array.from(billingByAccount.get(a.id) ?? [],
+        ([currency, amount]) => ({ currency, amount: Number(amount.toFixed(2)) })
+      ),
     }));
 
     const providerRollupMap = new Map<
@@ -821,6 +828,8 @@ export async function GET(request: Request) {
     const budgetPace = Math.min(100, Math.round((spentBudget / Math.max(1, monthlyBudget)) * 100));
 
     return NextResponse.json({
+      accessMode,
+      canExportBilling,
       scope: {
         accountIds: selectedAccountIds,
         providers: Array.from(providerFilterSet),
@@ -976,10 +985,12 @@ export async function GET(request: Request) {
         targetType: l.objectType,
         targetId: l.objectId,
       })),
-    });
+    }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error: any) {
+    const denied = workspaceAccessResponse(error);
+    if (denied) return denied;
     return NextResponse.json(
-      { error: { code: "SERVER_ERROR", message: error.message || "Failed to load dashboard data" } },
+      { error: { code: "SERVER_ERROR", message: "Failed to load dashboard data" } },
       { status: 500 }
     );
   }

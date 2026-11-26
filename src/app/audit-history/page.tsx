@@ -114,7 +114,7 @@ export default function AuditHistoryPage() {
         throw new Error(`HTTP ${res.status}`);
       }
       const data = await res.json();
-      setLogs(Array.isArray(data.logs) ? data.logs : []);
+      setLogs(Array.isArray(data) ? data : Array.isArray(data.logs) ? data.logs : []);
     } catch {
       setError("Could not load audit history right now.");
     } finally {

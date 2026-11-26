@@ -2,7 +2,7 @@
 
 **Decision (26 November 2026):** Build a research-grade, AWS-first prototype. The first release should produce reproducible, reviewable cost recommendations and measure outcomes after a human makes a change. It should not control production resources.
 
-Read in this order:
+Read the [product requirements and implementation gates](./PRODUCT_REQUIREMENTS.md) first for the multi-cloud roadmap. The two documents below cover the narrower AWS pilot and the supporting evidence.
 
 1. [Project blueprint](./PROJECT_BLUEPRINT.md) — scope, architecture, algorithms, experiments, milestones, and acceptance criteria.
 2. [Research and source register](./RESEARCH_EVIDENCE.md) — papers, provider documentation, what each source actually supports, and unresolved questions.

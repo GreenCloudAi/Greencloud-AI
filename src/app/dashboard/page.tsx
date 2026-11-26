@@ -1,6 +1,7 @@
 "use client";
 
-import React, { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAccountStatus } from "@/components/common/AccountStatusContext";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
@@ -34,7 +35,11 @@ function DashboardWorkspace() {
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const latestRequest = useRef(0);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const refreshDashboard = () => setRefreshVersion((version) => version + 1);
   const [error, setError] = useState<string | null>(null);
+  const [needsSignIn, setNeedsSignIn] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
@@ -51,70 +56,59 @@ function DashboardWorkspace() {
   const [focusModalOpen, setFocusModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
-  // Sync persisted workspace config (role, budget, SCI functional units) on initial mount
+  const [roleReady, setRoleReady] = useState(false);
   useEffect(() => {
-    fetch("/api/workspace/config", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((cfg) => {
-        const storedSessionRole =
-          typeof window !== "undefined"
-            ? (window.sessionStorage.getItem("gc_selected_role") as RoleFilter | null)
-            : null;
-        if (storedSessionRole && storedSessionRole in ROLE_META) {
-          setRoleFilter(storedSessionRole);
-        } else if (cfg?.activeRole && cfg.activeRole in ROLE_META) {
-          setRoleFilter(cfg.activeRole as RoleFilter);
-        }
-      })
-      .catch(() => {});
+    const stored = window.sessionStorage.getItem("gc_selected_role");
+    if (stored && Object.hasOwn(ROLE_META, stored)) setRoleFilter(stored as RoleFilter);
+    setRoleReady(true);
   }, []);
 
-  const fetchDashboard = useCallback(
-    async (
-      accountIdsOverride?: string[],
-      providersOverride?: CloudProviderId[],
-      windowOverride?: TimeWindow,
-      roleOverride?: RoleFilter
-    ) => {
+  useEffect(() => {
+    if (!roleReady) return;
+    const requestId = ++latestRequest.current;
+    const controller = new AbortController();
+    const params = new URLSearchParams({
+      accountIds: selectedAccountIds.join(",") || "all",
+      providers: selectedProviders.join(","),
+      window: timeWindow,
+      role: roleFilter,
+    });
+    setError(null);
+
+    async function loadDashboard() {
       try {
-        setError(null);
-        const accIds = accountIdsOverride ?? selectedAccountIds;
-        const provs = providersOverride ?? selectedProviders;
-        const win = windowOverride ?? timeWindow;
-        const role = roleOverride ?? roleFilter;
-
-        const params = new URLSearchParams();
-        if (accIds.length > 0) params.set("accountIds", accIds.join(","));
-        else params.set("accountIds", "all");
-
-        params.set("providers", provs.join(","));
-        params.set("window", win);
-        params.set("role", role);
-
-        const res = await fetch(`/api/dashboard?${params.toString()}`, {
-          cache: "no-store",
+        const res = await fetch(`/api/dashboard?${params}`, {
+          cache: "no-store", signal: controller.signal,
         });
         const json = await res.json();
+        if (controller.signal.aborted || requestId !== latestRequest.current) return;
+        setNeedsSignIn(res.status === 401);
         if (!res.ok || json.error) {
+          if (res.status === 401 || res.status === 403) {
+            setData(null);
+            setHasAccount(false);
+          }
           throw new Error(json.error?.message || "Failed to load dashboard telemetry");
         }
         setData(json);
-        setHasAccount(Boolean(json.allAccounts?.length > 0));
-        if (accIds.length === 0 && Array.isArray(json.allAccounts) && json.allAccounts.length > 0) {
-          setSelectedAccountIds(json.allAccounts.map((a: any) => a.id));
+        setHasAccount(json.allAccounts.length > 0);
+        if (!window.sessionStorage.getItem("gc_selected_role")
+          && Object.hasOwn(ROLE_META, json.workspaceConfig.activeRole)
+          && json.workspaceConfig.activeRole !== roleFilter) {
+          setRoleFilter(json.workspaceConfig.activeRole);
         }
-      } catch (err: any) {
-        setError(err.message || "Unable to load workspace telemetry.");
+      } catch (error) {
+        if (!controller.signal.aborted && requestId === latestRequest.current) {
+          setError(error instanceof Error ? error.message : "Unable to load workspace telemetry.");
+        }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted && requestId === latestRequest.current) setLoading(false);
       }
-    },
-    [roleFilter, selectedAccountIds, selectedProviders, setHasAccount, timeWindow]
-  );
+    }
 
-  useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
+    void loadDashboard();
+    return () => controller.abort();
+  }, [roleReady, roleFilter, selectedAccountIds, selectedProviders, setHasAccount, timeWindow, refreshVersion]);
 
   const handleSelectTab = (tab: DashboardTab) => {
     const nextUrl = tab === "overview" ? "/dashboard" : `/dashboard?tab=${tab}`;
@@ -126,39 +120,53 @@ function DashboardWorkspace() {
     if (typeof window !== "undefined") {
       window.sessionStorage.setItem("gc_selected_role", nextRole);
     }
-    fetch("/api/workspace/config", {
+    if (data?.accessMode === "local_demo") void fetch("/api/workspace/config", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ activeRole: nextRole }),
     }).catch(() => {});
-    fetchDashboard(undefined, undefined, undefined, nextRole);
   };
 
   const handleChangeAccountIds = (ids: string[]) => {
     setSelectedAccountIds(ids);
-    fetchDashboard(ids, selectedProviders, timeWindow, roleFilter);
   };
 
   const handleChangeProviders = (provs: CloudProviderId[]) => {
     setSelectedProviders(provs);
-    fetchDashboard(selectedAccountIds, provs, timeWindow, roleFilter);
   };
 
   const handleChangeWindow = (w: TimeWindow) => {
     setTimeWindow(w);
-    fetchDashboard(selectedAccountIds, selectedProviders, w, roleFilter);
   };
 
+  const scopedSelection = data?.allAccounts.filter((account) =>
+    (selectedAccountIds.length === 0 || selectedAccountIds.includes(account.id)) && selectedProviders.includes(account.provider)
+  ) ?? [];
+  const syncableAccounts = scopedSelection.filter((account) => account.canSync);
+  const canSync = data?.accessMode === "scoped" ? syncableAccounts.length > 0 : scopedSelection.length > 0 && roleFilter !== "viewer";
+
   const handleBatchSync = async () => {
-    if (!data?.allAccounts.length || roleFilter === "viewer") return;
+    if (!data?.allAccounts.length || !canSync) return;
     setSyncing(true);
     setSyncNotice(null);
     setError(null);
     try {
-      const targetIds =
-        selectedAccountIds.length > 0
-          ? selectedAccountIds
-          : data.allAccounts.map((a) => a.id);
+      if (data.accessMode === "scoped") {
+        const outcomes = [];
+        for (const account of syncableAccounts) {
+          try {
+            const res = await fetch("/api/cloud-accounts/" + encodeURIComponent(account.id) + "/sync", { method: "POST" });
+            const result = await res.json();
+            outcomes.push(account.name + " " + (res.ok ? result.status : result.error?.message ?? "failed"));
+          } catch {
+            outcomes.push(account.name + " failed");
+          }
+        }
+        refreshDashboard();
+        setSyncNotice(outcomes.join(" · "));
+        return;
+      }
+      const targetIds = scopedSelection.map((account) => account.id);
 
       const res = await fetch("/api/dashboard/sync", {
         method: "POST",
@@ -172,10 +180,11 @@ function DashboardWorkspace() {
       if (!res.ok || json.error) {
         throw new Error(json.error?.message || "Sync failed.");
       }
-      await fetchDashboard();
-      setSyncNotice(
-        `Synced ${json.syncedAccounts} account(s). ${json.recommendationCount || 0} recommendation(s) evaluated.`
-      );
+      refreshDashboard();
+      const results = json.results as Array<{ name: string; success: boolean; errors: string[] }>;
+      setSyncNotice(results.map((result) => result.name + " " +
+        (!result.success ? "failed" : result.errors.length ? "partially synced" : "synced")
+      ).join(" · "));
     } catch (err: any) {
       setError(err.message || "Sync failed. Check IAM Role permissions.");
     } finally {
@@ -192,25 +201,50 @@ function DashboardWorkspace() {
       },
       body: JSON.stringify({ functionalUnits: units }),
     });
-    if (res.ok) {
-      await fetchDashboard();
+    if (!res.ok) {
+      const json = await res.json().catch(() => null);
+      const message = json?.error?.message ?? "Unable to save SCI settings.";
+      setError(message);
+      throw new Error(message);
+    }
+    refreshDashboard();
+  };
+
+  const handleExportJson = async () => {
+    if (!data?.canExportBilling) return;
+    try {
+      let blob: Blob;
+      let filename: string;
+      if (data.accessMode === "scoped") {
+        const params = new URLSearchParams({
+          accountIds: selectedAccountIds.join(",") || "all",
+          providers: selectedProviders.join(","),
+          window: timeWindow,
+        });
+        const response = await fetch(`/api/dashboard/export?${params}`, { cache: "no-store" });
+        if (!response.ok) {
+          const result = await response.json().catch(() => null);
+          throw new Error(result?.error?.message ?? "Unable to export billing data.");
+        }
+        blob = await response.blob();
+        filename = "greencloud-billing.json";
+      } else {
+        blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        filename = `greencloud-multicloud-${timeWindow}-${new Date().toISOString().slice(0, 10)}.json`;
+      }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to export billing data.");
     }
   };
 
-  const handleExportJson = () => {
-    if (!data) return;
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `greencloud-multicloud-${timeWindow}-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const isReadOnly = roleFilter === "viewer";
+  const isReadOnly = data?.accessMode !== "local_demo" || roleFilter === "viewer";
 
   return (
     <DashboardShell
@@ -222,13 +256,15 @@ function DashboardWorkspace() {
       onChangeRoleFilter={handleChangeRole}
       account={data?.account ?? null}
       allAccounts={data?.allAccounts ?? []}
-      selectedAccountIds={selectedAccountIds}
+      selectedAccountIds={selectedAccountIds.length ? selectedAccountIds : data?.allAccounts.map(({ id }) => id) ?? []}
       onChangeAccountIds={handleChangeAccountIds}
       selectedProviders={selectedProviders}
       onChangeProviders={handleChangeProviders}
       onSync={handleBatchSync}
+      canSync={canSync}
       syncing={syncing}
-      onExportJson={handleExportJson}
+      onExportJson={data?.canExportBilling ? handleExportJson : undefined}
+      restrictMutations={data?.accessMode !== "local_demo"}
       onOpenKeysModal={() => setKeysModalOpen(true)}
       onOpenSettingsModal={() => setSettingsModalOpen(true)}
       onOpenFocusImport={() => setFocusModalOpen(true)}
@@ -237,6 +273,7 @@ function DashboardWorkspace() {
       {error && (
         <div className="mb-4 rounded-[20px] bg-[#FEE2E2] px-4 py-3 text-[13px] font-semibold text-[#991B1B]">
           {error}
+          {needsSignIn && <Link href="/workspace-sign-in" className="ml-2 underline">Sign in</Link>}
         </div>
       )}
 
@@ -282,8 +319,8 @@ function DashboardWorkspace() {
           {activeTab === "actions" && (
             <ActionsTab
               data={data}
-              roleFilter={roleFilter}
-              onRefresh={() => fetchDashboard()}
+              roleFilter={isReadOnly ? "viewer" : roleFilter}
+              onRefresh={refreshDashboard}
             />
           )}
         </>
@@ -293,7 +330,7 @@ function DashboardWorkspace() {
         account={data?.account ?? null}
         open={keysModalOpen}
         onClose={() => setKeysModalOpen(false)}
-        onUpdated={() => fetchDashboard()}
+        onUpdated={refreshDashboard}
       />
 
       <FocusImportModal
@@ -301,7 +338,7 @@ function DashboardWorkspace() {
         onClose={() => setFocusModalOpen(false)}
         onImported={() => {
           setSelectedAccountIds([]);
-          fetchDashboard([]);
+          refreshDashboard();
         }}
       />
 
@@ -311,7 +348,7 @@ function DashboardWorkspace() {
         monthlyBudget={data?.workspaceConfig.monthlyBudget ?? 150}
         functionalUnits={data?.workspaceConfig.functionalUnits ?? 100000}
         isReadOnly={isReadOnly}
-        onSaved={() => fetchDashboard()}
+        onSaved={refreshDashboard}
       />
     </DashboardShell>
   );

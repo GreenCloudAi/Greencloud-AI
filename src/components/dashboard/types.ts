@@ -18,6 +18,15 @@ export interface CloudAccountSummary {
   roleArn?: string | null;
   hasEncryptedCredentials?: boolean;
   syncFreshness?: string | null;
+  status?: string;
+  syncError?: string | null;
+  canSync?: boolean;
+  sync?: {
+    status: string;
+    attemptedAt: string;
+    sources: Record<string, { status: string; records: number; lastSuccess?: string | null; error?: string }>;
+  } | null;
+  providerConfig?: string | null;
 }
 
 export interface Ec2ResourceItem {
@@ -147,6 +156,7 @@ export interface AccountComparisonItem {
   activeRecCount: number;
   avgCpu: number | null;
   lastSyncedAt: string | null;
+  billingTotals?: Array<{ currency: string; amount: number }>;
 }
 
 export interface ProviderComparisonItem {
@@ -161,6 +171,8 @@ export interface ProviderComparisonItem {
 }
 
 export interface DashboardData {
+  accessMode: "scoped" | "local_demo";
+  canExportBilling: boolean;
   scope: {
     accountIds: string[];
     providers: CloudProviderId[];

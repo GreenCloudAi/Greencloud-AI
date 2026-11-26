@@ -61,6 +61,8 @@ export interface CostExplorerRow {
   Date: string;
   Service: string;
   Cost: number;
+  Currency: string;
+  Estimated: boolean;
 }
 
 // ─── On-Demand Pricing Reference ──────────────────────────────────────────────
@@ -104,6 +106,7 @@ const EBS_GB_MONTH_PRICING: Record<string, number> = {
 // ─── AWS Cloud Connector ───────────────────────────────────────────────────────
 
 export class AwsCloudConnector {
+  readonly scanIssues = { inventory: 0, telemetry: 0 };
   private roleArn: string;
   private externalId?: string;
   private regions: string[];
@@ -333,6 +336,7 @@ export class AwsCloudConnector {
                       `${instanceId} (${region}) CPU telemetry: avg=[${cpuSeries.join(", ")}%], peak=${peakCpu}%`
                     );
                   } catch (cwErr: any) {
+                    this.scanIssues.telemetry++;
                     Logger.warn(
                       "AWS",
                       "CLOUDWATCH_METRIC_SKIPPED",
@@ -377,6 +381,7 @@ export class AwsCloudConnector {
             );
           }
         } catch (error: any) {
+          this.scanIssues.inventory++;
           Logger.warn("AWS", "EC2_REGION_WARN", `EC2 DescribeInstances skipped for region ${region}: ${error.message}`);
         }
         return regionInstances;
@@ -547,6 +552,7 @@ export class AwsCloudConnector {
             );
           }
         } catch (error: any) {
+          this.scanIssues.inventory++;
           Logger.warn("AWS", "EBS_REGION_WARN", `EBS DescribeVolumes skipped for ${region}: ${error.message}`);
         }
         return regionVolumes;
@@ -610,6 +616,7 @@ export class AwsCloudConnector {
             );
           }
         } catch (error: any) {
+          this.scanIssues.inventory++;
           Logger.warn("AWS", "EIP_REGION_WARN", `EIP DescribeAddresses skipped for ${region}: ${error.message}`);
         }
         return regionIPs;
@@ -633,7 +640,8 @@ export class AwsCloudConnector {
    */
   async fetchBillingSummary(
     startDate: string,
-    endDate: string
+    endDate: string,
+    accountId: string
   ): Promise<CostExplorerRow[]> {
     Logger.info("AWS", "COST_EXPLORER_FETCH", `Querying AWS Cost Explorer from ${startDate} to ${endDate}`);
     const credentials = await this.getCredentials();
@@ -644,55 +652,42 @@ export class AwsCloudConnector {
         credentials,
       });
 
-      // Query Cost Explorer filtering out Credit and Refund record types
-      // so actual cloud resource spend matches AWS Console even when credits/free plan apply.
-      let response;
-      try {
-        const command = new GetCostAndUsageCommand({
-          TimePeriod: { Start: startDate, End: endDate },
-          Granularity: "DAILY",
-          Filter: {
-            Not: {
-              Dimensions: {
-                Key: "RECORD_TYPE",
-                Values: ["Credit", "Refund"],
-              },
-            },
-          },
-          Metrics: ["UnblendedCost"],
-          GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
-        });
-        response = await ceClient.send(command);
-      } catch (filterErr: any) {
-        Logger.warn("AWS", "COST_EXPLORER_FILTER_FALLBACK", `Filter query failed (${filterErr.message}), falling back to unfiltered GetCostAndUsage.`);
-        const fallbackCommand = new GetCostAndUsageCommand({
-          TimePeriod: { Start: startDate, End: endDate },
-          Granularity: "DAILY",
-          Metrics: ["UnblendedCost"],
-          GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
-        });
-        response = await ceClient.send(fallbackCommand);
+      if (!/^\d{12}$/.test(accountId)) {
+        throw new Error("Cost Explorer requires the 12-digit AWS account ID.");
       }
-
       const rows: CostExplorerRow[] = [];
+      const seenTokens = new Set<string>();
+      let nextPageToken: string | undefined;
+      do {
+        const response = await ceClient.send(new GetCostAndUsageCommand({
+          TimePeriod: { Start: startDate, End: endDate },
+          Granularity: "DAILY",
+          Filter: { Dimensions: { Key: "LINKED_ACCOUNT", Values: [accountId] } },
+          Metrics: ["UnblendedCost"],
+          GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
+          NextPageToken: nextPageToken,
+        }));
 
-      for (const day of response.ResultsByTime || []) {
-        const date = day.TimePeriod?.Start || "";
-        for (const grp of day.Groups || []) {
-          const service =
-            grp.Keys && grp.Keys.length > 0 ? grp.Keys[0] : "Other";
-          const cost = parseFloat(
-            grp.Metrics?.UnblendedCost?.Amount || "0"
-          );
-          if (cost > 0.000001) {
-            rows.push({
-              Date: date,
-              Service: service,
-              Cost: parseFloat(cost.toFixed(6)),
-            });
+        for (const day of response.ResultsByTime ?? []) {
+          for (const group of day.Groups ?? []) {
+            const metric = group.Metrics?.UnblendedCost;
+            const date = day.TimePeriod?.Start;
+            const service = group.Keys?.[0];
+            const amount = metric?.Amount?.trim();
+            const currency = metric?.Unit?.trim().toUpperCase();
+            if (!date || !service || !amount || !currency || !Number.isFinite(Number(amount))) {
+              throw new Error("Cost Explorer returned an incomplete billing row.");
+            }
+            rows.push({ Date: date, Service: service, Cost: Number(amount), Currency: currency, Estimated: day.Estimated === true });
           }
         }
-      }
+
+        nextPageToken = response.NextPageToken;
+        if (nextPageToken && seenTokens.has(nextPageToken)) {
+          throw new Error("Cost Explorer returned a repeated billing page token.");
+        }
+        if (nextPageToken) seenTokens.add(nextPageToken);
+      } while (nextPageToken);
 
       Logger.success("AWS", "COST_EXPLORER_DATA_RECEIVED", `Retrieved ${rows.length} billing rows from AWS Cost Explorer.`);
       return rows;
