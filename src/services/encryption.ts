@@ -5,11 +5,16 @@ const IV_LENGTH = 12; // Standard for GCM
 const AUTH_TAG_LENGTH = 16;
 
 /**
- * Derives a consistent 32-byte (256-bit) encryption key from the environment secret
- * or a system-level master salt.
+ * Derives a consistent 32-byte (256-bit) encryption key from ENCRYPTION_SECRET.
+ * Fails closed when ENCRYPTION_SECRET is not configured.
  */
 function getMasterKey(): Buffer {
-  const secret = process.env.ENCRYPTION_SECRET || "greencloud-ai-master-encryption-key-salt-2026";
+  const secret = process.env.ENCRYPTION_SECRET;
+  if (!secret) {
+    throw new Error(
+      "ENCRYPTION_SECRET environment variable is required to encrypt or decrypt credentials."
+    );
+  }
   return crypto.createHash("sha256").update(secret).digest();
 }
 

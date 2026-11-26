@@ -28,10 +28,11 @@ function statusPillText(status: "pass" | "hold" | "alert") {
 
 export function GateWalkthrough() {
   const [activeId, setActiveId] = useState<string>(SAFETY_SCENARIOS[0].id);
+  const [switchCount, setSwitchCount] = useState<number>(0);
   const scenario = SAFETY_SCENARIOS.find((s) => s.id === activeId) ?? SAFETY_SCENARIOS[0];
 
   return (
-    <div className="rounded-[32px] bg-[#FAF6E8] p-6 sm:p-8 lg:p-10 shadow-warm-sm space-y-6 sm:space-y-7">
+    <div className="gc-rv gc-rv-pop rounded-[32px] bg-[#FAF6E8] p-6 sm:p-8 lg:p-10 shadow-warm-sm space-y-6 sm:space-y-7">
       {/* Section Header & Connected Scenario Switcher */}
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
         <div className="space-y-1.5">
@@ -56,7 +57,10 @@ export function GateWalkthrough() {
                 type="button"
                 data-selected={selected}
                 aria-pressed={selected}
-                onClick={() => setActiveId(item.id)}
+                onClick={() => {
+                  setActiveId(item.id);
+                  setSwitchCount((c) => c + 1);
+                }}
                 className={`m3-seg ${selected ? "m3-pastel-sun" : "m3-pastel-oat"}`}
               >
                 {item.tabLabel}
@@ -67,7 +71,12 @@ export function GateWalkthrough() {
       </div>
 
       {/* Main Content Split */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+      <div
+        key={`${scenario.id}-${switchCount}`}
+        className={`grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch ${
+          switchCount > 0 ? "gc-hero-enter" : ""
+        }`}
+      >
         {/* Left Summary Card */}
         <div className="lg:col-span-5 rounded-[26px] bg-[#FFFDF4] p-6 flex flex-col justify-between gap-5">
           <div className="space-y-4">

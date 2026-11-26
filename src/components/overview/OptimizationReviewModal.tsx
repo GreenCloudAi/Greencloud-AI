@@ -41,6 +41,9 @@ export function OptimizationReviewModal({
     setCopiedTerraform(false);
     if (!item) return;
 
+    const prevBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onClose();
@@ -48,7 +51,10 @@ export function OptimizationReviewModal({
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [item, onClose]);
 
   if (!item) return null;
@@ -61,7 +67,7 @@ export function OptimizationReviewModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-[#2E2B1A]/35 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+      className="fixed inset-0 z-[100] bg-[#2E2B1A]/35 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overscroll-contain"
       onClick={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -72,7 +78,7 @@ export function OptimizationReviewModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={`opt-modal-title-${item.id}`}
-        className="bg-[#FFFDF4] rounded-[28px] max-w-lg w-full max-h-[90dvh] overflow-y-auto custom-scrollbar p-5 sm:p-6 shadow-warm-xl space-y-5 gc-hero-enter"
+        className="bg-[#FFFDF4] rounded-[28px] max-w-lg w-full max-h-[90dvh] overflow-y-auto overscroll-contain custom-scrollbar p-5 sm:p-6 shadow-warm-xl space-y-5 gc-hero-enter"
       >
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">

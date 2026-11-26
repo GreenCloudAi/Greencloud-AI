@@ -3,9 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { NavigationBar } from "@/components/common/NavigationBar";
 import { ComplianceFooter } from "@/components/common/ComplianceFooter";
-import { HeroShapeMorph } from "@/components/overview/MotionPrimitives";
+import { useAccountStatus } from "@/components/common/AccountStatusContext";
+import {
+  CountUpNumber,
+  HeroShapeMorph,
+  ScrollRevealObserver,
+} from "@/components/overview/MotionPrimitives";
 import {
   OptimizationReviewModal,
   type OptimizationReviewItem,
@@ -373,17 +377,18 @@ resource "aws_db_instance" "staging_postgres" {
 ];
 
 export default function WhyGreenOpsPage() {
+  const { hasAccount } = useAccountStatus();
   const [activeReviewItem, setActiveReviewItem] =
     useState<OptimizationReviewItem | null>(null);
 
   return (
-    <div className="min-h-screen bg-[#FFFDF4] text-[#2E2B1A] flex flex-col justify-between selection:bg-[#FFF76A] selection:text-[#2E2B1A]">
-      <NavigationBar />
+    <div className="flex-1 bg-[#FFFDF4] text-[#2E2B1A] flex flex-col justify-between selection:bg-[#FFF76A] selection:text-[#2E2B1A]">
+      <ScrollRevealObserver />
 
       <main className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 w-full flex-grow space-y-14 sm:space-y-20 pt-3 sm:pt-6">
         {/* Intro Hero */}
         <section className="max-w-3xl mx-auto text-center space-y-5 pt-2 sm:pt-4">
-          <div className="inline-flex items-center justify-center gap-2.5">
+          <div className="gc-hero-enter inline-flex items-center justify-center gap-2.5">
             <div className="relative w-8 h-8 flex items-center justify-center">
               <div className="absolute inset-0 text-[#CEECE0]">
                 <HeroShapeMorph shape="flower" />
@@ -397,23 +402,27 @@ export default function WhyGreenOpsPage() {
             </span>
           </div>
 
-          <h1 className="text-[32px] sm:text-[42px] lg:text-[46px] font-extrabold tracking-[-0.03em] text-[#2E2B1A] leading-[1.12]">
+          <h1 className="gc-hero-enter text-[32px] sm:text-[42px] lg:text-[46px] font-extrabold tracking-[-0.03em] text-[#2E2B1A] leading-[1.12]">
             Wasted cloud compute costs twice: in dollars and in carbon
           </h1>
 
-          <p className="text-[16px] sm:text-[17.5px] text-[#686450] leading-relaxed max-w-2xl mx-auto">
+          <p className="gc-hero-enter-delay-1 text-[16px] sm:text-[17.5px] text-[#686450] leading-relaxed max-w-2xl mx-auto">
             Over-provisioned databases and idle night servers inflate your monthly invoice while burning preventable grid energy. Fixing one fixes both.
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
-            <Link href="/dashboard" className="m3-btn m3-pastel-sun">
+          <div className="gc-hero-enter-delay-2 flex flex-wrap items-center justify-center gap-2.5 pt-1">
+            <Link
+              href={hasAccount ? "/dashboard" : "/onboarding"}
+              prefetch={true}
+              className="m3-btn m3-pastel-sun"
+            >
               <span className="material-symbols-outlined icon-filled text-[18px] leading-none">
-                dashboard
+                {hasAccount ? "dashboard" : "rocket_launch"}
               </span>
-              <span>Open live dashboard</span>
+              <span>{hasAccount ? "Go to dashboard" : "Start setup"}</span>
             </Link>
-            <Link href="/how-it-works" className="m3-btn m3-pastel-oat">
-              <span className="material-symbols-outlined icon-filled text-[18px] leading-none">
+            <Link href="/how-it-works" prefetch={true} className="m3-btn m3-pastel-oat">
+              <span className="material-symbols-outlined text-[18px] leading-none">
                 account_tree
               </span>
               <span>See how it works</span>
@@ -423,7 +432,7 @@ export default function WhyGreenOpsPage() {
 
         {/* Section 1: Four Pillars in Practice */}
         <section className="space-y-6 sm:space-y-7">
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
+          <div className="gc-rv flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
             <div className="space-y-1.5">
               <h2 className="text-[26px] sm:text-[32px] font-bold tracking-[-0.02em] text-[#2E2B1A] leading-tight">
                 Cost, waste, and emissions in one picture
@@ -436,7 +445,7 @@ export default function WhyGreenOpsPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Pillar 1: FinOps */}
-            <div className="gc-card-hover group rounded-[28px] bg-[#FAF6E8] p-6 sm:p-7 flex flex-col justify-between gap-5">
+            <div className="gc-rv gc-rv-pop gc-card-hover group rounded-[28px] bg-[#FAF6E8] p-6 sm:p-7 flex flex-col justify-between gap-5">
               <div className="space-y-4">
                 <div className="flex items-center gap-3.5">
                   <div className="relative w-11 h-11 shrink-0 flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-105 group-hover:rotate-3">
@@ -455,7 +464,7 @@ export default function WhyGreenOpsPage() {
 
                 <div className="flex items-baseline gap-2.5">
                   <span className="text-[34px] font-extrabold text-[#2E2B1A] tabular-nums tracking-tight">
-                    $24,842
+                    <CountUpNumber target={24842} prefix="$" />
                   </span>
                   <span className="text-[13px] font-medium text-[#686450]">/mo across AWS services</span>
                 </div>
@@ -473,7 +482,7 @@ export default function WhyGreenOpsPage() {
                       <span className="font-bold text-[#686450] tabular-nums">{row.amount} ({row.pct})</span>
                     </div>
                     <div className="h-2 rounded-full bg-[#FAF6E8] overflow-hidden">
-                      <div className={`h-full rounded-full ${row.bar}`} />
+                      <div className={`h-full rounded-full chart-segment-grow ${row.bar}`} />
                     </div>
                   </div>
                 ))}
@@ -481,7 +490,7 @@ export default function WhyGreenOpsPage() {
             </div>
 
             {/* Pillar 2: Infrastructure */}
-            <div className="gc-card-hover group rounded-[28px] bg-[#FAF6E8] p-6 sm:p-7 flex flex-col justify-between gap-5">
+            <div className="gc-rv gc-rv-pop gc-card-hover group rounded-[28px] bg-[#FAF6E8] p-6 sm:p-7 flex flex-col justify-between gap-5">
               <div className="space-y-4">
                 <div className="flex items-center gap-3.5">
                   <div className="relative w-11 h-11 shrink-0 flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-105 group-hover:rotate-3">
@@ -500,7 +509,7 @@ export default function WhyGreenOpsPage() {
 
                 <div className="flex items-baseline gap-2.5">
                   <span className="text-[34px] font-extrabold text-[#2E2B1A] tabular-nums tracking-tight">
-                    12 assets
+                    <CountUpNumber target={12} suffix=" assets" />
                   </span>
                   <span className="text-[13px] font-semibold text-[#8C5A00] tabular-nums">
                     $1,240/mo recoverable
@@ -524,7 +533,7 @@ export default function WhyGreenOpsPage() {
             </div>
 
             {/* Pillar 3: GreenOps */}
-            <div className="gc-card-hover group rounded-[28px] bg-[#FAF6E8] p-6 sm:p-7 flex flex-col justify-between gap-5">
+            <div className="gc-rv gc-rv-pop gc-card-hover group rounded-[28px] bg-[#FAF6E8] p-6 sm:p-7 flex flex-col justify-between gap-5">
               <div className="space-y-4">
                 <div className="flex items-center gap-3.5">
                   <div className="relative w-11 h-11 shrink-0 flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-105 group-hover:rotate-3">
@@ -543,7 +552,7 @@ export default function WhyGreenOpsPage() {
 
                 <div className="flex items-baseline gap-2.5">
                   <span className="text-[34px] font-extrabold text-[#155E4B] tabular-nums tracking-tight">
-                    12.8 tCO₂e
+                    <CountUpNumber target={12.8} decimals={1} suffix=" tCO₂e" />
                   </span>
                   <span className="text-[13px] font-medium text-[#686450]">monthly regional footprint</span>
                 </div>
@@ -575,7 +584,7 @@ export default function WhyGreenOpsPage() {
                       <span className="font-semibold text-[#686450] tabular-nums">{r.intensity}</span>
                     </div>
                     <div className="h-2 rounded-full bg-[#FAF6E8] overflow-hidden">
-                      <div className={`h-full rounded-full ${r.bar}`} />
+                      <div className={`h-full rounded-full chart-segment-grow ${r.bar}`} />
                     </div>
                   </div>
                 ))}
@@ -583,11 +592,11 @@ export default function WhyGreenOpsPage() {
             </div>
 
             {/* Pillar 4: Two Uniform Optimization Rule Examples */}
-            <div className="gc-card-hover rounded-[28px] bg-[#FAF6E8] p-6 sm:p-7 flex flex-col justify-between gap-5">
+            <div className="gc-rv gc-rv-pop gc-card-hover group rounded-[28px] bg-[#FAF6E8] p-6 sm:p-7 flex flex-col justify-between gap-5">
               {PILLAR_RECOMMENDATIONS.map((rec) => (
-                <div key={rec.id} className="space-y-3.5">
+                <div key={rec.id} className="space-y-3.5 group/rec">
                   <div className="flex items-center gap-3.5">
-                    <div className="relative w-11 h-11 shrink-0 flex items-center justify-center">
+                    <div className="relative w-11 h-11 shrink-0 flex items-center justify-center transition-transform duration-500 ease-out group-hover/rec:scale-105 group-hover/rec:rotate-3">
                       <div className={`absolute inset-0 ${rec.shapeColor}`}>
                         <HeroShapeMorph shape={rec.shape} />
                       </div>
@@ -645,8 +654,8 @@ export default function WhyGreenOpsPage() {
         </section>
 
         {/* Section 2: Everything You Need in One Place */}
-        <section className="rounded-[32px] bg-[#FAF6E8] p-6 sm:p-8 lg:p-10 shadow-warm-sm space-y-7">
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
+        <section className="gc-rv rounded-[32px] bg-[#FAF6E8] p-6 sm:p-8 lg:p-10 shadow-warm-sm space-y-7">
+          <div className="gc-rv flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
             <div className="space-y-1.5">
               <h2 className="text-[26px] sm:text-[32px] font-bold tracking-[-0.02em] text-[#2E2B1A] leading-tight">
                 Everything you need in one place
@@ -661,7 +670,7 @@ export default function WhyGreenOpsPage() {
             {PIPELINE_ITEMS.map((item) => (
               <div
                 key={item.num}
-                className="gc-card-hover group rounded-[24px] bg-[#FFFDF4] p-5 flex flex-col justify-between gap-4"
+                className="gc-rv gc-rv-pop gc-card-hover group rounded-[24px] bg-[#FFFDF4] p-5 flex flex-col justify-between gap-4"
               >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
@@ -711,7 +720,7 @@ export default function WhyGreenOpsPage() {
 
         {/* Section 3: One Place to Understand Your Cloud (9 Capabilities) */}
         <section className="space-y-6 sm:space-y-7">
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
+          <div className="gc-rv flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
             <div className="space-y-1.5">
               <h2 className="text-[26px] sm:text-[32px] font-bold tracking-[-0.02em] text-[#2E2B1A] leading-tight">
                 One place to understand your cloud
@@ -727,7 +736,9 @@ export default function WhyGreenOpsPage() {
               <Link
                 key={card.title}
                 href={card.href}
-                className="gc-card-hover group rounded-[24px] bg-[#FBF6E3] p-5 flex flex-col justify-between gap-4"
+                prefetch={true}
+                scroll={!card.href.includes("#")}
+                className="gc-rv gc-rv-pop gc-card-hover group rounded-[24px] bg-[#FBF6E3] p-5 flex flex-col justify-between gap-4"
               >
                 <div className="space-y-3">
                   <div className="flex items-center gap-3.5">
@@ -765,8 +776,8 @@ export default function WhyGreenOpsPage() {
         </section>
 
         {/* Section 4: Ask GreenCloud the Simple Questions */}
-        <section className="rounded-[32px] bg-[#FAF6E8] p-6 sm:p-8 lg:p-10 shadow-warm-sm space-y-7">
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
+        <section className="gc-rv rounded-[32px] bg-[#FAF6E8] p-6 sm:p-8 lg:p-10 shadow-warm-sm space-y-7">
+          <div className="gc-rv flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
             <div className="space-y-1.5">
               <h2 className="text-[26px] sm:text-[32px] font-bold tracking-[-0.02em] text-[#2E2B1A] leading-tight">
                 Ask the simple questions
@@ -781,7 +792,7 @@ export default function WhyGreenOpsPage() {
             {QA_ITEMS.map((item) => (
               <div
                 key={item.question}
-                className="rounded-[24px] bg-[#FFFDF4] p-6 flex flex-col justify-between gap-4"
+                className="gc-rv gc-rv-pop gc-card-hover rounded-[24px] bg-[#FFFDF4] p-6 flex flex-col justify-between gap-4"
               >
                 <div className="space-y-1.5">
                   <div className={`text-[12px] font-semibold ${item.accentInk}`}>
@@ -802,7 +813,7 @@ export default function WhyGreenOpsPage() {
 
         {/* Section 5: Useful for Every Team */}
         <section className="space-y-6 sm:space-y-7">
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
+          <div className="gc-rv flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
             <div className="space-y-1.5">
               <h2 className="text-[26px] sm:text-[32px] font-bold tracking-[-0.02em] text-[#2E2B1A] leading-tight">
                 Useful for every team
@@ -817,7 +828,7 @@ export default function WhyGreenOpsPage() {
             {TEAM_ROLES.map((role) => (
               <div
                 key={role.title}
-                className="gc-card-hover group rounded-[24px] bg-[#FBF6E3] p-5 flex flex-col gap-3"
+                className="gc-rv gc-rv-pop gc-card-hover group rounded-[24px] bg-[#FBF6E3] p-5 flex flex-col gap-3"
               >
                 <div className="flex items-center gap-3">
                   <div className="relative w-10 h-10 shrink-0 flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-105 group-hover:rotate-3">
@@ -847,7 +858,7 @@ export default function WhyGreenOpsPage() {
         </section>
 
         {/* Bottom CTA */}
-        <section className="rounded-[32px] bg-[#FAF6E8] p-8 sm:p-11 text-center flex flex-col items-center space-y-5">
+        <section className="gc-rv gc-rv-pop rounded-[32px] bg-[#FAF6E8] p-8 sm:p-11 text-center flex flex-col items-center space-y-5">
           <div className="space-y-2 max-w-xl">
             <h2 className="text-[26px] sm:text-[32px] font-bold tracking-[-0.02em] text-[#2E2B1A] leading-tight">
               Next: see the telemetry in action
@@ -858,14 +869,23 @@ export default function WhyGreenOpsPage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-            <Link href="/dashboard" className="m3-btn m3-pastel-sun">
-              <span>Explore live dashboard</span>
+            <Link
+              href={hasAccount ? "/dashboard" : "/onboarding"}
+              prefetch={true}
+              className="m3-btn m3-pastel-sun"
+            >
+              <span>{hasAccount ? "Go to dashboard" : "Start setup"}</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
-            <Link href="/#optimization" className="m3-btn m3-pastel-oat">
-              <span>View recommendations</span>
+            <Link
+              href={hasAccount ? "/#optimization" : "/dashboard"}
+              prefetch={true}
+              scroll={!hasAccount}
+              className="m3-btn m3-pastel-oat"
+            >
+              <span>{hasAccount ? "View recommendations" : "Live demo"}</span>
             </Link>
-            <Link href="/how-it-works" className="m3-btn m3-pastel-mint">
+            <Link href="/how-it-works" prefetch={true} className="m3-btn m3-pastel-mint">
               <span>How it works</span>
             </Link>
           </div>

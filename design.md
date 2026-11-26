@@ -97,13 +97,9 @@ Defined in [tailwind.config.js](file:///d:/VOLUME%20E/GreenCloudAI-MiniPROJECT/t
 
 - Procedural 72-point Catmull-Rom closed contours: `cookie9` (9 lobes), `sunny` (8 lobes), `flower` (6 lobes), `clover` (4 lobes).
 - Transitions smoothly between shapes (`680ms` cubic easing).
-- Used for:
-  - Hero 3-icon `CloudShapesCarousel` (`70px` tiles cycling `clover` / `sunny` / `flower`).
-  - Hero `"4"` count badge inside `"Explore recommendations"` (`24px` `clover`).
-  - Right telemetry card subtle corner background shapes (changing dynamically with `7D / 30D / 90D`).
-  - Optimization category badges (`48px` tiles: `sunny`, `flower`, `clover`, `cookie9`).
-  - `DecisionLoop` step number badges (`44px` tiles holding `01` `sunny`, `02` `clover`, `03` `flower`, `04` `cookie9`).
-  - `IntegrationMatrix` provider cards and top switcher tabs.
+- **Restraint Rule (Do Not Overuse Shape Containers)**:
+  - Reserve `HeroShapeMorph` strictly for primary landing/overview highlights (hero showcase carousel, count badges, top-level optimization category badges, `DecisionLoop` step numbers, and `IntegrationMatrix` showcase cards).
+  - Do **not** wrap icons in organic container shapes inside onboarding step cards, selectable radio/option cards, provider pickers, or secondary forms. Use crisp direct icons or clean SVG logos (`aws-dark.svg`, `gcp.svg`, `azure.svg`) without shape blobs, and distinguish selectable option cards via a warm `#FAF6E8` selector tray holding `#FFFDF4` option surfaces (`#FFF3A8` when selected) with explicit radio indicators instead of strokes or colored pills.
 
 ### Visibility & Number Animation Safety ([MotionPrimitives.tsx](file:///d:/VOLUME%20E/GreenCloudAI-MiniPROJECT/src/components/overview/MotionPrimitives.tsx))
 
@@ -151,9 +147,10 @@ Built with **Recharts** (`ComposedChart`, `ResponsiveContainer`):
 ### Section Breakdown
 
 1. **[NavigationBar.tsx](file:///d:/VOLUME%20E/GreenCloudAI-MiniPROJECT/src/components/common/NavigationBar.tsx)**:
-   - Sticky backdrop-blurred wrapper (`pt-2.5 pb-2.5 mb-2`), pill container `bg-[#F5EED6] rounded-full`.
-   - 6 concise desktop links at `lg:` (`Overview`, `Actions`, `How it works`, `Why?`, `Integrations`, `Docs`) with `/` scroll-spy highlighting (`IntersectionObserver`/scroll listener); `Dashboard` lives strictly on the primary yellow CTA pill when an account exists (removing crowding on `1024px` screens).
-   - Mobile/tablet (`< lg`): secondary circular icon hidden below `sm` (moved inside popover), `h-[40px] sm:h-[46px]` pill buttons, `Escape` + outside-click closes `rounded-[32px]` popover.
+   - Sticky backdrop-blurred wrapper (`pt-2.5 pb-2.5 mb-2`), pill container `bg-[#F5EED6] rounded-full shadow-warm-sm` with balanced 3-zone layout (Brand left, centered segmented nav track `bg-[#FAF6E8]/85`, CTA pills right).
+   - Ordered navigation tabs grouped seamlessly: contiguous homepage sections (`Overview`, `Actions`, `Integrations`, `Docs`) followed by a `w-px bg-[#DFD6B5]` divider and standalone routes (`How it works`, `Why?`), ensuring scroll-spy transitions smoothly left-to-right (`1 -> 2 -> 3 -> 4`) and reaches `Docs` at page bottom.
+   - Selected tab highlights via a gliding `#155E4B` Deep Forest Emerald indicator pill (`text-[#FFFDF4]`, animating smoothly across clicks, scroll-spy updates, and `sessionStorage`-handed route changes) plus `window.scrollTo({ behavior: "smooth" })` header-offset scrolling on anchor navigation.
+   - Mobile/tablet (`< lg`): secondary circular icon hidden below `sm` (moved inside popover), active route highlighting in `#155E4B`, `Escape` + outside-click closes `rounded-[30px]` popover.
 2. **[HeroSection.tsx](file:///d:/VOLUME%20E/GreenCloudAI-MiniPROJECT/src/components/overview/HeroSection.tsx)**:
    - **Left Column**:
      - Top `CloudShapesCarousel`: 3-icon Material 3 Expressive shapes carousel (`Google Cloud`, `AWS`, `Microsoft Azure`), starting first rotation `950ms` after mount then every `2.4s`, inline status caption (`flex-wrap min-[430px]:flex-nowrap`), interactive click + M3 dots.

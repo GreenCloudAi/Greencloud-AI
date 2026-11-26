@@ -85,8 +85,12 @@ export interface ExecutiveReportSummary {
  */
 export function generateExecutiveBrief(data: any): ExecutiveReportSummary {
   const accountName = data?.account?.name || "GreenCloud AWS Account";
-  const providerAccountId = data?.account?.providerAccountId || "793168138593";
-  const roleArn = data?.account?.roleArn || `arn:aws:iam::${providerAccountId}:role/GreenCloudRole`;
+  const providerAccountId = data?.account?.providerAccountId || "Not connected";
+  const roleArn =
+    data?.account?.roleArn ||
+    (data?.account?.providerAccountId
+      ? `arn:aws:iam::${data.account.providerAccountId}:role/GreenCloudReadOnlyRole`
+      : "Not configured");
 
   // Spend & Savings
   const billedMonthlySpend = Number(data?.costs?.totalCost ?? 112.95);
@@ -313,7 +317,7 @@ function getDeterministicHash(accountId: string, timestamp: string): string {
     hash = (hash * 31 + seed.charCodeAt(i)) & 0x7fffffff;
   }
   const hex = hash.toString(16).padStart(8, "0");
-  return `gcloud-sha256-${hex}-793168138593`;
+  return `gcloud-sha256-${hex}`;
 }
 
 function getActionVerb(title: string = "", type: string = ""): string {

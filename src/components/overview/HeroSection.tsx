@@ -12,6 +12,7 @@ import {
   SpendCarbonChart,
   useHeroTelemetryDatasets,
 } from "@/components/overview/SpendCarbonChart";
+import { useAccountStatus } from "@/components/common/AccountStatusContext";
 
 const CLOUD_ICONS = [
   { src: "/icons/aws.svg", alt: "AWS", className: "h-[30px] w-auto" },
@@ -190,22 +191,24 @@ function CloudIconSequence({ keyPrefix }: { keyPrefix: string }) {
 }
 
 export function HeroSection() {
+  const { hasAccount } = useAccountStatus();
   const [timeRange, setTimeRange] = useState<ChartRange>("30D");
   const [hoveredSeries, setHoveredSeries] = useState<"spend" | "carbon" | null>(null);
   const [hoveredResource, setHoveredResource] = useState<"compute" | "database" | "storage" | null>(null);
-  const [hasAccount, setHasAccount] = useState<boolean>(false);
 
   const chartDatasets = useHeroTelemetryDatasets();
   const activeDataset = chartDatasets[timeRange];
 
-  useEffect(() => {
-    fetch("/api/cloud-accounts")
-      .then((r) => r.json())
-      .then((accs) => {
-        if (Array.isArray(accs) && accs.length > 0) setHasAccount(true);
-      })
-      .catch(() => { });
-  }, []);
+  const handleScrollToOptimization = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    const target = document.getElementById("optimization");
+    if (!target) return;
+    const headerHeight = document.querySelector("header")?.offsetHeight ?? 84;
+    const top = Math.max(0, target.getBoundingClientRect().top + window.scrollY - (headerHeight + 12));
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.history.replaceState(null, "", "/#optimization");
+    window.scrollTo({ top, behavior: reduced ? "auto" : "smooth" });
+  };
 
   const heroTopShape = timeRange === "7D" ? "clover" : timeRange === "30D" ? "sunny" : "flower";
   const heroBottomShape = timeRange === "7D" ? "sunny" : timeRange === "30D" ? "cookie9" : "clover";
@@ -250,16 +253,17 @@ export function HeroSection() {
                       <span>Connect AWS</span>
                     </Link>
                   </div>
-                  <a href="#optimization" className="m3-hero-btn-pill m3-pastel-mint group">
-                    <span className="material-symbols-outlined text-[19px] leading-none">
-                      trending_down
-                    </span>
+                  <a
+                    href="#optimization"
+                    onClick={handleScrollToOptimization}
+                    className="m3-hero-btn-pill m3-pastel-oat group"
+                  >
                     <span>Explore recommendations</span>
                     <span className="relative w-6 h-6 inline-flex items-center justify-center shrink-0">
-                      <span className="absolute inset-0 text-[#C3E9DB]">
+                      <span className="absolute inset-0 text-[#E2DAC0]">
                         <HeroShapeMorph shape="clover" />
                       </span>
-                      <span className="relative z-10 text-[#155E4B] text-[11.5px] font-bold tabular-nums leading-none">
+                      <span className="relative z-10 text-[#2E2B1A] text-[11.5px] font-bold tabular-nums leading-none">
                         4
                       </span>
                     </span>
@@ -274,27 +278,30 @@ export function HeroSection() {
                       </span>
                       <span>Start setup</span>
                     </Link>
-                    <Link href="/dashboard" className="m3-hero-btn-right m3-pastel-oat">
+                    <Link
+                      href="/dashboard"
+                      className="m3-hero-btn-right bg-[#FBE0BC] hover:bg-[#F7D3A3] text-[#6B4814]"
+                    >
                       <span className="material-symbols-outlined text-[19px] leading-none">
                         play_circle
                       </span>
                       <span>Live demo</span>
                     </Link>
                   </div>
-                  <a href="#optimization" className="m3-hero-btn-pill m3-pastel-mint group">
-                    <span className="material-symbols-outlined text-[19px] leading-none">
-                      trending_down
-                    </span>
-                    <span>Explore optimization actions</span>
+                  <a
+                    href="#optimization"
+                    onClick={handleScrollToOptimization}
+                    className="m3-hero-btn-pill m3-pastel-oat group"
+                  >
+                    <span>Explore recommendations</span>
                     <span className="relative w-6 h-6 inline-flex items-center justify-center shrink-0">
-                      <span className="absolute inset-0 text-[#C3E9DB]">
+                      <span className="absolute inset-0 text-[#E2DAC0]">
                         <HeroShapeMorph shape="clover" />
                       </span>
-                      <span className="relative z-10 text-[#155E4B] text-[11.5px] font-bold tabular-nums leading-none">
+                      <span className="relative z-10 text-[#2E2B1A] text-[11.5px] font-bold tabular-nums leading-none">
                         4
                       </span>
                     </span>
-                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                   </a>
                 </>
               )}

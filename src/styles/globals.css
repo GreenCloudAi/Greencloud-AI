@@ -206,6 +206,51 @@ body {
   animation: gc-hero-enter 720ms var(--ease-spring) 160ms both;
 }
 
+@keyframes gc-step-forward {
+  from {
+    opacity: 0;
+    transform: translate3d(18px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes gc-step-back {
+  from {
+    opacity: 0;
+    transform: translate3d(-18px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes gc-panel-swap {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.gc-step-forward {
+  animation: gc-step-forward 300ms var(--ease-smooth) both;
+}
+
+.gc-step-back {
+  animation: gc-step-back 300ms var(--ease-smooth) both;
+}
+
+.gc-panel-swap {
+  animation: gc-panel-swap 200ms var(--ease-smooth) both;
+}
+
 .chart-draw {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
@@ -465,6 +510,9 @@ body {
   .gc-hero-enter,
   .gc-hero-enter-delay-1,
   .gc-hero-enter-delay-2,
+  .gc-step-forward,
+  .gc-step-back,
+  .gc-panel-swap,
   .chart-draw,
   .chart-draw-delayed,
   .chart-area-fade,

@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
-import { NavigationBar } from "@/components/common/NavigationBar";
 import { ComplianceFooter } from "@/components/common/ComplianceFooter";
-import { HeroShapeMorph } from "@/components/overview/MotionPrimitives";
+import {
+  HeroShapeMorph,
+  ScrollRevealObserver,
+} from "@/components/overview/MotionPrimitives";
 
 interface AuditLog {
   id: string;
@@ -125,12 +127,12 @@ export default function AuditHistoryPage() {
   }, [loadLogs]);
 
   return (
-    <div className="min-h-screen bg-[#FFFDF4] text-[#2E2B1A] flex flex-col justify-between selection:bg-[#FFF76A] selection:text-[#2E2B1A]">
-      <NavigationBar />
+    <div className="flex-1 bg-[#FFFDF4] text-[#2E2B1A] flex flex-col justify-between selection:bg-[#FFF76A] selection:text-[#2E2B1A]">
+      <ScrollRevealObserver />
 
       <main className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 w-full flex-grow space-y-7 sm:space-y-9 pt-4 sm:pt-6">
         {/* Header */}
-        <section className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
+        <section className="gc-hero-enter flex flex-col lg:flex-row lg:items-end justify-between gap-4 items-center text-center lg:text-left">
           <div className="space-y-1.5">
             <h1 className="text-[28px] sm:text-[36px] font-extrabold tracking-[-0.02em] text-[#2E2B1A] leading-tight">
               Audit history
@@ -157,7 +159,7 @@ export default function AuditHistoryPage() {
         </section>
 
         {/* Audit Ledger Card */}
-        <section className="rounded-[28px] bg-[#FAF6E8] p-4 sm:p-6 shadow-warm-sm">
+        <section className="gc-rv gc-rv-pop rounded-[28px] bg-[#FAF6E8] p-4 sm:p-6 shadow-warm-sm">
           {loading ? (
             <div className="rounded-[22px] bg-[#FFFDF4] p-12 text-center space-y-2">
               <div className="text-[15px] font-semibold text-[#2E2B1A]">Loading audit events...</div>

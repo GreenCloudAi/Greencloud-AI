@@ -1,6 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, IBM_Plex_Mono } from "next/font/google";
+import { prisma } from "@/services/db";
+import {
+  AccountStatusProvider,
+  PersistentNavigationShell,
+} from "@/components/common/AccountStatusContext";
 import "@/styles/globals.css";
+
+export const dynamic = "force-dynamic";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -27,11 +34,22 @@ export const viewport: Viewport = {
   themeColor: "#FFFDF4",
 };
 
-export default function RootLayout({
+async function getInitialHasAccount(): Promise<boolean> {
+  try {
+    const count = await prisma.cloudAccount.count();
+    return count > 0;
+  } catch {
+    return false;
+  }
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const initialHasAccount = await getInitialHasAccount();
+
   return (
     <html lang="en" className={`scroll-smooth ${inter.variable} ${ibmPlexMono.variable}`}>
       <head>
@@ -46,8 +64,11 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="font-sans antialiased selection:bg-[#FFF76A] selection:text-[#2E2B1A] bg-[#FFFDF4] text-[#2E2B1A] min-h-screen flex flex-col justify-between">
-        {children}
+      <body className="font-sans antialiased selection:bg-[#FFF76A] selection:text-[#2E2B1A] bg-[#FFFDF4] text-[#2E2B1A] min-h-screen flex flex-col">
+        <AccountStatusProvider initialHasAccount={initialHasAccount}>
+          <PersistentNavigationShell />
+          {children}
+        </AccountStatusProvider>
       </body>
     </html>
   );
