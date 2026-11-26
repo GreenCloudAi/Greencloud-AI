@@ -122,8 +122,12 @@ export interface ForecastPoint {
   date: string;
   actualCost?: number | null;
   projectedCost?: number | null;
+  predictedCost?: number;
+  lowerBoundCost?: number;
+  upperBoundCost?: number;
   actualCarbon?: number | null;
   projectedCarbon?: number | null;
+  predictedCarbonGco2e?: number;
   isForecast?: boolean;
 }
 

@@ -546,10 +546,10 @@ export function OverviewTab({
                   <div className="space-y-2">
                     <button
                       type="button"
-                      onClick={() => onSelectTab("governance")}
+                      onClick={() => onSelectTab("actions")}
                       className="m3-btn m3-btn-compact m3-pastel-sun w-full justify-between"
                     >
-                      <span>Manage Access &amp; RBAC</span>
+                      <span>Review Optimization Queue</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                     <Link href="/audit-history" prefetch={true} className="m3-btn m3-btn-compact m3-pastel-oat w-full justify-between">
