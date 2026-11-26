@@ -1,249 +1,731 @@
 import { STSClient, AssumeRoleCommand } from "@aws-sdk/client-sts";
-import { EC2Client, DescribeInstancesCommand, DescribeVolumesCommand, DescribeAddressesCommand } from "@aws-sdk/client-ec2";
-import { CostExplorerClient, GetCostAndUsageCommand } from "@aws-sdk/client-cost-explorer";
-import { CloudWatchClient, GetMetricDataCommand } from "@aws-sdk/client-cloudwatch";
-import { AwsMockSimulator, MockEC2Instance, MockEBSVolume, MockElasticIP, MockCostExplorerRow } from "./awsMock";
+import "./dnsFallback";
+import {
+  EC2Client,
+  DescribeInstancesCommand,
+  DescribeVolumesCommand,
+  DescribeAddressesCommand,
+  DescribeRegionsCommand,
+} from "@aws-sdk/client-ec2";
+import {
+  CloudWatchClient,
+  GetMetricDataCommand,
+} from "@aws-sdk/client-cloudwatch";
+import {
+  CostExplorerClient,
+  GetCostAndUsageCommand,
+} from "@aws-sdk/client-cost-explorer";
+import { GreenCloudConfig } from "./config";
+import { Logger } from "./logger";
+
+// ─── Shared Resource Interfaces ────────────────────────────────────────────────
+// These define the normalized shape that the ingestion pipeline expects.
+// Every field is sourced from real AWS API responses - no hardcoded values.
+
+export interface EC2InstanceResource {
+  InstanceId: string;
+  InstanceType: string;
+  State: string;
+  Region: string;
+  AvailabilityZone: string;
+  LaunchTime: string;
+  CpuUtilizationSeries: number[]; // Daily average CPU % from CloudWatch
+  PeakCpuUtilization: number; // Maximum daily CPU % over the lookback window
+  Tags: { Key: string; Value: string }[];
+  MonthlyCost: number; // Estimated from on-demand pricing table
+}
+
+export interface EBSVolumeResource {
+  VolumeId: string;
+  Size: number; // GB
+  State: string;
+  Region: string;
+  VolumeType: string;
+  Iops: number;
+  CreateTime: string;
+  AttachmentInstanceId?: string;
+  Tags: { Key: string; Value: string }[];
+  MonthlyCost: number; // Calculated from size × volume-type rate
+}
+
+export interface ElasticIPResource {
+  PublicIp: string;
+  AllocationId: string;
+  AssociationId?: string;
+  Region: string;
+  Tags: { Key: string; Value: string }[];
+  MonthlyCost: number;
+}
+
+export interface CostExplorerRow {
+  Date: string;
+  Service: string;
+  Cost: number;
+}
+
+// ─── On-Demand Pricing Reference ──────────────────────────────────────────────
+// Approximate US-East-1 on-demand pricing per hour (USD).
+// Used only for per-resource cost estimation when Cost Explorer doesn't break
+// down to individual instance level.
+const EC2_HOURLY_PRICING: Record<string, number> = {
+  "t3.nano": 0.0052,
+  "t3.micro": 0.0104,
+  "t3.small": 0.0208,
+  "t3.medium": 0.0416,
+  "t3.large": 0.0832,
+  "t3.xlarge": 0.1664,
+  "t3.2xlarge": 0.3328,
+  "m5.large": 0.096,
+  "m5.xlarge": 0.192,
+  "m5.2xlarge": 0.384,
+  "m5.4xlarge": 0.768,
+  "c5.large": 0.085,
+  "c5.xlarge": 0.17,
+  "c5.2xlarge": 0.34,
+  "r5.large": 0.126,
+  "r5.xlarge": 0.252,
+  "t2.micro": 0.0116,
+  "t2.small": 0.023,
+  "t2.medium": 0.0464,
+  "t2.large": 0.0928,
+};
+
+// EBS pricing per GB-month by volume type (US-East-1)
+const EBS_GB_MONTH_PRICING: Record<string, number> = {
+  gp3: 0.08,
+  gp2: 0.1,
+  io1: 0.125,
+  io2: 0.125,
+  st1: 0.045,
+  sc1: 0.015,
+  standard: 0.05,
+};
+
+// ─── AWS Cloud Connector ───────────────────────────────────────────────────────
 
 export class AwsCloudConnector {
-  private roleArn?: string;
+  private roleArn: string;
   private externalId?: string;
-  private isMockMode: boolean = true;
+  private regions: string[];
+  private baseCredentials?: { accessKeyId: string; secretAccessKey: string };
 
-  constructor(roleArn?: string, externalId?: string) {
-    if (roleArn && roleArn.trim().startsWith("arn:aws:iam::")) {
-      this.roleArn = roleArn;
-      this.externalId = externalId;
-      this.isMockMode = false;
+  constructor(
+    roleArn: string,
+    externalId?: string,
+    baseCredentials?: { accessKeyId: string; secretAccessKey: string }
+  ) {
+    if (!roleArn) {
+      throw new Error(
+        "AwsCloudConnector requires a valid IAM Role ARN. " +
+          "Provide the ARN of the GreenCloudReadOnlyRole created in the target AWS account."
+      );
     }
+    this.roleArn = roleArn;
+    this.externalId = externalId;
+    this.regions = GreenCloudConfig.scanRegions;
+    this.baseCredentials = baseCredentials;
   }
 
+  // ─── STS Credential Acquisition ──────────────────────────────────────────────
+
   /**
-   * Helper to retrieve temporary credentials by assuming cross-account IAM role.
+   * Assumes the cross-account IAM role and returns temporary credentials.
+   * The calling machine must have base AWS credentials configured
+   * (env vars, ~/.aws/credentials, or IAM instance profile).
    */
   private async getCredentials() {
-    if (this.isMockMode || !this.roleArn) {
-      throw new Error("Cannot assume role: Connector is in mock or unconfigured mode.");
-    }
-
-    const stsClient = new STSClient({ region: "us-east-1" });
-    const command = new AssumeRoleCommand({
-      RoleArn: this.roleArn,
-      RoleSessionName: "GreenCloudIngestionSession",
-      ExternalId: this.externalId,
-      DurationSeconds: 900 // 15-minute least privilege session
+    Logger.info("AWS", "STS_ASSUME_ROLE", `Assuming IAM Role: ${this.roleArn}`, {
+      externalId: this.externalId || "(none)",
+      durationSeconds: GreenCloudConfig.stsSessionDurationSeconds,
     });
 
-    const response = await stsClient.send(command);
-    if (!response.Credentials || !response.Credentials.AccessKeyId || !response.Credentials.SecretAccessKey) {
-      throw new Error("STS AssumeRole returned incomplete credentials");
-    }
+    const rawAccessKey = this.baseCredentials?.accessKeyId || process.env.AWS_ACCESS_KEY_ID;
+    const rawSecretKey = this.baseCredentials?.secretAccessKey || process.env.AWS_SECRET_ACCESS_KEY;
+    const accessKeyId = rawAccessKey ? rawAccessKey.trim() : undefined;
+    const secretAccessKey = rawSecretKey ? rawSecretKey.trim() : undefined;
 
-    return {
-      accessKeyId: response.Credentials.AccessKeyId,
-      secretAccessKey: response.Credentials.SecretAccessKey,
-      sessionToken: response.Credentials.SessionToken
-    };
-  }
-
-  /**
-   * Fetches real CloudWatch CPU utilization metric series for an EC2 instance over 7 days.
-   */
-  async fetchCloudWatchCpuMetrics(instanceId: string, credentials?: any): Promise<number[]> {
-    if (this.isMockMode || !credentials) {
-      return [3.5, 4.0, 2.9, 3.1, 4.2, 3.8, 3.0];
-    }
-
-    try {
-      const cwClient = new CloudWatchClient({ region: "us-east-1", credentials });
-      const endTime = new Date();
-      const startTime = new Date(endTime.getTime() - 7 * 24 * 3600 * 1000);
-
-      const command = new GetMetricDataCommand({
-        MetricDataQueries: [
-          {
-            Id: "m1",
-            MetricStat: {
-              Metric: {
-                Namespace: "AWS/EC2",
-                MetricName: "CPUUtilization",
-                Dimensions: [{ Name: "InstanceId", Value: instanceId }]
-              },
-              Period: 86400, // 1 day period
-              Stat: "Average"
-            }
+    const stsClient = new STSClient({
+      region: GreenCloudConfig.defaultRegion,
+      ...(accessKeyId && secretAccessKey
+        ? {
+            credentials: {
+              accessKeyId,
+              secretAccessKey,
+            },
           }
-        ],
-        StartTime: startTime,
-        EndTime: endTime
+        : {}),
+    });
+
+    const params: any = {
+      RoleArn: this.roleArn,
+      RoleSessionName: `GreenCloud-${Date.now()}`,
+      DurationSeconds: GreenCloudConfig.stsSessionDurationSeconds,
+    };
+
+    if (this.externalId) {
+      params.ExternalId = this.externalId;
+    }
+
+    try {
+      const response = await stsClient.send(new AssumeRoleCommand(params));
+
+      if (!response.Credentials) {
+        throw new Error("STS AssumeRole returned empty credentials.");
+      }
+
+      Logger.success("AWS", "STS_CREDENTIALS_ACQUIRED", `Temporary session token generated for role ${this.roleArn}`);
+
+      return {
+        accessKeyId: response.Credentials.AccessKeyId!,
+        secretAccessKey: response.Credentials.SecretAccessKey!,
+        sessionToken: response.Credentials.SessionToken!,
+      };
+    } catch (error: any) {
+      Logger.error(
+        "AWS",
+        "STS_ASSUME_ROLE_FAILED",
+        error,
+        "Verify your local AWS credentials (.env.local) and check the IAM Role Trust Relationship."
+      );
+      if (error.name === "AccessDenied" || error.Code === "AccessDenied") {
+        throw new Error(
+          `STS AssumeRole denied. Verify that:\n` +
+            `  1. Role ARN "${this.roleArn}" exists in the target account\n` +
+            `  2. The trust policy allows your AWS account to assume this role\n` +
+            `  3. The ExternalId matches: "${this.externalId || "(none)"}"\n` +
+            `  Original error: ${error.message}`
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Resolves all enabled AWS regions to scan.
+   * If GREENCLOUD_SCAN_REGIONS is 'all' or empty, queries AWS DescribeRegions
+   * dynamically with STS credentials. Falls back to 17 standard AWS regions.
+   */
+  async getTargetRegions(credentials: {
+    accessKeyId: string;
+    secretAccessKey: string;
+    sessionToken: string;
+  }): Promise<string[]> {
+    const configured = this.regions.filter((r) => r.toLowerCase() !== "all");
+    if (!GreenCloudConfig.isAllRegions && configured.length > 0) {
+      return configured;
+    }
+
+    try {
+      Logger.info("AWS", "DESCRIBE_REGIONS", "Querying enabled AWS regions for account...");
+      const ec2Client = new EC2Client({
+        region: GreenCloudConfig.defaultRegion,
+        credentials,
+      });
+      const response = await ec2Client.send(new DescribeRegionsCommand({ AllRegions: false }));
+      const discovered = (response.Regions || [])
+        .map((r) => r.RegionName)
+        .filter((r): r is string => Boolean(r));
+
+      if (discovered.length > 0) {
+        Logger.success(
+          "AWS",
+          "REGIONS_DISCOVERED",
+          `Discovered ${discovered.length} enabled AWS regions: ${discovered.join(", ")}`
+        );
+        return discovered;
+      }
+    } catch (err: any) {
+      Logger.warn(
+        "AWS",
+        "DESCRIBE_REGIONS_FALLBACK",
+        `Dynamic region discovery unavailable: ${err.message}. Using 17 standard regions fallback list.`
+      );
+    }
+
+    // Comprehensive fallback across all major AWS regions
+    return [
+      "ap-south-1",
+      "us-east-1",
+      "us-east-2",
+      "us-west-1",
+      "us-west-2",
+      "eu-central-1",
+      "eu-west-1",
+      "eu-west-2",
+      "eu-west-3",
+      "eu-north-1",
+      "ap-southeast-1",
+      "ap-southeast-2",
+      "ap-northeast-1",
+      "ap-northeast-2",
+      "ap-northeast-3",
+      "ca-central-1",
+      "sa-east-1",
+    ];
+  }
+
+  // ─── EC2 Instances ───────────────────────────────────────────────────────────
+
+  /**
+   * Fetches all EC2 instances across all enabled AWS regions.
+   * For each running instance, queries CloudWatch in that instance's region for real CPU telemetry.
+   */
+  async fetchEC2Instances(): Promise<EC2InstanceResource[]> {
+    const credentials = await this.getCredentials();
+    const targetRegions = await this.getTargetRegions(credentials);
+    Logger.info(
+      "AWS",
+      "EC2_SCAN_START",
+      `Scanning EC2 instances across ${targetRegions.length} regions: ${targetRegions.join(", ")}`
+    );
+
+    const allInstances: EC2InstanceResource[] = [];
+    const batchSize = 6; // Concurrent chunks to avoid rate limiting while remaining fast
+
+    for (let i = 0; i < targetRegions.length; i += batchSize) {
+      const batch = targetRegions.slice(i, i + batchSize);
+      const batchPromises = batch.map(async (region) => {
+        const regionInstances: EC2InstanceResource[] = [];
+        try {
+          const ec2Client = new EC2Client({ region, credentials });
+          let nextToken: string | undefined;
+
+          do {
+            const command = new DescribeInstancesCommand({
+              NextToken: nextToken,
+            });
+            const response = await ec2Client.send(command);
+            nextToken = response.NextToken;
+
+            for (const reservation of response.Reservations || []) {
+              for (const inst of reservation.Instances || []) {
+                const instanceId = inst.InstanceId || "unknown";
+                const instanceType = inst.InstanceType || "t3.micro";
+                const state = inst.State?.Name || "unknown";
+                const az = inst.Placement?.AvailabilityZone || region;
+
+                const tags = (inst.Tags || []).map((t) => ({
+                  Key: t.Key || "",
+                  Value: t.Value || "",
+                }));
+
+                // Fetch real CloudWatch CPU metrics for running instances
+                let cpuSeries: number[] = [];
+                let peakCpu = 0;
+
+                if (state === "running") {
+                  try {
+                    Logger.info(
+                      "AWS",
+                      "CLOUDWATCH_METRIC_FETCH",
+                      `Fetching ${GreenCloudConfig.cloudwatchLookbackDays}d CPU metrics for ${instanceId} in ${region}`
+                    );
+                    const cwResult = await this.fetchCloudWatchCPU(
+                      credentials,
+                      region,
+                      instanceId
+                    );
+                    cpuSeries = cwResult.dailyAverages;
+                    peakCpu = cwResult.peak;
+                    Logger.success(
+                      "AWS",
+                      "CLOUDWATCH_METRIC_ACQUIRED",
+                      `${instanceId} (${region}) CPU telemetry: avg=[${cpuSeries.join(", ")}%], peak=${peakCpu}%`
+                    );
+                  } catch (cwErr: any) {
+                    Logger.warn(
+                      "AWS",
+                      "CLOUDWATCH_METRIC_SKIPPED",
+                      `CloudWatch metrics unavailable for ${instanceId} (${region}): ${cwErr.message}`,
+                      "Ensure IAM role has 'cloudwatch:GetMetricData' permission and instance is sending metrics."
+                    );
+                  }
+                }
+
+                // Estimate monthly cost from on-demand pricing table
+                const hourlyRate =
+                  EC2_HOURLY_PRICING[instanceType] ||
+                  EC2_HOURLY_PRICING["t3.micro"]!;
+                const monthlyCost =
+                  state === "running"
+                    ? parseFloat((hourlyRate * 730).toFixed(2))
+                    : 0;
+
+                regionInstances.push({
+                  InstanceId: instanceId,
+                  InstanceType: instanceType,
+                  State: state,
+                  Region: region,
+                  AvailabilityZone: az,
+                  LaunchTime: inst.LaunchTime
+                    ? inst.LaunchTime.toISOString()
+                    : new Date().toISOString(),
+                  CpuUtilizationSeries: cpuSeries,
+                  PeakCpuUtilization: peakCpu,
+                  Tags: tags,
+                  MonthlyCost: monthlyCost,
+                });
+              }
+            }
+          } while (nextToken);
+
+          if (regionInstances.length > 0) {
+            Logger.success(
+              "AWS",
+              "EC2_REGION_SCANNED",
+              `Region ${region}: Found ${regionInstances.length} EC2 instances (${regionInstances.filter((r) => r.State === "running").length} running).`
+            );
+          }
+        } catch (error: any) {
+          Logger.warn("AWS", "EC2_REGION_WARN", `EC2 DescribeInstances skipped for region ${region}: ${error.message}`);
+        }
+        return regionInstances;
       });
 
-      const res = await cwClient.send(command);
-      const values = res.MetricDataResults?.[0]?.Values || [];
-      if (values.length === 0) {
-        return [5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0];
+      const results = await Promise.all(batchPromises);
+      for (const res of results) {
+        allInstances.push(...res);
       }
-      return values.map(v => parseFloat(v.toFixed(2)));
-    } catch (err) {
-      console.warn(`CloudWatch metric query fallback for ${instanceId}:`, err);
-      return [3.5, 4.0, 2.9, 3.1, 4.2, 3.8, 3.0];
     }
+
+    Logger.success(
+      "AWS",
+      "EC2_SCAN_COMPLETE",
+      `Total EC2 instances discovered across all ${targetRegions.length} regions: ${allInstances.length} (${allInstances.filter((i) => i.State === "running").length} running)`
+    );
+    return allInstances;
   }
 
+  // ─── CloudWatch CPU Metrics ──────────────────────────────────────────────────
+
   /**
-   * Fetches EC2 instances via DescribeInstances & CloudWatch metrics. Fallback to mock on auth/permission failures.
+   * Queries CloudWatch for real CPU utilization metrics over the configured
+   * lookback window. Returns daily average values and peak.
    */
-  async fetchEC2Instances(): Promise<MockEC2Instance[]> {
-    if (this.isMockMode) {
-      return AwsMockSimulator.getEC2Instances();
-    }
+  private async fetchCloudWatchCPU(
+    credentials: {
+      accessKeyId: string;
+      secretAccessKey: string;
+      sessionToken: string;
+    },
+    region: string,
+    instanceId: string
+  ): Promise<{ dailyAverages: number[]; peak: number }> {
+    const cwClient = new CloudWatchClient({ region, credentials });
 
-    try {
-      const credentials = await this.getCredentials();
-      const ec2Client = new EC2Client({ region: "us-east-1", credentials });
-      const command = new DescribeInstancesCommand({});
-      const response = await ec2Client.send(command);
+    const endTime = new Date();
+    const startTime = new Date();
+    startTime.setDate(
+      startTime.getDate() - GreenCloudConfig.cloudwatchLookbackDays
+    );
 
-      const list: MockEC2Instance[] = [];
-      const reservations = response.Reservations || [];
+    const command = new GetMetricDataCommand({
+      StartTime: startTime,
+      EndTime: endTime,
+      MetricDataQueries: [
+        {
+          Id: "cpu_avg",
+          MetricStat: {
+            Metric: {
+              Namespace: "AWS/EC2",
+              MetricName: "CPUUtilization",
+              Dimensions: [
+                { Name: "InstanceId", Value: instanceId },
+              ],
+            },
+            Period: GreenCloudConfig.cloudwatchPeriodSeconds,
+            Stat: "Average",
+          },
+          ReturnData: true,
+        },
+        {
+          Id: "cpu_max",
+          MetricStat: {
+            Metric: {
+              Namespace: "AWS/EC2",
+              MetricName: "CPUUtilization",
+              Dimensions: [
+                { Name: "InstanceId", Value: instanceId },
+              ],
+            },
+            Period: GreenCloudConfig.cloudwatchPeriodSeconds,
+            Stat: "Maximum",
+          },
+          ReturnData: true,
+        },
+      ],
+    });
 
-      for (const res of reservations) {
-        const instances = res.Instances || [];
-        for (const inst of instances) {
-          const tags = (inst.Tags || []).map((t) => ({ Key: t.Key || "", Value: t.Value || "" }));
-          const instanceId = inst.InstanceId || "unknown";
-          
-          // Query CloudWatch for actual CPU telemetry
-          const cpuSeries = await this.fetchCloudWatchCpuMetrics(instanceId, credentials);
+    const response = await cwClient.send(command);
 
-          list.push({
-            InstanceId: instanceId,
-            InstanceType: inst.InstanceType || "t3.micro",
-            State: inst.State?.Name || "stopped",
-            Region: "us-east-1",
-            LaunchTime: inst.LaunchTime ? inst.LaunchTime.toISOString() : new Date().toISOString(),
-            CpuUtilizationSeries: cpuSeries,
-            Tags: tags,
-            MonthlyCost: inst.InstanceType === "m5.large" ? 69.36 : inst.InstanceType === "c5.xlarge" ? 124.10 : 30.00
-          });
+    const avgResult = response.MetricDataResults?.find(
+      (r) => r.Id === "cpu_avg"
+    );
+    const maxResult = response.MetricDataResults?.find(
+      (r) => r.Id === "cpu_max"
+    );
+
+    const dailyAverages = (avgResult?.Values || []).map((v) =>
+      parseFloat(v.toFixed(2))
+    );
+    const peakValues = maxResult?.Values || [];
+    const peak =
+      peakValues.length > 0
+        ? parseFloat(Math.max(...peakValues).toFixed(2))
+        : 0;
+
+    return { dailyAverages, peak };
+  }
+
+  // ─── EBS Volumes ─────────────────────────────────────────────────────────────
+
+  /**
+   * Fetches all EBS volumes across all enabled AWS regions.
+   * Includes real size, type, IOPS, and attachment status.
+   */
+  async fetchEBSVolumes(): Promise<EBSVolumeResource[]> {
+    const credentials = await this.getCredentials();
+    const targetRegions = await this.getTargetRegions(credentials);
+    const allVolumes: EBSVolumeResource[] = [];
+    const batchSize = 6;
+
+    for (let i = 0; i < targetRegions.length; i += batchSize) {
+      const batch = targetRegions.slice(i, i + batchSize);
+      const batchPromises = batch.map(async (region) => {
+        const regionVolumes: EBSVolumeResource[] = [];
+        try {
+          const ec2Client = new EC2Client({ region, credentials });
+          let nextToken: string | undefined;
+
+          do {
+            const command = new DescribeVolumesCommand({
+              NextToken: nextToken,
+            });
+            const response = await ec2Client.send(command);
+            nextToken = response.NextToken;
+
+            for (const vol of response.Volumes || []) {
+              const volumeType = vol.VolumeType || "gp3";
+              const sizeGb = vol.Size || 0;
+              const tags = (vol.Tags || []).map((t) => ({
+                Key: t.Key || "",
+                Value: t.Value || "",
+              }));
+
+              const attachment =
+                vol.Attachments && vol.Attachments.length > 0
+                  ? vol.Attachments[0]
+                  : null;
+
+              // Calculate real monthly cost from volume size and type
+              const gbRate =
+                EBS_GB_MONTH_PRICING[volumeType] || EBS_GB_MONTH_PRICING.gp3!;
+              const monthlyCost = parseFloat((sizeGb * gbRate).toFixed(2));
+
+              regionVolumes.push({
+                VolumeId: vol.VolumeId || "unknown",
+                Size: sizeGb,
+                State: vol.State || "unknown",
+                Region: region,
+                VolumeType: volumeType,
+                Iops: vol.Iops || 0,
+                CreateTime: vol.CreateTime
+                  ? vol.CreateTime.toISOString()
+                  : new Date().toISOString(),
+                AttachmentInstanceId: attachment?.InstanceId || undefined,
+                Tags: tags,
+                MonthlyCost: monthlyCost,
+              });
+            }
+          } while (nextToken);
+
+          if (regionVolumes.length > 0) {
+            Logger.success(
+              "AWS",
+              "EBS_REGION_SCANNED",
+              `Region ${region}: Found ${regionVolumes.length} EBS volumes.`
+            );
+          }
+        } catch (error: any) {
+          Logger.warn("AWS", "EBS_REGION_WARN", `EBS DescribeVolumes skipped for ${region}: ${error.message}`);
         }
-      }
-      return list.length > 0 ? list : AwsMockSimulator.getEC2Instances();
-    } catch (error) {
-      console.warn("Live AWS EC2 fetch warning (falling back to simulation):", error);
-      return AwsMockSimulator.getEC2Instances();
-    }
-  }
-
-  /**
-   * Fetches EBS volumes. Fallback to mock on failures.
-   */
-  async fetchEBSVolumes(): Promise<MockEBSVolume[]> {
-    if (this.isMockMode) {
-      return AwsMockSimulator.getEBSVolumes();
-    }
-
-    try {
-      const credentials = await this.getCredentials();
-      const ec2Client = new EC2Client({ region: "us-east-1", credentials });
-      const command = new DescribeVolumesCommand({});
-      const response = await ec2Client.send(command);
-
-      const list: MockEBSVolume[] = [];
-      const volumes = response.Volumes || [];
-
-      for (const vol of volumes) {
-        const tags = (vol.Tags || []).map((t) => ({ Key: t.Key || "", Value: t.Value || "" }));
-        const attachment = vol.Attachments && vol.Attachments.length > 0 ? vol.Attachments[0] : null;
-
-        list.push({
-          VolumeId: vol.VolumeId || "unknown",
-          Size: vol.Size || 8,
-          State: vol.State || "available",
-          Region: "us-east-1",
-          VolumeType: vol.VolumeType || "gp3",
-          CreateTime: vol.CreateTime ? vol.CreateTime.toISOString() : new Date().toISOString(),
-          AttachmentInstanceId: attachment?.InstanceId || undefined,
-          Tags: tags,
-          MonthlyCost: (vol.Size || 8) * 0.08
-        });
-      }
-      return list.length > 0 ? list : AwsMockSimulator.getEBSVolumes();
-    } catch (error) {
-      console.warn("Live AWS EBS fetch warning (falling back to simulation):", error);
-      return AwsMockSimulator.getEBSVolumes();
-    }
-  }
-
-  /**
-   * Fetches Elastic IPs. Fallback to mock on failures.
-   */
-  async fetchElasticIPs(): Promise<MockElasticIP[]> {
-    if (this.isMockMode) {
-      return AwsMockSimulator.getElasticIPs();
-    }
-
-    try {
-      const credentials = await this.getCredentials();
-      const ec2Client = new EC2Client({ region: "us-east-1", credentials });
-      const command = new DescribeAddressesCommand({});
-      const response = await ec2Client.send(command);
-
-      const list: MockElasticIP[] = [];
-      const addresses = response.Addresses || [];
-
-      for (const addr of addresses) {
-        const tags = (addr.Tags || []).map((t) => ({ Key: t.Key || "", Value: t.Value || "" }));
-        list.push({
-          PublicIp: addr.PublicIp || "0.0.0.0",
-          AllocationId: addr.AllocationId || "unknown",
-          AssociationId: addr.AssociationId || undefined,
-          Region: "us-east-1",
-          Tags: tags,
-          MonthlyCost: addr.AssociationId ? 0 : 3.60
-        });
-      }
-      return list.length > 0 ? list : AwsMockSimulator.getElasticIPs();
-    } catch (error) {
-      console.warn("Live AWS EIP fetch warning (falling back to simulation):", error);
-      return AwsMockSimulator.getElasticIPs();
-    }
-  }
-
-  /**
-   * Fetches billing summary rows from AWS Cost Explorer. Fallback to mock.
-   */
-  async fetchBillingSummary(startDate: string, endDate: string): Promise<MockCostExplorerRow[]> {
-    if (this.isMockMode) {
-      return AwsMockSimulator.getCostExplorer(startDate, endDate);
-    }
-
-    try {
-      const credentials = await this.getCredentials();
-      const ceClient = new CostExplorerClient({ region: "us-east-1", credentials });
-      const command = new GetCostAndUsageCommand({
-        TimePeriod: { Start: startDate, End: endDate },
-        Granularity: "DAILY",
-        Metrics: ["UnblendedCost"],
-        GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }]
+        return regionVolumes;
       });
 
-      const response = await ceClient.send(command);
-      const results = response.ResultsByTime || [];
-      const rows: MockCostExplorerRow[] = [];
+      const results = await Promise.all(batchPromises);
+      for (const res of results) {
+        allVolumes.push(...res);
+      }
+    }
 
-      for (const day of results) {
-        const date = day.TimePeriod?.Start || startDate;
-        const groups = day.Groups || [];
-        for (const grp of groups) {
-          const service = grp.Keys && grp.Keys.length > 0 ? grp.Keys[0] : "Other Services";
-          const cost = parseFloat(grp.Metrics?.UnblendedCost?.Amount || "0");
-          rows.push({ Date: date, Service: service, Cost: parseFloat(cost.toFixed(2)) });
+    return allVolumes;
+  }
+
+  // ─── Elastic IPs ─────────────────────────────────────────────────────────────
+
+  /**
+   * Fetches all Elastic IP addresses across all enabled AWS regions.
+   * Unassociated IPs cost $0.005/hr ($3.60/month) since Feb 2024 AWS pricing change.
+   */
+  async fetchElasticIPs(): Promise<ElasticIPResource[]> {
+    const credentials = await this.getCredentials();
+    const targetRegions = await this.getTargetRegions(credentials);
+    const allIPs: ElasticIPResource[] = [];
+    const batchSize = 6;
+
+    for (let i = 0; i < targetRegions.length; i += batchSize) {
+      const batch = targetRegions.slice(i, i + batchSize);
+      const batchPromises = batch.map(async (region) => {
+        const regionIPs: ElasticIPResource[] = [];
+        try {
+          const ec2Client = new EC2Client({ region, credentials });
+          const command = new DescribeAddressesCommand({});
+          const response = await ec2Client.send(command);
+
+          for (const addr of response.Addresses || []) {
+            const tags = (addr.Tags || []).map((t) => ({
+              Key: t.Key || "",
+              Value: t.Value || "",
+            }));
+
+            // AWS charges $0.005/hr for ALL public IPv4 addresses since Feb 2024
+            // Unassociated EIPs have an additional idle charge
+            const isAssociated = !!addr.AssociationId;
+            const monthlyCost = isAssociated ? 3.6 : 7.2;
+
+            regionIPs.push({
+              PublicIp: addr.PublicIp || "0.0.0.0",
+              AllocationId: addr.AllocationId || "unknown",
+              AssociationId: addr.AssociationId || undefined,
+              Region: region,
+              Tags: tags,
+              MonthlyCost: parseFloat(monthlyCost.toFixed(2)),
+            });
+          }
+          if (regionIPs.length > 0) {
+            Logger.success(
+              "AWS",
+              "EIP_REGION_SCANNED",
+              `Region ${region}: Found ${regionIPs.length} Elastic IPs.`
+            );
+          }
+        } catch (error: any) {
+          Logger.warn("AWS", "EIP_REGION_WARN", `EIP DescribeAddresses skipped for ${region}: ${error.message}`);
+        }
+        return regionIPs;
+      });
+
+      const results = await Promise.all(batchPromises);
+      for (const res of results) {
+        allIPs.push(...res);
+      }
+    }
+
+    return allIPs;
+  }
+
+  // ─── Cost Explorer ───────────────────────────────────────────────────────────
+
+  /**
+   * Fetches real billing data from AWS Cost Explorer.
+   * Cost Explorer is a global service - always called from us-east-1.
+   * Note: Cost Explorer API calls are billed at $0.01 per request.
+   */
+  async fetchBillingSummary(
+    startDate: string,
+    endDate: string
+  ): Promise<CostExplorerRow[]> {
+    Logger.info("AWS", "COST_EXPLORER_FETCH", `Querying AWS Cost Explorer from ${startDate} to ${endDate}`);
+    const credentials = await this.getCredentials();
+
+    try {
+      const ceClient = new CostExplorerClient({
+        region: "us-east-1", // Cost Explorer is always us-east-1
+        credentials,
+      });
+
+      // Query Cost Explorer filtering out Credit and Refund record types
+      // so actual cloud resource spend matches AWS Console even when credits/free plan apply.
+      let response;
+      try {
+        const command = new GetCostAndUsageCommand({
+          TimePeriod: { Start: startDate, End: endDate },
+          Granularity: "DAILY",
+          Filter: {
+            Not: {
+              Dimensions: {
+                Key: "RECORD_TYPE",
+                Values: ["Credit", "Refund"],
+              },
+            },
+          },
+          Metrics: ["UnblendedCost"],
+          GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
+        });
+        response = await ceClient.send(command);
+      } catch (filterErr: any) {
+        Logger.warn("AWS", "COST_EXPLORER_FILTER_FALLBACK", `Filter query failed (${filterErr.message}), falling back to unfiltered GetCostAndUsage.`);
+        const fallbackCommand = new GetCostAndUsageCommand({
+          TimePeriod: { Start: startDate, End: endDate },
+          Granularity: "DAILY",
+          Metrics: ["UnblendedCost"],
+          GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
+        });
+        response = await ceClient.send(fallbackCommand);
+      }
+
+      const rows: CostExplorerRow[] = [];
+
+      for (const day of response.ResultsByTime || []) {
+        const date = day.TimePeriod?.Start || "";
+        for (const grp of day.Groups || []) {
+          const service =
+            grp.Keys && grp.Keys.length > 0 ? grp.Keys[0] : "Other";
+          const cost = parseFloat(
+            grp.Metrics?.UnblendedCost?.Amount || "0"
+          );
+          if (cost > 0.000001) {
+            rows.push({
+              Date: date,
+              Service: service,
+              Cost: parseFloat(cost.toFixed(6)),
+            });
+          }
         }
       }
-      return rows.length > 0 ? rows : AwsMockSimulator.getCostExplorer(startDate, endDate);
-    } catch (error) {
-      console.warn("Live AWS Cost Explorer warning (falling back to simulation):", error);
-      return AwsMockSimulator.getCostExplorer(startDate, endDate);
+
+      Logger.success("AWS", "COST_EXPLORER_DATA_RECEIVED", `Retrieved ${rows.length} billing rows from AWS Cost Explorer.`);
+      return rows;
+    } catch (error: any) {
+      Logger.error(
+        "AWS",
+        "COST_EXPLORER_FETCH_FAILED",
+        error,
+        "Enable Cost Explorer in AWS Console (Billing -> Cost Explorer) and attach 'ce:GetCostAndUsage' permission."
+      );
+      this.logPermissionHint(error, "ce:GetCostAndUsage");
+      throw error; // Do not swallow billing errors; they are critical
+    }
+  }
+
+  // ─── Error Diagnostics ───────────────────────────────────────────────────────
+
+  /**
+   * Logs a human-readable hint when an AWS API call fails due to missing permissions.
+   */
+  private logPermissionHint(error: any, requiredAction: string): void {
+    const code = error.name || error.Code || "";
+    if (
+      code === "UnauthorizedAccess" ||
+      code === "AccessDeniedException" ||
+      code === "AccessDenied" ||
+      code === "AuthFailure"
+    ) {
+      console.error(
+        `\n⚠️  PERMISSION ERROR: The IAM role "${this.roleArn}" is missing permission "${requiredAction}".\n` +
+          `   Add this action to the GreenCloudTelemetryAndCostReadPolicy in your CloudFormation stack.\n` +
+          `   See: docs/aws-setup-guide.md\n`
+      );
     }
   }
 }

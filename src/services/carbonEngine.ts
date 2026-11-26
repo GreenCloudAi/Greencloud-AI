@@ -1,70 +1,109 @@
-/**
- * Carbon Footprint Calculation Engine
- * Operational carbon = Energy (kWh) * Grid Carbon Intensity (gCO2e / kWh)
- * Energy = (Average CPU Util % * TDP Watts * PUE * Hours) / 1000
- */
-
-export interface CarbonCalculationInput {
-  instanceType: string;
-  cpuUtilPercent: number; // 0 - 100
-  hours: number;
-  region?: string;
-  gridCarbonIntensityGco2ePerKwh?: number; // Default 385 gCO2e/kWh (US average)
-}
+import { getRegionMeta } from "./cloudMetadata";
 
 export interface CarbonCalculationResult {
   energyKwh: number;
   operationalGco2e: number;
   embodiedGco2e: number;
   method: string;
-  confidence: number;
 }
 
 export class CarbonEngine {
-  // Approximate thermal design power (TDP) in Watts per instance type
-  private static TDP_MAP: Record<string, number> = {
-    "t3.micro": 8,
-    "m5.large": 45,
-    "c5.xlarge": 90,
-    "r5.large": 60,
-  };
-
-  // Approximate embodied carbon gCO2e per instance-hour
-  private static EMBODIED_MAP: Record<string, number> = {
-    "t3.micro": 0.5,
-    "m5.large": 2.1,
-    "c5.xlarge": 4.2,
-    "r5.large": 3.0,
-  };
-
-  // Cloud datacenter PUE (Power Usage Effectiveness)
-  private static AWS_DEFAULT_PUE = 1.15;
-
-  // Default Grid Intensity (gCO2e / kWh)
-  private static DEFAULT_GRID_INTENSITY = 385.0;
+  // Hardware Manufacturing/Lifespan constants for Embodied Carbon
+  // Server lifespans are standard 4 years (35,040 hours)
+  private static physicalServerEmbodiedGco2e = 1200000; // 1.2 metric tonnes of CO2e
+  private static lifespanHours = 35040;
+  private static physicalServerVcpus = 64;
 
   /**
-   * Calculates operational and embodied carbon footprint using hybrid CCF method.
+   * Returns regional grid carbon intensity (gCO2e/kWh) across AWS, GCP, and Azure
    */
-  static calculateInstanceCarbon(input: CarbonCalculationInput): CarbonCalculationResult {
-    const tdp = this.TDP_MAP[input.instanceType] || 40;
-    const embodiedPerHour = this.EMBODIED_MAP[input.instanceType] || 2.0;
-    const gridIntensity = input.gridCarbonIntensityGco2ePerKwh || this.DEFAULT_GRID_INTENSITY;
+  static getCarbonIntensity(region: string): number {
+    return getRegionMeta(region).gridIntensity;
+  }
 
-    // Minimum power draw at idle is ~25% of TDP, scaling linearly with CPU utilization
-    const loadFraction = Math.max(0.25, input.cpuUtilPercent / 100);
-    const powerWatts = tdp * loadFraction * this.AWS_DEFAULT_PUE;
-    const energyKwh = (powerWatts * input.hours) / 1000;
+  /**
+   * Calculates carbon footprint metrics for an EC2 Instance over a specified day.
+   */
+  static calculateEC2Carbon(
+    instanceType: string,
+    region: string,
+    avgCpuPercentage: number,
+    durationHours: number = 24
+  ): CarbonCalculationResult {
+    // 1. Operational Energy Estimation (based on vCPU power drawing)
+    // Estimate vCPUs for typical instance types
+    let vcpus = 2;
+    if (instanceType.includes("large")) vcpus = 2;
+    else if (instanceType.includes("medium")) vcpus = 2;
+    else if (instanceType.includes("micro") || instanceType.includes("nano")) vcpus = 1;
+    else if (instanceType.includes("xlarge")) vcpus = 4;
 
-    const operationalGco2e = energyKwh * gridIntensity;
-    const embodiedGco2e = embodiedPerHour * input.hours;
+    // Power consumption estimates (Watts/vCPU) - based on CCF coefficients
+    const idlePowerWatts = 15; // Power consumed by CPU/RAM/Host while idle
+    const peakPowerWatts = 45; // Power consumed at full load
+    
+    const cpuFactor = avgCpuPercentage / 100;
+    const powerDrawWatts = vcpus * (idlePowerWatts + (peakPowerWatts - idlePowerWatts) * cpuFactor);
+    const energyKwh = (powerDrawWatts / 1000) * durationHours;
+
+    // 2. Operational Carbon
+    const intensity = this.getCarbonIntensity(region);
+    const operationalGco2e = energyKwh * intensity;
+
+    // 3. Embodied Carbon (manufacturing allocated to instance size)
+    const serverHourlyEmbodied = this.physicalServerEmbodiedGco2e / this.lifespanHours;
+    const instanceHourlyEmbodied = serverHourlyEmbodied * (vcpus / this.physicalServerVcpus);
+    const embodiedGco2e = instanceHourlyEmbodied * durationHours;
 
     return {
       energyKwh: parseFloat(energyKwh.toFixed(4)),
       operationalGco2e: parseFloat(operationalGco2e.toFixed(2)),
       embodiedGco2e: parseFloat(embodiedGco2e.toFixed(2)),
-      method: "hybrid_ccf_v1.2",
-      confidence: 0.92
+      method: "GSF-SCI-v1"
     };
+  }
+
+  /**
+   * Calculates carbon footprint metrics for an EBS Volume over a day.
+   */
+  static calculateEBSCarbon(
+    sizeGb: number,
+    region: string,
+    durationHours: number = 24
+  ): CarbonCalculationResult {
+    // 1. Operational Energy
+    // SSD/HDD energy use is estimated around 0.0005 Wh per GB per hour (CCF standard)
+    const energyFactorWh = 0.0005; 
+    const energyKwh = (sizeGb * energyFactorWh * durationHours) / 1000;
+
+    // 2. Operational Carbon
+    const intensity = this.getCarbonIntensity(region);
+    const operationalGco2e = energyKwh * intensity;
+
+    // 3. Embodied Carbon for storage
+    // Allocated manufacturing emissions: ~0.0002 gCO2e per GB per hour
+    const embodiedHourlyRate = 0.0002;
+    const embodiedGco2e = sizeGb * embodiedHourlyRate * durationHours;
+
+    return {
+      energyKwh: parseFloat(energyKwh.toFixed(6)),
+      operationalGco2e: parseFloat(operationalGco2e.toFixed(2)),
+      embodiedGco2e: parseFloat(embodiedGco2e.toFixed(2)),
+      method: "CCF-Storage-v1.5"
+    };
+  }
+
+  /**
+   * Calculates the GSF SCI score for a workload.
+   * SCI = (Operational Carbon + Embodied Carbon) / Functional Unit
+   */
+  static calculateSciScore(
+    totalOperationalGco2e: number,
+    totalEmbodiedGco2e: number,
+    functionalUnits: number
+  ): number {
+    if (functionalUnits <= 0) return 0;
+    const totalEmissions = totalOperationalGco2e + totalEmbodiedGco2e;
+    return parseFloat((totalEmissions / functionalUnits).toFixed(5));
   }
 }

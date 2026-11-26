@@ -11,6 +11,28 @@ GreenCloud is a proposed FinOps and GreenOps platform for understanding and redu
 
 ---
 
+## Quickstart (Running on a New Device)
+
+### 1. Clone & Install
+```bash
+git clone https://github.com/GreenCloudAi/Greencloud-AI.git
+cd Greencloud-AI
+npm install
+```
+> **Note:** `npm install` automatically triggers the `postinstall` hook (`prisma generate && prisma db push`), which creates your local SQLite database (`prisma/dev.db`) with all schema tables ready out of the box.
+
+### 2. Environment Setup
+```bash
+cp .env.example .env.local
+```
+Fill in your local AWS credentials in `.env.local` (only used locally for the STS AssumeRole handshake).
+
+### 3. Run Locally
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
 ## 1. What Problem Does It Solve?
 
 Cloud is easy to start, hard to control.

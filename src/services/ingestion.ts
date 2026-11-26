@@ -1,280 +1,471 @@
 import { prisma } from "./db";
 import { AwsCloudConnector } from "./awsConnector";
 import { CarbonEngine } from "./carbonEngine";
-import { RecommendationEngine } from "./recommendationEngine";
+import { GreenCloudConfig } from "./config";
+import { Logger } from "./logger";
+import { decryptCredential } from "./encryption";
+import { normalizeFocusServiceCategory, normalizeProviderId } from "./cloudMetadata";
 
-export interface SyncOptions {
-  cloudAccountId: string;
+/**
+ * Resilient Retry Helper
+ * Executes an async operation, retrying up to maxRetries on failure with exponential backoff.
+ */
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  operationName: string,
+  maxRetries = GreenCloudConfig.maxRetries,
+  delayMs = GreenCloudConfig.retryBaseDelayMs
+): Promise<T> {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      return await operation();
+    } catch (error) {
+      attempt++;
+      if (attempt >= maxRetries) {
+        throw error;
+      }
+      Logger.warn(
+        "INGEST",
+        "RETRY_ATTEMPT",
+        `${operationName} attempt ${attempt} failed. Retrying in ${delayMs}ms...`,
+        "Check network latency or transient AWS API availability.",
+        { error: (error as any)?.message }
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      delayMs *= 2; // Exponential backoff
+    }
+  }
+  throw new Error("Retry logic failed");
 }
 
 export class IngestionService {
+  private tenantId: string;
+  private accountId: string;
+
+  constructor(tenantId: string, accountId: string) {
+    this.tenantId = tenantId;
+    this.accountId = accountId;
+  }
+
   /**
-   * Executes full ingestion sync for a Cloud Account:
-   * 1. Fetches EC2, EBS, Elastic IPs, and Cost Explorer summaries.
-   * 2. Ingests resources & telemetry into DB.
-   * 3. Computes Carbon Footprint emissions.
-   * 4. Evaluates evidence-backed Recommendations.
-   * 5. Updates sync freshness timestamp and audit log.
+   * Runs the complete ingestion and normalization workflow using real AWS APIs.
+   * Isolates failures in sub-scans (EC2, EBS, EIP, Billing) so that partial
+   * failures do not prevent progress.
    */
-  static async syncCloudAccount(options: SyncOptions) {
-    const cloudAccount = await prisma.cloudAccount.findUnique({
-      where: { id: options.cloudAccountId },
-      include: { tenant: true }
+  async runSync(): Promise<{ success: boolean; errors: string[] }> {
+    const errors: string[] = [];
+
+    // 1. Fetch Cloud Account from DB
+    const account = await prisma.cloudAccount.findFirst({
+      where: { id: this.accountId, tenantId: this.tenantId },
     });
 
-    if (!cloudAccount) {
-      throw new Error(`Cloud account ${options.cloudAccountId} not found`);
+    if (!account) {
+      throw new Error(
+        `Cloud account ${this.accountId} not found for tenant ${this.tenantId}`
+      );
     }
 
-    const startTime = new Date();
-    console.log(`[IngestionEngine] Starting sync for account: ${cloudAccount.name} (${cloudAccount.id})`);
-
-    const connector = new AwsCloudConnector(cloudAccount.roleArn || undefined, `greencloud-${cloudAccount.tenantId}`);
-
-    try {
-      // Step 1: Fetch resources & cost summaries
-      const ec2List = await connector.fetchEC2Instances();
-      const ebsList = await connector.fetchEBSVolumes();
-      const eipList = await connector.fetchElasticIPs();
-
-      let ingestedCount = 0;
-
-      // Step 2: Upsert EC2 instances
-      for (const ec2 of ec2List) {
-        const resourceId = `${cloudAccount.id}_${ec2.InstanceId}`;
-        const avgCpu = ec2.CpuUtilizationSeries.length > 0
-          ? ec2.CpuUtilizationSeries.reduce((a, b) => a + b, 0) / ec2.CpuUtilizationSeries.length
-          : 5.0;
-
-        const dbRes = await prisma.cloudResource.upsert({
-          where: { id: resourceId },
-          update: {
-            lifecycleState: ec2.State,
-            tags: JSON.stringify(ec2.Tags),
-            telemetryMetrics: JSON.stringify({ cpuUtilizationSeries: ec2.CpuUtilizationSeries, instanceType: ec2.InstanceType }),
-            lastSeenAt: startTime
+    const provider = normalizeProviderId(account.provider);
+    if (provider !== "aws") {
+      // GCP / Azure accounts ingest via CNCF FOCUS imports or project billing APIs;
+      // recompute carbon emissions across stored resources on re-sync without requiring STS AssumeRole.
+      const existingResources = await prisma.cloudResource.findMany({
+        where: { cloudAccountId: this.accountId },
+      });
+      const syncTime = new Date();
+      for (const res of existingResources) {
+        let avgCpu = 25;
+        if (res.telemetryMetrics) {
+          try {
+            const parsed = JSON.parse(res.telemetryMetrics);
+            if (Array.isArray(parsed.cpuDailyAverages) && parsed.cpuDailyAverages.length > 0) {
+              avgCpu =
+                parsed.cpuDailyAverages.reduce((a: number, b: number) => a + b, 0) /
+                parsed.cpuDailyAverages.length;
+            }
+          } catch {}
+        }
+        const carbonResult =
+          res.serviceCategory === "Storage" || res.resourceType.includes("ebs") || res.resourceType.includes("disk")
+            ? CarbonEngine.calculateEBSCarbon(res.sizeGb || 50, res.region)
+            : CarbonEngine.calculateEC2Carbon(res.instanceType || "n2-standard-2", res.region, avgCpu);
+        await prisma.carbonEmission.create({
+          data: {
+            resourceId: res.id,
+            ts: syncTime,
+            energyKwh: carbonResult.energyKwh,
+            operationalGco2e: carbonResult.operationalGco2e,
+            embodiedGco2e: carbonResult.embodiedGco2e,
+            method: carbonResult.method,
           },
+        });
+      }
+      await prisma.cloudAccount.update({
+        where: { id: this.accountId },
+        data: { status: "active", syncFreshness: syncTime, syncError: null },
+      });
+      return { success: true, errors: [] };
+    }
+
+    if (!account.roleArn) {
+      throw new Error(
+        `Cloud account "${account.name}" has no IAM Role ARN configured. ` +
+          `Please provide the GreenCloudReadOnlyRole ARN in the onboarding form.`
+      );
+    }
+
+    // Mark account as syncing
+    await prisma.cloudAccount.update({
+      where: { id: this.accountId },
+      data: { status: "syncing" },
+    });
+
+    // Check for encrypted credentials stored on the account
+    let baseCredentials: { accessKeyId: string; secretAccessKey: string } | undefined = undefined;
+    if (account.encryptedAccessKey && account.encryptedSecretKey) {
+      const decAccess = decryptCredential(account.encryptedAccessKey);
+      const decSecret = decryptCredential(account.encryptedSecretKey);
+      if (decAccess && decSecret) {
+        baseCredentials = { accessKeyId: decAccess, secretAccessKey: decSecret };
+        Logger.info("INGEST", "ENCRYPTED_CREDENTIALS_LOADED", "Decrypted in-memory credentials for secure live sync.");
+      }
+    }
+
+    // Create real AWS connector with the stored Role ARN, ExternalId, and optional decrypted base credentials
+    const connector = new AwsCloudConnector(
+      account.roleArn,
+      account.externalId || undefined,
+      baseCredentials
+    );
+    const syncTime = new Date();
+    const syncedResourceIds: string[] = [];
+
+    // --- Sub-scan 1: EC2 Instances ---
+    try {
+      Logger.info("INGEST", "EC2_INGEST_START", "Starting EC2 inventory and CloudWatch telemetry scan...");
+      const instances = await withRetry(() => connector.fetchEC2Instances(), "EC2 Ingestion");
+      Logger.success("INGEST", "EC2_INGEST_FETCHED", `Discovered ${instances.length} EC2 instances in account.`);
+
+      for (const inst of instances) {
+        // Upsert resource into the Resource Graph
+        const resource = await prisma.cloudResource.upsert({
+          where: { id: `${this.accountId}_${inst.InstanceId}` },
           create: {
-            id: resourceId,
-            cloudAccountId: cloudAccount.id,
-            providerResourceId: ec2.InstanceId,
+            id: `${this.accountId}_${inst.InstanceId}`,
+            cloudAccountId: this.accountId,
+            provider: "aws",
+            providerResourceId: inst.InstanceId,
             resourceType: "ec2",
-            region: ec2.Region,
-            lifecycleState: ec2.State,
-            tags: JSON.stringify(ec2.Tags),
-            telemetryMetrics: JSON.stringify({ cpuUtilizationSeries: ec2.CpuUtilizationSeries, instanceType: ec2.InstanceType }),
-            firstSeenAt: new Date(ec2.LaunchTime),
-            lastSeenAt: startTime
-          }
+            serviceCategory: "Compute",
+            region: inst.Region,
+            lifecycleState: inst.State,
+            tags: JSON.stringify(inst.Tags),
+            instanceType: inst.InstanceType,
+            monthlyCost: inst.MonthlyCost,
+            telemetryMetrics: JSON.stringify({
+              cpuDailyAverages: inst.CpuUtilizationSeries,
+              peakCpu: inst.PeakCpuUtilization,
+              lookbackDays: GreenCloudConfig.cloudwatchLookbackDays,
+              collectedAt: syncTime.toISOString(),
+            }),
+            firstSeenAt: new Date(inst.LaunchTime),
+            lastSeenAt: syncTime,
+          },
+          update: {
+            provider: "aws",
+            serviceCategory: "Compute",
+            lifecycleState: inst.State,
+            tags: JSON.stringify(inst.Tags),
+            instanceType: inst.InstanceType,
+            monthlyCost: inst.MonthlyCost,
+            telemetryMetrics: JSON.stringify({
+              cpuDailyAverages: inst.CpuUtilizationSeries,
+              peakCpu: inst.PeakCpuUtilization,
+              lookbackDays: GreenCloudConfig.cloudwatchLookbackDays,
+              collectedAt: syncTime.toISOString(),
+            }),
+            lastSeenAt: syncTime,
+          },
         });
 
-        // Compute Carbon Footprint
-        const carbonRes = CarbonEngine.calculateInstanceCarbon({
-          instanceType: ec2.InstanceType,
-          cpuUtilPercent: avgCpu,
-          hours: 730
-        });
+        syncedResourceIds.push(resource.id);
+
+        // Calculate carbon emissions from real CPU data
+        const avgCpu =
+          inst.CpuUtilizationSeries.length > 0
+            ? inst.CpuUtilizationSeries.reduce((a, b) => a + b, 0) /
+              inst.CpuUtilizationSeries.length
+            : 0;
+
+        const carbonResult = CarbonEngine.calculateEC2Carbon(
+          inst.InstanceType,
+          inst.Region,
+          avgCpu
+        );
 
         await prisma.carbonEmission.create({
           data: {
-            resourceId: dbRes.id,
-            energyKwh: carbonRes.energyKwh,
-            operationalGco2e: carbonRes.operationalGco2e,
-            embodiedGco2e: carbonRes.embodiedGco2e,
-            method: carbonRes.method,
-            confidence: carbonRes.confidence
-          }
-        });
-
-        // Evaluate Recommendations
-        const recCandidate = RecommendationEngine.evaluateResource({
-          id: dbRes.id,
-          providerResourceId: ec2.InstanceId,
-          resourceType: "ec2",
-          lifecycleState: ec2.State,
-          tags: ec2.Tags,
-          cpuUtilizationSeries: ec2.CpuUtilizationSeries,
-          monthlyCost: ec2.MonthlyCost,
-          instanceType: ec2.InstanceType
-        });
-
-        if (recCandidate) {
-          await prisma.recommendation.create({
-            data: {
-              tenantId: cloudAccount.tenantId,
-              resourceId: dbRes.id,
-              category: recCandidate.category,
-              title: recCandidate.title,
-              status: "active",
-              estimatedMonthlySavings: recCandidate.estimatedMonthlySavings,
-              estimatedGco2eSavings: recCandidate.estimatedGco2eSavings,
-              riskScore: recCandidate.riskScore,
-              confidence: recCandidate.confidence,
-              evidence: JSON.stringify(recCandidate.evidence)
-            }
-          });
-        }
-
-        ingestedCount++;
-      }
-
-      // Step 3: Upsert EBS volumes
-      for (const ebs of ebsList) {
-        const resourceId = `${cloudAccount.id}_${ebs.VolumeId}`;
-        const dbRes = await prisma.cloudResource.upsert({
-          where: { id: resourceId },
-          update: {
-            lifecycleState: ebs.State,
-            tags: JSON.stringify(ebs.Tags),
-            lastSeenAt: startTime
+            resourceId: resource.id,
+            ts: syncTime,
+            energyKwh: carbonResult.energyKwh,
+            operationalGco2e: carbonResult.operationalGco2e,
+            embodiedGco2e: carbonResult.embodiedGco2e,
+            method: carbonResult.method,
           },
-          create: {
-            id: resourceId,
-            cloudAccountId: cloudAccount.id,
-            providerResourceId: ebs.VolumeId,
-            resourceType: "ebs",
-            region: ebs.Region,
-            lifecycleState: ebs.State,
-            tags: JSON.stringify(ebs.Tags),
-            firstSeenAt: new Date(ebs.CreateTime),
-            lastSeenAt: startTime
-          }
         });
-
-        const recCandidate = RecommendationEngine.evaluateResource({
-          id: dbRes.id,
-          providerResourceId: ebs.VolumeId,
-          resourceType: "ebs",
-          lifecycleState: ebs.State,
-          tags: ebs.Tags,
-          monthlyCost: ebs.MonthlyCost,
-          volumeSizeGb: ebs.Size,
-          isAttached: !!ebs.AttachmentInstanceId
-        });
-
-        if (recCandidate) {
-          await prisma.recommendation.create({
-            data: {
-              tenantId: cloudAccount.tenantId,
-              resourceId: dbRes.id,
-              category: recCandidate.category,
-              title: recCandidate.title,
-              status: "active",
-              estimatedMonthlySavings: recCandidate.estimatedMonthlySavings,
-              estimatedGco2eSavings: recCandidate.estimatedGco2eSavings,
-              riskScore: recCandidate.riskScore,
-              confidence: recCandidate.confidence,
-              evidence: JSON.stringify(recCandidate.evidence)
-            }
-          });
-        }
-
-        ingestedCount++;
       }
-
-      // Step 4: Upsert Elastic IPs
-      for (const eip of eipList) {
-        const resourceId = `${cloudAccount.id}_${eip.AllocationId}`;
-        const dbRes = await prisma.cloudResource.upsert({
-          where: { id: resourceId },
-          update: {
-            lifecycleState: eip.AssociationId ? "associated" : "unassociated",
-            tags: JSON.stringify(eip.Tags),
-            lastSeenAt: startTime
-          },
-          create: {
-            id: resourceId,
-            cloudAccountId: cloudAccount.id,
-            providerResourceId: eip.AllocationId,
-            resourceType: "eip",
-            region: eip.Region,
-            lifecycleState: eip.AssociationId ? "associated" : "unassociated",
-            tags: JSON.stringify(eip.Tags),
-            firstSeenAt: startTime,
-            lastSeenAt: startTime
-          }
-        });
-
-        const recCandidate = RecommendationEngine.evaluateResource({
-          id: dbRes.id,
-          providerResourceId: eip.PublicIp,
-          resourceType: "eip",
-          lifecycleState: eip.AssociationId ? "associated" : "unassociated",
-          tags: eip.Tags,
-          monthlyCost: eip.MonthlyCost,
-          isAttached: !!eip.AssociationId
-        });
-
-        if (recCandidate) {
-          await prisma.recommendation.create({
-            data: {
-              tenantId: cloudAccount.tenantId,
-              resourceId: dbRes.id,
-              category: recCandidate.category,
-              title: recCandidate.title,
-              status: "active",
-              estimatedMonthlySavings: recCandidate.estimatedMonthlySavings,
-              estimatedGco2eSavings: recCandidate.estimatedGco2eSavings,
-              riskScore: recCandidate.riskScore,
-              confidence: recCandidate.confidence,
-              evidence: JSON.stringify(recCandidate.evidence)
-            }
-          });
-        }
-
-        ingestedCount++;
-      }
-
-      // Step 5: Update Cloud Account sync freshness
-      await prisma.cloudAccount.update({
-        where: { id: cloudAccount.id },
-        data: {
-          status: "active",
-          syncFreshness: startTime,
-          syncError: null
-        }
-      });
-
-      // Step 6: Write Audit Log
-      await prisma.auditLog.create({
-        data: {
-          tenantId: cloudAccount.tenantId,
-          actor: "IngestionEngineJob",
-          action: "sync_completed",
-          objectType: "CloudAccount",
-          objectId: cloudAccount.id,
-          metadata: JSON.stringify({
-            ingestedResourcesCount: ingestedCount,
-            syncDurationMs: Date.now() - startTime.getTime()
-          })
-        }
-      });
-
-      console.log(`[IngestionEngine] Completed sync for account ${cloudAccount.id}. Ingested ${ingestedCount} resources.`);
-      return { success: true, ingestedCount };
     } catch (err: any) {
-      console.error(`[IngestionEngine] Error syncing account ${cloudAccount.id}:`, err);
-      
-      await prisma.cloudAccount.update({
-        where: { id: cloudAccount.id },
-        data: {
-          status: "sync_failed",
-          syncError: err.message || String(err)
-        }
-      });
-
-      await prisma.auditLog.create({
-        data: {
-          tenantId: cloudAccount.tenantId,
-          actor: "IngestionEngineJob",
-          action: "sync_failed",
-          objectType: "CloudAccount",
-          objectId: cloudAccount.id,
-          metadata: JSON.stringify({ error: err.message || String(err) })
-        }
-      });
-
-      throw err;
+      const msg = `EC2 Ingestion failed: ${err.message || err}`;
+      Logger.error("INGEST", "EC2_INGEST_ERROR", err, "Check 'ec2:DescribeInstances' permission and IAM role trust relationship.");
+      errors.push(msg);
     }
+
+    // --- Sub-scan 2: EBS Volumes ---
+    try {
+      Logger.info("INGEST", "EBS_INGEST_START", "Starting EBS storage scan...");
+      const volumes = await withRetry(() => connector.fetchEBSVolumes(), "EBS Ingestion");
+      Logger.success("INGEST", "EBS_INGEST_FETCHED", `Discovered ${volumes.length} EBS volumes.`);
+
+      for (const vol of volumes) {
+        const resource = await prisma.cloudResource.upsert({
+          where: { id: `${this.accountId}_${vol.VolumeId}` },
+          create: {
+            id: `${this.accountId}_${vol.VolumeId}`,
+            cloudAccountId: this.accountId,
+            provider: "aws",
+            providerResourceId: vol.VolumeId,
+            resourceType: "ebs",
+            serviceCategory: "Storage",
+            region: vol.Region,
+            lifecycleState: vol.State,
+            tags: JSON.stringify(vol.Tags),
+            sizeGb: vol.Size,
+            monthlyCost: vol.MonthlyCost,
+            firstSeenAt: new Date(vol.CreateTime),
+            lastSeenAt: syncTime,
+          },
+          update: {
+            provider: "aws",
+            serviceCategory: "Storage",
+            lifecycleState: vol.State,
+            tags: JSON.stringify(vol.Tags),
+            sizeGb: vol.Size,
+            monthlyCost: vol.MonthlyCost,
+            lastSeenAt: syncTime,
+          },
+        });
+
+        syncedResourceIds.push(resource.id);
+
+        // Carbon calculation for storage
+        const carbonResult = CarbonEngine.calculateEBSCarbon(
+          vol.Size,
+          vol.Region
+        );
+        await prisma.carbonEmission.create({
+          data: {
+            resourceId: resource.id,
+            ts: syncTime,
+            energyKwh: carbonResult.energyKwh,
+            operationalGco2e: carbonResult.operationalGco2e,
+            embodiedGco2e: carbonResult.embodiedGco2e,
+            method: carbonResult.method,
+          },
+        });
+      }
+    } catch (err: any) {
+      const msg = `EBS Ingestion failed: ${err.message || err}`;
+      Logger.error("INGEST", "EBS_INGEST_ERROR", err, "Check 'ec2:DescribeVolumes' permission in target AWS account.");
+      errors.push(msg);
+    }
+
+    // --- Sub-scan 3: Elastic IPs ---
+    try {
+      Logger.info("INGEST", "EIP_INGEST_START", "Starting Elastic IP network scan...");
+      const ips = await withRetry(() => connector.fetchElasticIPs(), "EIP Ingestion");
+      Logger.success("INGEST", "EIP_INGEST_FETCHED", `Discovered ${ips.length} Elastic IPs.`);
+
+      for (const ip of ips) {
+        const resource = await prisma.cloudResource.upsert({
+          where: { id: `${this.accountId}_${ip.AllocationId}` },
+          create: {
+            id: `${this.accountId}_${ip.AllocationId}`,
+            cloudAccountId: this.accountId,
+            provider: "aws",
+            providerResourceId: ip.PublicIp,
+            resourceType: "eip",
+            serviceCategory: "Network",
+            region: ip.Region,
+            lifecycleState: ip.AssociationId ? "associated" : "unassociated",
+            tags: JSON.stringify(ip.Tags),
+            monthlyCost: ip.MonthlyCost,
+            firstSeenAt: syncTime,
+            lastSeenAt: syncTime,
+          },
+          update: {
+            provider: "aws",
+            serviceCategory: "Network",
+            lifecycleState: ip.AssociationId ? "associated" : "unassociated",
+            tags: JSON.stringify(ip.Tags),
+            monthlyCost: ip.MonthlyCost,
+            lastSeenAt: syncTime,
+          },
+        });
+
+        syncedResourceIds.push(resource.id);
+
+        // Elastic IPs: minimal operational carbon
+        await prisma.carbonEmission.create({
+          data: {
+            resourceId: resource.id,
+            ts: syncTime,
+            energyKwh: 0,
+            operationalGco2e: 0,
+            embodiedGco2e: 0,
+            method: "zero_emission_source",
+          },
+        });
+      }
+    } catch (err: any) {
+      const msg = `EIP Ingestion failed: ${err.message || err}`;
+      Logger.error("INGEST", "EIP_INGEST_ERROR", err, "Check 'ec2:DescribeAddresses' permission in target AWS account.");
+      errors.push(msg);
+    }
+
+    // --- Sub-scan 4: Billing (Cost Explorer → FOCUS Normalization) ---
+    try {
+      Logger.info("INGEST", "BILLING_INGEST_START", "Starting Cost Explorer 30-day billing scan...");
+      const thirtyDaysAgo = new Date(
+        syncTime.getTime() - 30 * 24 * 3600 * 1000
+      );
+      const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().slice(0, 10);
+      // Cost Explorer End date is exclusive in UTC, so tomorrow ensures today's spend is included
+      const tomorrow = new Date(syncTime.getTime() + 24 * 3600 * 1000);
+      const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+
+      const billRows = await withRetry(
+        () => connector.fetchBillingSummary(thirtyDaysAgoStr, tomorrowStr),
+        "Cost Explorer Ingestion"
+      );
+      Logger.success("INGEST", "BILLING_INGEST_FETCHED", `Retrieved ${billRows.length} FOCUS-normalized cost records.`);
+
+      // Clean up previous cost records for re-sync safety
+      await prisma.costLineItem.deleteMany({
+        where: { cloudAccountId: this.accountId },
+      });
+
+      for (const row of billRows) {
+        // Attempt to match billing service to resource type
+        let matchedResourceId: string | null = null;
+
+        if (
+          row.Service === "Amazon Elastic Compute Cloud - Compute" ||
+          row.Service === "AmazonEC2"
+        ) {
+          const matches = await prisma.cloudResource.findMany({
+            where: {
+              cloudAccountId: this.accountId,
+              resourceType: "ec2",
+            },
+          });
+          if (matches.length > 0) matchedResourceId = matches[0].id;
+        } else if (
+          row.Service === "Amazon Elastic Block Store" ||
+          row.Service === "AmazonEBS"
+        ) {
+          const matches = await prisma.cloudResource.findMany({
+            where: {
+              cloudAccountId: this.accountId,
+              resourceType: "ebs",
+            },
+          });
+          if (matches.length > 0) matchedResourceId = matches[0].id;
+        } else if (
+          row.Service === "Amazon Virtual Private Cloud" ||
+          row.Service === "AmazonVPC"
+        ) {
+          const matches = await prisma.cloudResource.findMany({
+            where: {
+              cloudAccountId: this.accountId,
+              resourceType: "eip",
+            },
+          });
+          if (matches.length > 0) matchedResourceId = matches[0].id;
+        }
+
+        // Write as FOCUS normalized cost line item
+        await prisma.costLineItem.create({
+          data: {
+            cloudAccountId: this.accountId,
+            resourceId: matchedResourceId,
+            provider: "aws",
+            region: "global",
+            chargeDate: new Date(row.Date),
+            providerService: row.Service,
+            serviceCategory: normalizeFocusServiceCategory(row.Service),
+            chargeCategory: "Usage",
+            billedCost: row.Cost,
+            effectiveCost: row.Cost,
+            currency: "USD",
+          },
+        });
+      }
+    } catch (err: any) {
+      const msg = `Billing Ingestion failed: ${err.message || err}`;
+      Logger.error("INGEST", "BILLING_INGEST_ERROR", err, "Ensure Cost Explorer is enabled in AWS Console and IAM role has 'ce:GetCostAndUsage'.");
+      errors.push(msg);
+    }
+
+    // --- Finalize Sync Status ---
+    const isSuccess = errors.length < 4; // Resilient: succeeds if at least one sub-scan worked
+    const finalStatus = isSuccess ? "active" : "sync_failed";
+
+    await prisma.cloudAccount.update({
+      where: { id: this.accountId },
+      data: {
+        status: finalStatus,
+        syncFreshness: isSuccess ? syncTime : undefined,
+        syncError: errors.length > 0 ? errors.join(" | ") : null,
+      },
+    });
+
+    // Write audit log
+    await prisma.auditLog.create({
+      data: {
+        tenantId: this.tenantId,
+        actor: "system_ingest",
+        action: "sync_completed",
+        objectType: "cloud_account",
+        objectId: this.accountId,
+        metadata: JSON.stringify({
+          success: isSuccess,
+          syncedResourceCount: syncedResourceIds.length,
+          errors,
+        }),
+      },
+    });
+
+    if (isSuccess) {
+      Logger.success(
+        "INGEST",
+        "SYNC_WORKFLOW_COMPLETE",
+        `Ingestion finished successfully. Status: ${finalStatus}. Total resources synced: ${syncedResourceIds.length}.`,
+        { errorsCount: errors.length }
+      );
+    } else {
+      Logger.error(
+        "INGEST",
+        "SYNC_WORKFLOW_FAILED",
+        new Error(errors.join(" | ")),
+        "Review AWS permissions above and ensure credentials are valid."
+      );
+    }
+
+    return {
+      success: isSuccess,
+      errors,
+    };
   }
 }
