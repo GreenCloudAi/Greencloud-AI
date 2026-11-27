@@ -181,14 +181,33 @@ export class AwsCloudConnector {
         error,
         "Verify your local AWS credentials (.env.local) and check the IAM Role Trust Relationship."
       );
+      if (error.name === "InvalidClientTokenId" || error.Code === "InvalidClientTokenId") {
+        const source = this.baseCredentials
+          ? "the per-account encrypted AWS Access Key"
+          : "AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in .env.local";
+        const err = new Error(
+          `Invalid AWS base credentials (${source}): ${error.message} Update your active IAM Access Keys in .env.local (and restart dev server) or in Dashboard → Settings → Encrypted Credentials.`
+        );
+        err.name = "InvalidClientTokenId";
+        throw err;
+      }
+      if (error.name === "SignatureDoesNotMatch" || error.Code === "SignatureDoesNotMatch") {
+        const err = new Error(
+          `AWS Secret Access Key mismatch (SignatureDoesNotMatch). Verify AWS_SECRET_ACCESS_KEY in .env.local or Dashboard → Settings.`
+        );
+        err.name = "SignatureDoesNotMatch";
+        throw err;
+      }
       if (error.name === "AccessDenied" || error.Code === "AccessDenied") {
-        throw new Error(
+        const err = new Error(
           `STS AssumeRole denied. Verify that:\n` +
             `  1. Role ARN "${this.roleArn}" exists in the target account\n` +
             `  2. The trust policy allows your AWS account to assume this role\n` +
             `  3. The ExternalId matches: "${this.externalId || "(none)"}"\n` +
             `  Original error: ${error.message}`
         );
+        err.name = "AccessDenied";
+        throw err;
       }
       throw error;
     }

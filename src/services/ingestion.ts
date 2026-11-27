@@ -23,6 +23,18 @@ async function withRetry<T>(
     try {
       return await operation();
     } catch (error) {
+      const errName = (error as any)?.name || (error as any)?.Code || "";
+      const errMsg = String((error as any)?.message || "");
+      const isAuthError =
+        errName === "InvalidClientTokenId" ||
+        errName === "SignatureDoesNotMatch" ||
+        errName === "AccessDenied" ||
+        errName === "ExpiredToken" ||
+        errMsg.includes("security token included in the request is invalid") ||
+        errMsg.includes("Azure authentication failed");
+      if (isAuthError) {
+        throw error;
+      }
       attempt++;
       if (attempt >= maxRetries) {
         throw error;
