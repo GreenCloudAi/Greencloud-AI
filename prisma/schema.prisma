@@ -48,11 +48,26 @@ model CloudResource {
   sizeGb             Float?               // EBS volume size in GB
   monthlyCost        Float?               // Estimated monthly cost in USD
   telemetryMetrics   String?              // JSON: CloudWatch CPU/Memory time series
+  attachedToResourceId String?            // providerResourceId of VM this disk/IP is attached to
   firstSeenAt        DateTime             @default(now())
   lastSeenAt         DateTime             @default(now())
   costLineItems      CostLineItem[]
   carbonEmissions    CarbonEmission[]
   recommendations    Recommendation[]
+}
+
+model PriceCatalog {
+  id         String   @id @default(uuid())
+  provider   String   // "aws" | "azure"
+  sku        String   // normalised lowercase: "m5.large", "standard_d2s_v5"
+  region     String   // provider region code: "ap-south-1", "centralindia"
+  os         String   @default("linux") // "linux" | "windows"
+  hourlyUsd  Float
+  source     String   // "aws_price_list_api" | "azure_retail_api" | "snapshot"
+  fetchedAt  DateTime @default(now())
+
+  @@unique([provider, sku, region, os])
+  @@index([provider, region])
 }
 
 model CostLineItem {

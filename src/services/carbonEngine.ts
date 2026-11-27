@@ -8,6 +8,7 @@ export interface CarbonCalculationResult {
 export class CarbonEngine {
   // Region Grid Carbon Intensity Factors in gCO2e/kWh (CEA / Electricity Maps baseline)
   private static gridIntensity: Record<string, number> = {
+    // AWS Regions
     "ap-south-1": 680.0, // Mumbai / India (High thermal & coal grid mix)
     "us-east-1": 420.0, // Virginia (Gas & coal grid mix)
     "us-east-2": 410.0, // Ohio (Coal & gas mix)
@@ -19,6 +20,25 @@ export class CarbonEngine {
     "eu-north-1": 45.0,  // Stockholm / Sweden (Hydro & nuclear - ultra clean!)
     "ap-southeast-1": 480.0, // Singapore (High fossil fuel mix)
     "ap-northeast-1": 470.0, // Tokyo / Japan (LNG & coal mix)
+    // Azure Regions
+    "centralindia": 680.0,
+    "southindia": 650.0,
+    "eastus": 420.0,
+    "eastus2": 420.0,
+    "westus": 210.0,
+    "westus2": 80.0,
+    "westus3": 390.0,
+    "centralus": 450.0,
+    "northeurope": 310.0,
+    "westeurope": 320.0,
+    "uksouth": 220.0,
+    "germanywestcentral": 340.0,
+    "francecentral": 75.0,
+    "swedencentral": 45.0,
+    "southeastasia": 480.0,
+    "japaneast": 470.0,
+    "canadacentral": 120.0,
+    "brazilsouth": 110.0,
     "default": 350.0
   };
 
@@ -42,15 +62,26 @@ export class CarbonEngine {
     instanceType: string,
     region: string,
     avgCpuPercentage: number,
-    durationHours: number = 24
+    durationHours: number = 24,
+    vCpuOverride?: number
   ): CarbonCalculationResult {
     // 1. Operational Energy Estimation (based on vCPU power drawing)
-    // Estimate vCPUs for typical instance types
-    let vcpus = 2;
-    if (instanceType.includes("large")) vcpus = 2;
-    else if (instanceType.includes("medium")) vcpus = 2;
-    else if (instanceType.includes("micro") || instanceType.includes("nano")) vcpus = 1;
-    else if (instanceType.includes("xlarge")) vcpus = 4;
+    // Estimate vCPUs for AWS EC2 and Azure VM sizes
+    let vcpus = vCpuOverride && vCpuOverride > 0 ? vCpuOverride : 2;
+    if (!vCpuOverride) {
+      const lowerType = instanceType.toLowerCase();
+      const azureMatch = lowerType.match(/standard_[a-z]+(\d+)/);
+      if (azureMatch) {
+        vcpus = Math.max(1, parseInt(azureMatch[1], 10));
+      } else if (lowerType.includes("16xlarge")) vcpus = 64;
+      else if (lowerType.includes("8xlarge")) vcpus = 32;
+      else if (lowerType.includes("4xlarge")) vcpus = 16;
+      else if (lowerType.includes("2xlarge")) vcpus = 8;
+      else if (lowerType.includes("xlarge")) vcpus = 4;
+      else if (lowerType.includes("large")) vcpus = 2;
+      else if (lowerType.includes("medium")) vcpus = 2;
+      else if (lowerType.includes("micro") || lowerType.includes("nano")) vcpus = 1;
+    }
 
     // Power consumption estimates (Watts/vCPU) - based on CCF coefficients
     const idlePowerWatts = 15; // Power consumed by CPU/RAM/Host while idle

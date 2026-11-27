@@ -70,7 +70,8 @@ This policy grants **read-only** access to EC2, EBS, EIP, CloudWatch, Cost Explo
         "ce:GetCostForecast",
         "ce:GetDimensionValues",
         "ce:GetReservationUtilization",
-        "ce:GetTags"
+        "ce:GetTags",
+        "pricing:GetProducts"
       ],
       "Resource": "*"
     },

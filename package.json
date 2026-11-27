@@ -10,12 +10,15 @@
     "postinstall": "prisma generate && prisma db push",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "test:e2e": "node scripts/run-e2e.js"
+    "test:e2e": "node scripts/run-e2e.js",
+    "prices:snapshot": "tsx scripts/snapshot-prices.ts",
+    "test:cross-cloud": "tsx scripts/test-cross-cloud.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1114.0",
     "@aws-sdk/client-cost-explorer": "^3.500.0",
     "@aws-sdk/client-ec2": "^3.500.0",
+    "@aws-sdk/client-pricing": "^3.1178.0",
     "@aws-sdk/client-sts": "^3.500.0",
     "@prisma/client": "^5.10.0",
     "lucide-react": "^0.330.0",
@@ -31,6 +34,7 @@
     "postcss": "^8.5.28",
     "prisma": "^5.10.0",
     "tailwindcss": "^3.4.19",
+    "tsx": "^4.23.15",
     "typescript": "^5.3.3"
   }
 }

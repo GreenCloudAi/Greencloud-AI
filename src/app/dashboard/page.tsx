@@ -59,6 +59,7 @@ import { RegionalGridMatrixView } from "@/components/sustainability/RegionalGrid
 import { SciTunerGovernanceView } from "@/components/sustainability/SciTunerGovernanceView";
 import { RecommendationsView } from "@/components/optimization/RecommendationsView";
 import { OpportunitiesView } from "@/components/optimization/OpportunitiesView";
+import { CrossCloudAdvisorView } from "@/components/optimization/CrossCloudAdvisorView";
 import { generateExecutiveBrief } from "@/services/executiveAgent";
 import { ReportPreviewModal } from "@/components/reports/ReportPreviewModal";
 import { ExecutivePdfReport } from "@/components/reports/ExecutivePdfReport";
@@ -391,12 +392,65 @@ export default function DashboardPage() {
     }
   };
 
-  // Helper: Generate Terraform IaC snippet for a recommendation
-  // Helper: Generate Terraform IaC snippet for a recommendation
+  // Helper: Generate Terraform IaC snippet for a recommendation (AWS & Azure)
   const generateTerraformSnippet = (rec: Recommendation): string => {
-    const isEip = rec.title.toLowerCase().includes("elastic ip") || rec.category === "eip_cleanup" || rec.resource?.resourceType === "eip";
-    const isEbs = rec.title.toLowerCase().includes("ebs") || rec.title.toLowerCase().includes("volume") || rec.resource?.resourceType === "ebs";
-    const isEc2 = rec.title.toLowerCase().includes("ec2") || rec.title.toLowerCase().includes("instance") || rec.resource?.resourceType === "ec2";
+    const rType = rec.resource?.resourceType || "";
+    const isAzure = rType.startsWith("azure_") || rec.title.toLowerCase().includes("azure");
+    const isEip = rec.title.toLowerCase().includes("elastic ip") || rec.title.toLowerCase().includes("public ip") || rec.category === "eip_cleanup" || rType === "eip" || rType === "azure_ip";
+    const isEbs = rec.title.toLowerCase().includes("ebs") || rec.title.toLowerCase().includes("disk") || rec.title.toLowerCase().includes("volume") || rType === "ebs" || rType === "azure_disk";
+    const isEc2 = rec.title.toLowerCase().includes("ec2") || rec.title.toLowerCase().includes("azure vm") || rec.title.toLowerCase().includes("instance") || rType === "ec2" || rType === "azure_vm";
+
+    if (isAzure) {
+      if (isEip) {
+        return `# GreenCloud AI — Azure Remediation Terraform Snippet
+# Action: Release unassociated Azure Public IP to eliminate idle IPv4 charges
+# Resource: ${rec.resource?.providerResourceId || "unassociated-public-ip"} (${rec.resource?.region || "eastus"})
+
+resource "azurerm_public_ip" "unused_ip" {
+  count               = 0 # Decommissioned via GreenCloud AI FinOps review
+  name                = "${rec.resource?.providerResourceId || "unused-ip"}"
+  location            = "${rec.resource?.region || "eastus"}"
+  resource_group_name = var.resource_group_name
+  allocation_method   = "Static"
+}`;
+      }
+      if (isEbs) {
+        return `# GreenCloud AI — Azure Remediation Terraform Snippet
+# Action: Snapshot and remove unattached Azure Managed Disk (${rec.resource?.sizeGb || 50} GB)
+# Resource: ${rec.resource?.providerResourceId || "unattached-disk"}
+
+resource "azurerm_snapshot" "decommission_backup" {
+  name                = "greencloud-backup-${rec.resource?.providerResourceId || "disk"}"
+  location            = "${rec.resource?.region || "eastus"}"
+  resource_group_name = var.resource_group_name
+  create_option       = "Copy"
+  source_uri          = var.managed_disk_id
+}
+
+# Equivalent Azure CLI:
+# az disk delete --name ${rec.resource?.providerResourceId || "unattached-disk"} --resource-group <rg> --yes`;
+      }
+      if (isEc2) {
+        if (rec.title.toLowerCase().includes("stop") || rec.category === "idle_cleanup") {
+          return `# GreenCloud AI — Azure Remediation Snippet
+# Action: Deallocate idle Azure VM to stop compute billing
+# Resource: ${rec.resource?.providerResourceId || "vm-resource-id"} (${rec.resource?.region || "eastus"})
+
+# Azure CLI command (deallocates compute while preserving OS disk):
+# az vm deallocate --ids ${rec.resource?.providerResourceId || "/subscriptions/.../virtualMachines/vm-name"}`;
+        }
+        return `# GreenCloud AI — Azure Remediation Terraform Snippet
+# Action: Resize Azure VM to match actual CPU telemetry
+# Resource: ${rec.resource?.providerResourceId || "vm-resource-id"}
+
+resource "azurerm_linux_virtual_machine" "optimized_node" {
+  name                = "${(rec.resource?.providerResourceId || "vm").split("/").pop()}"
+  location            = "${rec.resource?.region || "eastus"}"
+  resource_group_name = var.resource_group_name
+  size                = "Standard_B2ps_v2" # Downsized from ${rec.resource?.instanceType || "Standard_D2s_v5"} (Est. savings: $${rec.estimatedMonthlySavings.toFixed(2)}/mo)
+}`;
+      }
+    }
 
     if (isEip) {
       return `# GreenCloud AI — Remediation Terraform Snippet
@@ -844,1638 +898,2631 @@ Apply the proposed Terraform configuration change or safely update the resource 
   return (
     <>
       <div className="min-h-screen bg-[#FFFDF4] text-[#2E2B1A] flex flex-col lg:flex-row selection:bg-[#FFF76A] selection:text-[#2E2B1A] print:hidden">
-      {/* ========================================================================= */}
-      {/* 1. LEFT SIDEBAR NAVIGATION                                                */}
-      {/* ========================================================================= */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#FFFDF7] border-r border-[#ECE5CC] flex flex-col justify-between transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
-      >
-        <div className="flex flex-col flex-grow min-h-0">
-          {/* Brand Header */}
-          <div className="p-4 border-b border-[#ECE5CC] flex items-center justify-between shrink-0">
-            <Link href="/" className="flex items-center gap-2.5 group">
-              <div className="w-8 h-8 rounded-xl bg-[#FFF76A] border border-[#DFD6B5] flex items-center justify-center text-[#2E2B1A] shadow-xs group-hover:scale-105 transition-transform">
-                <svg className="w-4 h-4 text-[#2E2B1A]" width="16" height="16" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M24 4C25.7818 14.2173 33.7827 22.2182 44 24C33.7827 25.7818 25.7818 33.7827 24 44C22.2182 33.7827 14.2173 25.7818 4 24C14.2173 22.2182 22.2182 14.2173 24 4Z" fill="currentColor" />
-                </svg>
-              </div>
-              <div>
-                <span className="font-black text-[14.5px] tracking-tight block text-[#2E2B1A]">
-                  GreenCloud AI
-                </span>
-                <span className="font-mono text-[9px] uppercase font-bold text-[#8D8975] tracking-wider block">
-                  FinOps & Carbon
-                </span>
-              </div>
-            </Link>
+        {/* ========================================================================= */}
+        {/* 1. LEFT SIDEBAR NAVIGATION                                                */}
+        {/* ========================================================================= */}
+        <aside
+          className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#FFFDF7] border-r border-[#ECE5CC] flex flex-col justify-between transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+            }`}
+        >
+          <div className="flex flex-col flex-grow min-h-0">
+            {/* Brand Header */}
+            <div className="p-4 border-b border-[#ECE5CC] flex items-center justify-between shrink-0">
+              <Link href="/" className="flex items-center gap-2.5 group">
+                <div className="w-8 h-8 rounded-xl bg-[#FFF76A] border border-[#DFD6B5] flex items-center justify-center text-[#2E2B1A] shadow-xs group-hover:scale-105 transition-transform">
+                  <svg className="w-4 h-4 text-[#2E2B1A]" width="16" height="16" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M24 4C25.7818 14.2173 33.7827 22.2182 44 24C33.7827 25.7818 25.7818 33.7827 24 44C22.2182 33.7827 14.2173 25.7818 4 24C14.2173 22.2182 22.2182 14.2173 24 4Z" fill="currentColor" />
+                  </svg>
+                </div>
+                <div>
+                  <span className="font-black text-[14.5px] tracking-tight block text-[#2E2B1A]">
+                    GreenCloud AI
+                  </span>
+                  <span className="font-mono text-[9px] uppercase font-bold text-[#8D8975] tracking-wider block">
+                    FinOps & Carbon
+                  </span>
+                </div>
+              </Link>
 
-            <button
-              type="button"
-              onClick={() => setMobileSidebarOpen(false)}
-              className="lg:hidden p-1.5 rounded-lg text-[#8D8975] hover:bg-[#FAF6E8]"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => setMobileSidebarOpen(false)}
+                className="lg:hidden p-1.5 rounded-lg text-[#8D8975] hover:bg-[#FAF6E8]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-          {/* Navigation Tree (Scrollable) */}
-          <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
-            {/* Top Item: Overview */}
-            <button
-              type="button"
-              onClick={() => {
-                setCurrentTab("overview");
-                setActiveNavItem("overview");
-                setMobileSidebarOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-[13.5px] font-bold transition-all cursor-pointer ${activeNavItem === "overview" && currentTab === "overview"
+            {/* Navigation Tree (Scrollable) */}
+            <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
+              {/* Top Item: Overview */}
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentTab("overview");
+                  setActiveNavItem("overview");
+                  setMobileSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-[13.5px] font-bold transition-all cursor-pointer ${activeNavItem === "overview" && currentTab === "overview"
                   ? "bg-[#FAF6E8] text-[#2E2B1A]"
                   : "text-[#686450] hover:bg-[#FAF6E8]/60 hover:text-[#2E2B1A]"
-                }`}
-            >
-              <LayoutGrid className="w-4 h-4 text-[#2E2B1A]" />
-              <span>Overview</span>
-            </button>
-
-            {/* Group 1: Infrastructure */}
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => toggleSection("infrastructure")}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 text-[13px] font-bold text-[#555240] hover:text-[#2E2B1A] transition-colors group cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Server className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
-                  <span className="text-[#555240] group-hover:text-[#2E2B1A]">Infrastructure</span>
-                </div>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${openSections.infrastructure ? "" : "-rotate-90"
-                    }`}
-                />
-              </button>
-
-              {openSections.infrastructure && (
-                <div className="ml-4 pl-3.5 border-l border-[#ECE5CC] space-y-0.5 my-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("infrastructure");
-                      setActiveNavItem("infra-accounts");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "infra-accounts" && currentTab === "infrastructure"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Accounts
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("infrastructure");
-                      setActiveNavItem("infra-resources");
-                      setInfraTypeFilter("all");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "infra-resources" && currentTab === "infrastructure"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Resources
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("infrastructure");
-                      setActiveNavItem("infra-regions");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "infra-regions" && currentTab === "infrastructure"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Regions
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Group 2: Costs & Usage */}
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => toggleSection("costs")}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 text-[13px] font-bold text-[#555240] hover:text-[#2E2B1A] transition-colors group cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <DollarSign className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
-                  <span className="text-[#555240] group-hover:text-[#2E2B1A]">Costs & Usage</span>
-                </div>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${openSections.costs ? "" : "-rotate-90"
-                    }`}
-                />
-              </button>
-
-              {openSections.costs && (
-                <div className="ml-4 pl-3.5 border-l border-[#ECE5CC] space-y-0.5 my-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("cost");
-                      setActiveNavItem("cost-overview");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-overview" && currentTab === "cost"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Cost Overview
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("cost");
-                      setActiveNavItem("cost-explorer");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-explorer" && currentTab === "cost"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Cost Explorer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("cost");
-                      setActiveNavItem("cost-allocation");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-allocation" && currentTab === "cost"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Cost Allocation
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("cost");
-                      setActiveNavItem("cost-budgets");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-budgets" && currentTab === "cost"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Budgets
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("cost");
-                      setActiveNavItem("cost-anomalies");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-anomalies" && currentTab === "cost"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Anomalies
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("cost");
-                      setActiveNavItem("cost-forecast");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-forecast" && currentTab === "cost"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Forecast
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Group 3: Sustainability */}
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => toggleSection("sustainability")}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 text-[13px] font-bold text-[#555240] hover:text-[#2E2B1A] transition-colors group cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Leaf className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
-                  <span className="text-[#555240] group-hover:text-[#2E2B1A]">Sustainability</span>
-                </div>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${openSections.sustainability ? "" : "-rotate-90"
-                    }`}
-                />
-              </button>
-
-              {openSections.sustainability && (
-                <div className="ml-4 pl-3.5 border-l border-[#ECE5CC] space-y-0.5 my-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("carbon");
-                      setActiveNavItem("sustainability-overview");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-overview" && currentTab === "carbon"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Overview
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("carbon");
-                      setActiveNavItem("sustainability-carbon");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-carbon" && currentTab === "carbon"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Carbon
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("carbon");
-                      setActiveNavItem("sustainability-resources");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-resources" && currentTab === "carbon"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Resources
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("carbon");
-                      setActiveNavItem("sustainability-regions");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-regions" && currentTab === "carbon"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Regions
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("carbon");
-                      setActiveNavItem("sustainability-sci");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-sci" && currentTab === "carbon"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    SCI
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("carbon");
-                      setActiveNavItem("sustainability-recommendations");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-recommendations" && currentTab === "carbon"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    <span>Recommendations</span>
-                    <span className="w-5 h-5 rounded-full bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] font-bold text-[10.5px] flex items-center justify-center shrink-0">
-                      {data?.recommendations?.activeCount || 2}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("carbon");
-                      setActiveNavItem("sustainability-opportunities");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-opportunities" && currentTab === "carbon"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Opportunities
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Group 4: Optimization */}
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => toggleSection("optimization")}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 text-[13px] font-bold text-[#555240] hover:text-[#2E2B1A] transition-colors group cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Sparkles className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
-                  <span className="text-[#555240] group-hover:text-[#2E2B1A]">Optimization</span>
-                </div>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${openSections.optimization ? "" : "-rotate-90"
-                    }`}
-                />
-              </button>
-
-              {openSections.optimization && (
-                <div className="ml-4 pl-3.5 border-l border-[#ECE5CC] space-y-0.5 my-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("recommendations");
-                      setActiveNavItem("opt-recommendations");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "opt-recommendations" && currentTab === "recommendations"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    <span>Recommendations</span>
-                    <span className="w-5 h-5 rounded-full bg-[#FFF76A] border border-[#DFD6B5] text-[#2E2B1A] font-bold text-[11px] flex items-center justify-center shrink-0">
-                      {data?.recommendations?.activeCount || 4}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("recommendations");
-                      setActiveNavItem("opt-opportunities");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "opt-opportunities" && currentTab === "recommendations"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Opportunities
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentTab("audit");
-                      setActiveNavItem("opt-actions");
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "opt-actions" && currentTab === "audit"
-                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
-                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
-                      }`}
-                  >
-                    Actions
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Reports */}
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveNavItem("reports");
-                  setExportModalOpen(true);
-                  setMobileSidebarOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-[13px] font-bold transition-all cursor-pointer ${activeNavItem === "reports"
-                    ? "bg-[#FAF6E8] text-[#2E2B1A]"
-                    : "text-[#2E2B1A] bg-[#FAF6E8]/70 hover:bg-[#FAF6E8]"
                   }`}
               >
-                <FileText className="w-4 h-4 text-[#8D8975]" />
-                <span>Reports</span>
-              </button>
-            </div>
-
-            {/* Settings */}
-            <div className="pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveNavItem("settings");
-                  setSettingsModalOpen(true);
-                  setMobileSidebarOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3.5 py-2 text-[13px] font-bold transition-all cursor-pointer ${activeNavItem === "settings" || settingsModalOpen
-                    ? "bg-[#FAF6E8] text-[#2E2B1A] rounded-xl"
-                    : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 rounded-xl"
-                  }`}
-              >
-                <Settings className="w-4 h-4 text-[#8D8975]" />
-                <span>Settings</span>
-              </button>
-            </div>
-          </nav>
-        </div>
-
-        {/* User Profile Badge at Bottom */}
-        <div className="p-3.5 border-t border-[#ECE5CC] bg-[#FAF6E8]/30 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#FFF76A] border border-[#DFD6B5] flex items-center justify-center font-bold text-[11px] text-[#2E2B1A] shrink-0 shadow-2xs">
-              GC
-            </div>
-            <div className="flex-1 min-w-0">
-              <span className="font-bold text-[12.5px] text-[#2E2B1A] block truncate leading-tight">
-                {activeAccount?.name || "GreenCloud-Anshul"}
-              </span>
-              <span className="text-[10.5px] text-[#8D8975] block truncate font-mono">
-                {activeAccount?.provider?.toUpperCase() || "AWS"} ({activeAccount?.externalAccountId ? activeAccount.externalAccountId.slice(-4) : "8593"})
-              </span>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {/* Mobile Backdrop */}
-      {mobileSidebarOpen && (
-        <div
-          onClick={() => setMobileSidebarOpen(false)}
-          className="fixed inset-0 z-40 bg-black/20 backdrop-blur-xs lg:hidden"
-        />
-      )}
-
-      {/* ========================================================================= */}
-      {/* 2. MAIN DASHBOARD CONTENT AREA                                            */}
-      {/* ========================================================================= */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        {/* Top Control Bar Header */}
-        <header className="sticky top-0 z-30 bg-[#FFFDF4]/90 backdrop-blur-md border-b border-[#ECE5CC] px-4 sm:px-6 py-3 transition-all">
-          <div className="max-w-[1360px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            {/* Left: View Title & Mobile Menu Trigger */}
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setMobileSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-xl border border-[#ECE5CC] hover:bg-[#FAF6E8] text-[#2E2B1A]"
-              >
-                <Menu className="w-5 h-5" />
+                <LayoutGrid className="w-4 h-4 text-[#2E2B1A]" />
+                <span>Overview</span>
               </button>
 
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-[18px] sm:text-[20px] font-black text-[#2E2B1A] tracking-tight">
-                    {currentTab === "overview" && "Cloud Overview"}
-                    {currentTab === "cost" && (
-                      activeNavItem === "cost-explorer" ? "Costs & Usage / Cost Explorer" :
-                        activeNavItem === "cost-allocation" ? "Costs & Usage / Cost Allocation & Tags" :
-                          activeNavItem === "cost-budgets" ? "Costs & Usage / Budgets & Governance" :
-                            activeNavItem === "cost-anomalies" ? "Costs & Usage / Cost Anomalies" :
-                              activeNavItem === "cost-forecast" ? "Costs & Usage / Predictive Forecast Studio" :
-                                "Costs & Usage / Overview"
-                    )}
-                    {currentTab === "carbon" && (
-                      activeNavItem === "sustainability-carbon" ? "Sustainability / Scope 2 & 3 Accounting" :
-                        activeNavItem === "sustainability-resources" ? "Sustainability / Resource Carbon Ledger" :
-                          activeNavItem === "sustainability-regions" ? "Sustainability / Regional Grid Matrix" :
-                            activeNavItem === "sustainability-sci" ? "Sustainability / GSF-SCI Tuner Studio" :
-                              activeNavItem === "sustainability-recommendations" ? "Sustainability / Carbon Reduction Recommendations" :
-                                activeNavItem === "sustainability-opportunities" ? "Sustainability / Green Modernization Opportunities" :
-                                  "Sustainability / Overview"
-                    )}
-                    {currentTab === "infrastructure" && "Infrastructure Overview"}
-                    {currentTab === "recommendations" && (
-                      activeNavItem === "opt-opportunities"
-                        ? "Optimization / Strategic Modernization Opportunities"
-                        : "Optimization / Actionable Recommendations"
-                    )}
-                    {currentTab === "audit" && "Audit History"}
-                  </h1>
-
-                  {activeAccount && (
-                    <>
-                      <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70]">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#1F8A70] animate-pulse"></span>
-                        <span>Connected</span>
-                      </span>
-
-                      <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A]">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#1F8A70] animate-pulse"></span>
-                        <span>17 AWS Regions Monitored</span>
-                      </span>
-                    </>
-                  )}
-                </div>
-                <p className="text-[11.5px] text-[#686450] hidden sm:block">
-                  Understand your cloud usage, cost trajectory, and carbon optimization opportunities.
-                </p>
-              </div>
-            </div>
-
-            {/* Right Controls: Account Switcher, Time Selector, Sync Button */}
-            <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
-              {/* Account Switcher Dropdown */}
-              {activeAccount && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setAccountDropdownOpen(!accountDropdownOpen)}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-[#ECE5CC] text-[12px] font-bold text-[#2E2B1A] shadow-2xs hover:bg-[#FAF6E8] transition-all cursor-pointer"
-                  >
-                    <div className="w-2 h-2 rounded-full bg-[#1F8A70]"></div>
-                    <span className="max-w-[120px] truncate">{activeAccount.name}</span>
-                    <span className="text-[#8D8975] font-mono text-[11px]">
-                      ({activeAccount.externalAccountId.slice(-4)})
-                    </span>
-                    <ChevronDown className="w-3.5 h-3.5 text-[#8D8975]" />
-                  </button>
-
-                  {accountDropdownOpen && (
-                    <div className="absolute right-0 mt-1 w-64 bg-white rounded-2xl border border-[#ECE5CC] shadow-warm-md p-2 z-50 animate-in fade-in duration-100">
-                      <span className="text-[10px] font-mono font-bold text-[#8D8975] uppercase px-2.5 py-1 block">
-                        Switch Cloud Account
-                      </span>
-                      {accountsList.map((acc) => (
-                        <button
-                          key={acc.id}
-                          type="button"
-                          onClick={() => {
-                            setAccountDropdownOpen(false);
-                            loadDashboard(acc.id);
-                          }}
-                          className={`w-full text-left px-2.5 py-2 rounded-xl text-[12px] flex items-center justify-between transition-colors ${acc.id === activeAccount.id
-                              ? "bg-[#FAF6E8] font-bold text-[#2E2B1A]"
-                              : "text-[#686450] hover:bg-[#FAF6E8]/60"
-                            }`}
-                        >
-                          <div className="truncate">
-                            <span className="block truncate">{acc.name}</span>
-                            <span className="text-[10.5px] font-mono text-[#8D8975]">
-                              {acc.externalAccountId}
-                            </span>
-                          </div>
-                          {acc.id === activeAccount.id && (
-                            <Check className="w-3.5 h-3.5 text-[#1F8A70]" />
-                          )}
-                        </button>
-                      ))}
-
-                      <div className="pt-2 mt-1 border-t border-[#ECE5CC]">
-                        <Link
-                          href="/onboarding"
-                          className="w-full text-left px-2.5 py-1.5 rounded-xl text-[11.5px] font-bold text-[#9A6B00] hover:bg-[#FAF6E8] flex items-center gap-1.5"
-                        >
-                          <PlusCircle className="w-3.5 h-3.5" />
-                          <span>Connect Another Account</span>
-                        </Link>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Time Range Selector */}
-              <div className="flex items-center rounded-xl bg-white border border-[#ECE5CC] p-0.5 text-[11.5px] font-bold">
-                {(["7d", "30d", "90d"] as const).map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setTimeRange(r)}
-                    className={`px-2.5 py-1 rounded-lg transition-all ${timeRange === r
-                        ? "bg-[#FFF76A] text-[#2E2B1A] shadow-2xs"
-                        : "text-[#8D8975] hover:text-[#2E2B1A]"
-                      }`}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-
-              {/* Export Report Button */}
-              {activeAccount && (
+              {/* Group 1: Infrastructure */}
+              <div className="pt-2">
                 <button
                   type="button"
-                  onClick={() => setExportModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] text-[12px] font-bold text-[#2E2B1A] shadow-2xs transition-all cursor-pointer"
+                  onClick={() => toggleSection("infrastructure")}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 text-[13px] font-bold text-[#555240] hover:text-[#2E2B1A] transition-colors group cursor-pointer"
                 >
-                  <Download className="w-3.5 h-3.5 text-[#8D8975]" />
-                  <span>Export</span>
+                  <div className="flex items-center gap-2.5">
+                    <Server className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
+                    <span className="text-[#555240] group-hover:text-[#2E2B1A]">Infrastructure</span>
+                  </div>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${openSections.infrastructure ? "" : "-rotate-90"
+                      }`}
+                  />
                 </button>
-              )}
 
-              {/* Encrypted Keys Button */}
-              {activeAccount && (
+                {openSections.infrastructure && (
+                  <div className="ml-4 pl-3.5 border-l border-[#ECE5CC] space-y-0.5 my-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("infrastructure");
+                        setActiveNavItem("infra-accounts");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "infra-accounts" && currentTab === "infrastructure"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Accounts
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("infrastructure");
+                        setActiveNavItem("infra-resources");
+                        setInfraTypeFilter("all");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "infra-resources" && currentTab === "infrastructure"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Resources
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("infrastructure");
+                        setActiveNavItem("infra-regions");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "infra-regions" && currentTab === "infrastructure"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Regions
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Group 2: Costs & Usage */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => toggleSection("costs")}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 text-[13px] font-bold text-[#555240] hover:text-[#2E2B1A] transition-colors group cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <DollarSign className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
+                    <span className="text-[#555240] group-hover:text-[#2E2B1A]">Costs & Usage</span>
+                  </div>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${openSections.costs ? "" : "-rotate-90"
+                      }`}
+                  />
+                </button>
+
+                {openSections.costs && (
+                  <div className="ml-4 pl-3.5 border-l border-[#ECE5CC] space-y-0.5 my-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("cost");
+                        setActiveNavItem("cost-overview");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-overview" && currentTab === "cost"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Cost Overview
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("cost");
+                        setActiveNavItem("cost-explorer");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-explorer" && currentTab === "cost"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Cost Explorer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("cost");
+                        setActiveNavItem("cost-allocation");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-allocation" && currentTab === "cost"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Cost Allocation
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("cost");
+                        setActiveNavItem("cost-budgets");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-budgets" && currentTab === "cost"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Budgets
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("cost");
+                        setActiveNavItem("cost-anomalies");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-anomalies" && currentTab === "cost"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Anomalies
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("cost");
+                        setActiveNavItem("cost-forecast");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "cost-forecast" && currentTab === "cost"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Forecast
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Group 3: Sustainability */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => toggleSection("sustainability")}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 text-[13px] font-bold text-[#555240] hover:text-[#2E2B1A] transition-colors group cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Leaf className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
+                    <span className="text-[#555240] group-hover:text-[#2E2B1A]">Sustainability</span>
+                  </div>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${openSections.sustainability ? "" : "-rotate-90"
+                      }`}
+                  />
+                </button>
+
+                {openSections.sustainability && (
+                  <div className="ml-4 pl-3.5 border-l border-[#ECE5CC] space-y-0.5 my-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("carbon");
+                        setActiveNavItem("sustainability-overview");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-overview" && currentTab === "carbon"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Overview
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("carbon");
+                        setActiveNavItem("sustainability-carbon");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-carbon" && currentTab === "carbon"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Carbon
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("carbon");
+                        setActiveNavItem("sustainability-resources");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-resources" && currentTab === "carbon"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Resources
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("carbon");
+                        setActiveNavItem("sustainability-regions");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-regions" && currentTab === "carbon"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Regions
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("carbon");
+                        setActiveNavItem("sustainability-sci");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-sci" && currentTab === "carbon"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      SCI
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("carbon");
+                        setActiveNavItem("sustainability-recommendations");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-recommendations" && currentTab === "carbon"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      <span>Recommendations</span>
+                      <span className="w-5 h-5 rounded-full bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] font-bold text-[10.5px] flex items-center justify-center shrink-0">
+                        {data?.recommendations?.activeCount || 2}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("carbon");
+                        setActiveNavItem("sustainability-opportunities");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "sustainability-opportunities" && currentTab === "carbon"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Opportunities
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("recommendations");
+                        setActiveNavItem("opt-cross-cloud");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "opt-cross-cloud" && currentTab === "recommendations"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      <span>Cross-Cloud Advisor</span>
+                      {data?.recommendations?.items?.some((r) => r.category === "cross_cloud_migration") && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] font-bold text-[10px]">
+                          {data.recommendations.items.filter((r) => r.category === "cross_cloud_migration").length}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Group 4: Optimization */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => toggleSection("optimization")}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 text-[13px] font-bold text-[#555240] hover:text-[#2E2B1A] transition-colors group cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
+                    <span className="text-[#555240] group-hover:text-[#2E2B1A]">Optimization</span>
+                  </div>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-[#8D8975] transition-transform duration-200 ${openSections.optimization ? "" : "-rotate-90"
+                      }`}
+                  />
+                </button>
+
+                {openSections.optimization && (
+                  <div className="ml-4 pl-3.5 border-l border-[#ECE5CC] space-y-0.5 my-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("recommendations");
+                        setActiveNavItem("opt-recommendations");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "opt-recommendations" && currentTab === "recommendations"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      <span>Recommendations</span>
+                      <span className="w-5 h-5 rounded-full bg-[#FFF76A] border border-[#DFD6B5] text-[#2E2B1A] font-bold text-[11px] flex items-center justify-center shrink-0">
+                        {data?.recommendations?.activeCount || 4}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("recommendations");
+                        setActiveNavItem("opt-opportunities");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "opt-opportunities" && currentTab === "recommendations"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Opportunities
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("recommendations");
+                        setActiveNavItem("opt-cross-cloud");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "opt-cross-cloud" && currentTab === "recommendations"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      <span>Cross-Cloud Advisor</span>
+                      {data?.recommendations?.items?.some((r) => r.category === "cross_cloud_migration") && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] font-bold text-[10px]">
+                          {data.recommendations.items.filter((r) => r.category === "cross_cloud_migration").length}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab("audit");
+                        setActiveNavItem("opt-actions");
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer ${activeNavItem === "opt-actions" && currentTab === "audit"
+                        ? "bg-[#E2F5EF] text-[#1F8A70] font-semibold"
+                        : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 font-medium"
+                        }`}
+                    >
+                      Actions
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Reports */}
+              <div className="pt-2">
                 <button
                   type="button"
                   onClick={() => {
-                    setCredAccessKeyId("");
-                    setCredSecretKey("");
-                    setCredsError(null);
-                    setCredentialsModalOpen(true);
+                    setActiveNavItem("reports");
+                    setExportModalOpen(true);
+                    setMobileSidebarOpen(false);
                   }}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[12px] font-bold shadow-2xs transition-all cursor-pointer ${activeAccount.hasEncryptedCredentials
-                      ? "bg-[#E2F5EF] hover:bg-[#D4EFE7] border-[#BDEBDD] text-[#1F8A70]"
-                      : "bg-white hover:bg-[#FAF6E8] border-[#ECE5CC] text-[#2E2B1A]"
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-[13px] font-bold transition-all cursor-pointer ${activeNavItem === "reports"
+                    ? "bg-[#FAF6E8] text-[#2E2B1A]"
+                    : "text-[#2E2B1A] bg-[#FAF6E8]/70 hover:bg-[#FAF6E8]"
                     }`}
-                  title={
-                    activeAccount.hasEncryptedCredentials
-                      ? `AES-256 encrypted keys active (${activeAccount.maskedAccessKey || "configured"})`
-                      : "Configure secure AES-256 encrypted AWS credentials for live syncing"
-                  }
                 >
-                  <Shield className="w-3.5 h-3.5 text-current" />
-                  <span>{activeAccount.hasEncryptedCredentials ? "Encrypted Keys Active" : "Encrypted Keys"}</span>
+                  <FileText className="w-4 h-4 text-[#8D8975]" />
+                  <span>Reports</span>
                 </button>
-              )}
+              </div>
 
-              {/* Sync Telemetry Button */}
-              {activeAccount && (
+              {/* Settings */}
+              <div className="pt-1">
                 <button
                   type="button"
-                  disabled={syncing}
-                  onClick={handleTriggerSync}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+                  onClick={() => {
+                    setActiveNavItem("settings");
+                    setSettingsModalOpen(true);
+                    setMobileSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2 text-[13px] font-bold transition-all cursor-pointer ${activeNavItem === "settings" || settingsModalOpen
+                    ? "bg-[#FAF6E8] text-[#2E2B1A] rounded-xl"
+                    : "text-[#686450] hover:text-[#2E2B1A] hover:bg-[#FAF6E8]/60 rounded-xl"
+                    }`}
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
-                  <span>{syncing ? "Syncing..." : "Sync Telemetry"}</span>
+                  <Settings className="w-4 h-4 text-[#8D8975]" />
+                  <span>Settings</span>
                 </button>
-              )}
-            </div>
+              </div>
+            </nav>
           </div>
 
-          {/* Sync Status Banner */}
-          {syncMessage && (
-            <div className="mt-2 p-2.5 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[12px] font-medium text-[#2E2B1A] flex items-center justify-between animate-in fade-in duration-150">
-              <div className="flex items-center gap-2">
-                <Info className="w-4 h-4 text-[#9A6B00] shrink-0" />
-                <span>{syncMessage}</span>
+          {/* User Profile Badge at Bottom */}
+          <div className="p-3.5 border-t border-[#ECE5CC] bg-[#FAF6E8]/30 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-[#FFF76A] border border-[#DFD6B5] flex items-center justify-center font-bold text-[11px] text-[#2E2B1A] shrink-0 shadow-2xs">
+                GC
               </div>
-              <button
-                type="button"
-                onClick={() => setSyncMessage(null)}
-                className="text-[#8D8975] hover:text-[#2E2B1A]"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
-          {actionSuccess && (
-            <div className="mt-2 p-2.5 rounded-xl bg-[#E2F5EF] border border-[#BDEBDD] text-[12px] font-bold text-[#1F8A70] flex items-center gap-2 animate-in fade-in duration-150">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{actionSuccess}</span>
-            </div>
-          )}
-
-          {dashboardError && (
-            <div className="mt-2 p-3 rounded-xl bg-red-50 border border-red-200 text-[12.5px] font-medium text-red-700 flex items-center justify-between animate-in fade-in duration-150">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-                <span>{dashboardError}</span>
+              <div className="flex-1 min-w-0">
+                <span className="font-bold text-[12.5px] text-[#2E2B1A] block truncate leading-tight">
+                  {activeAccount?.name || "GreenCloud-Anshul"}
+                </span>
+                <span className="text-[10.5px] text-[#8D8975] block truncate font-mono">
+                  {activeAccount?.provider?.toUpperCase() || "AWS"} ({activeAccount?.externalAccountId ? activeAccount.externalAccountId.slice(-4) : "8593"})
+                </span>
               </div>
-              <button
-                type="button"
-                onClick={() => loadDashboard()}
-                className="px-3 py-1 rounded-full bg-red-100 hover:bg-red-200 text-red-800 text-[11.5px] font-bold cursor-pointer"
-              >
-                Retry
-              </button>
             </div>
-          )}
-        </header>
+          </div>
+        </aside>
+
+        {/* Mobile Backdrop */}
+        {mobileSidebarOpen && (
+          <div
+            onClick={() => setMobileSidebarOpen(false)}
+            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-xs lg:hidden"
+          />
+        )}
 
         {/* ========================================================================= */}
-        {/* 3. TAB VIEWS CONTENT                                                      */}
+        {/* 2. MAIN DASHBOARD CONTENT AREA                                            */}
         {/* ========================================================================= */}
-        <main className="p-4 sm:p-6 max-w-[1360px] mx-auto w-full space-y-6">
-          {/* Loading State Skeleton */}
-          {loading && (
-            <div className="space-y-6 animate-pulse">
-              <div className="h-24 bg-[#FAF6E8] rounded-2xl border border-[#ECE5CC]" />
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-32 bg-[#FAF6E8] rounded-2xl border border-[#ECE5CC]" />
-                ))}
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 h-72 bg-[#FAF6E8] rounded-2xl border border-[#ECE5CC]" />
-                <div className="h-72 bg-[#FAF6E8] rounded-2xl border border-[#ECE5CC]" />
-              </div>
-            </div>
-          )}
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+          {/* Top Control Bar Header */}
+          <header className="sticky top-0 z-30 bg-[#FFFDF4]/90 backdrop-blur-md border-b border-[#ECE5CC] px-4 sm:px-6 py-3 transition-all">
+            <div className="max-w-[1360px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* Left: View Title & Mobile Menu Trigger */}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMobileSidebarOpen(true)}
+                  className="lg:hidden p-2 rounded-xl border border-[#ECE5CC] hover:bg-[#FAF6E8] text-[#2E2B1A]"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
 
-          {/* If No Cloud Account Connected */}
-          {!activeAccount && !loading && (
-            <div className="max-w-md mx-auto text-center p-8 bg-white rounded-3xl border border-[#ECE5CC] shadow-warm-sm my-12">
-              <div className="w-12 h-12 rounded-2xl bg-[#FFF3D6] text-[#9A6B00] flex items-center justify-center mx-auto mb-4 border border-[#ECE5CC]">
-                <Server className="w-6 h-6" />
-              </div>
-              <h2 className="text-[20px] font-bold text-[#2E2B1A] mb-1.5">No Cloud Account Connected</h2>
-              <p className="text-[13px] text-[#686450] mb-5 leading-relaxed">
-                Connect your AWS account via read-only IAM credentials to begin discovering cost and carbon waste.
-              </p>
-              <Link
-                href="/onboarding"
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[13px] font-bold text-[#2E2B1A] shadow-xs"
-              >
-                <span>Connect Cloud Account</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </div>
-          )}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-[18px] sm:text-[20px] font-black text-[#2E2B1A] tracking-tight">
+                      {currentTab === "overview" && "Cloud Overview"}
+                      {currentTab === "cost" && (
+                        activeNavItem === "cost-explorer" ? "Costs & Usage / Cost Explorer" :
+                          activeNavItem === "cost-allocation" ? "Costs & Usage / Cost Allocation & Tags" :
+                            activeNavItem === "cost-budgets" ? "Costs & Usage / Budgets & Governance" :
+                              activeNavItem === "cost-anomalies" ? "Costs & Usage / Cost Anomalies" :
+                                activeNavItem === "cost-forecast" ? "Costs & Usage / Predictive Forecast Studio" :
+                                  "Costs & Usage / Overview"
+                      )}
+                      {currentTab === "carbon" && (
+                        activeNavItem === "sustainability-carbon" ? "Sustainability / Scope 2 & 3 Accounting" :
+                          activeNavItem === "sustainability-resources" ? "Sustainability / Resource Carbon Ledger" :
+                            activeNavItem === "sustainability-regions" ? "Sustainability / Regional Grid Matrix" :
+                              activeNavItem === "sustainability-sci" ? "Sustainability / GSF-SCI Tuner Studio" :
+                                activeNavItem === "sustainability-recommendations" ? "Sustainability / Carbon Reduction Recommendations" :
+                                  activeNavItem === "sustainability-opportunities" ? "Sustainability / Green Modernization Opportunities" :
+                                    "Sustainability / Overview"
+                      )}
+                      {currentTab === "infrastructure" && "Infrastructure Overview"}
+                      {currentTab === "recommendations" && (
+                        activeNavItem === "opt-opportunities"
+                          ? "Optimization / Strategic Modernization Opportunities"
+                          : "Optimization / Actionable Recommendations"
+                      )}
+                      {currentTab === "audit" && "Audit History"}
+                    </h1>
 
-          {/* TAB 1: CLOUD OVERVIEW */}
-          {currentTab === "overview" && activeAccount && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              {/* Multi-Region Active Running Compute Alert Banner */}
-              {data?.multiRegionAlert?.active && (
-                <div className="p-4 sm:p-5 rounded-2xl bg-[#FFF8E6] border-2 border-[#E5B542] shadow-warm-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="flex items-start gap-3.5">
-                    <div className="p-2.5 rounded-xl bg-[#FFF3D6] text-[#9A6B00] border border-[#E5B542]/40 shrink-0 mt-0.5">
-                      <AlertTriangle className="w-5 h-5 text-[#9A6B00]" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-black text-[14px] text-[#2E2B1A]">
-                          {data.multiRegionAlert.title}
+                    {activeAccount && (
+                      <>
+                        <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#1F8A70] animate-pulse"></span>
+                          <span>Connected</span>
                         </span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E5B542]/20 border border-[#E5B542]/60 text-[#845A00] uppercase tracking-wider">
-                          Credit Burn Guard Active
+
+                        <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#1F8A70] animate-pulse"></span>
+                          <span>17 AWS Regions Monitored</span>
                         </span>
-                      </div>
-                      <p className="text-[12.5px] text-[#5C4A1E] mt-1 leading-relaxed max-w-3xl">
-                        {data.multiRegionAlert.message}
-                      </p>
-                      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-                        <span className="text-[11px] font-mono font-bold text-[#845A00] uppercase">Active Regions:</span>
-                        {data.resources.byRegion?.filter(r => r.runningEc2 > 0).map(r => (
-                          <span key={r.region} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-[#E5B542]/60 text-[11.5px] font-bold text-[#2E2B1A] shadow-2xs">
-                            <span>{r.regionName}</span>
-                            <span className="text-[#8D8975] font-mono text-[10.5px]">({r.region})</span>
-                            <span className="text-[#1F8A70] font-mono text-[10.5px]">· {r.runningEc2} running</span>
-                          </span>
-                        ))}
-                        <span className="text-[11.5px] font-semibold text-[#845A00] ml-1">
-                          Continuous Spend Rate: <strong>${data.multiRegionAlert.monthlyBurnEstimate}/mo</strong>
-                        </span>
-                      </div>
-                    </div>
+                      </>
+                    )}
                   </div>
+                  <p className="text-[11.5px] text-[#686450] hidden sm:block">
+                    Understand your cloud usage, cost trajectory, and carbon optimization opportunities.
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Controls: Account Switcher, Time Selector, Sync Button */}
+              <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
+                {/* Account Switcher Dropdown */}
+                {activeAccount && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setAccountDropdownOpen(!accountDropdownOpen)}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-[#ECE5CC] text-[12px] font-bold text-[#2E2B1A] shadow-2xs hover:bg-[#FAF6E8] transition-all cursor-pointer"
+                    >
+                      <div className="w-2 h-2 rounded-full bg-[#1F8A70]"></div>
+                      <span className="max-w-[120px] truncate">{activeAccount.name}</span>
+                      <span className="text-[#8D8975] font-mono text-[11px]">
+                        ({activeAccount.externalAccountId.slice(-4)})
+                      </span>
+                      <ChevronDown className="w-3.5 h-3.5 text-[#8D8975]" />
+                    </button>
+
+                    {accountDropdownOpen && (
+                      <div className="absolute right-0 mt-1 w-64 bg-white rounded-2xl border border-[#ECE5CC] shadow-warm-md p-2 z-50 animate-in fade-in duration-100">
+                        <span className="text-[10px] font-mono font-bold text-[#8D8975] uppercase px-2.5 py-1 block">
+                          Switch Cloud Account
+                        </span>
+                        {accountsList.map((acc) => (
+                          <button
+                            key={acc.id}
+                            type="button"
+                            onClick={() => {
+                              setAccountDropdownOpen(false);
+                              loadDashboard(acc.id);
+                            }}
+                            className={`w-full text-left px-2.5 py-2 rounded-xl text-[12px] flex items-center justify-between transition-colors ${acc.id === activeAccount.id
+                              ? "bg-[#FAF6E8] font-bold text-[#2E2B1A]"
+                              : "text-[#686450] hover:bg-[#FAF6E8]/60"
+                              }`}
+                          >
+                            <div className="truncate">
+                              <span className="block truncate">{acc.name}</span>
+                              <span className="text-[10.5px] font-mono text-[#8D8975]">
+                                {acc.externalAccountId}
+                              </span>
+                            </div>
+                            {acc.id === activeAccount.id && (
+                              <Check className="w-3.5 h-3.5 text-[#1F8A70]" />
+                            )}
+                          </button>
+                        ))}
+
+                        <div className="pt-2 mt-1 border-t border-[#ECE5CC]">
+                          <Link
+                            href="/onboarding"
+                            className="w-full text-left px-2.5 py-1.5 rounded-xl text-[11.5px] font-bold text-[#9A6B00] hover:bg-[#FAF6E8] flex items-center gap-1.5"
+                          >
+                            <PlusCircle className="w-3.5 h-3.5" />
+                            <span>Connect Another Account</span>
+                          </Link>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Time Range Selector */}
+                <div className="flex items-center rounded-xl bg-white border border-[#ECE5CC] p-0.5 text-[11.5px] font-bold">
+                  {(["7d", "30d", "90d"] as const).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setTimeRange(r)}
+                      className={`px-2.5 py-1 rounded-lg transition-all ${timeRange === r
+                        ? "bg-[#FFF76A] text-[#2E2B1A] shadow-2xs"
+                        : "text-[#8D8975] hover:text-[#2E2B1A]"
+                        }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Export Report Button */}
+                {activeAccount && (
                   <button
                     type="button"
-                    onClick={() => setCurrentTab("infrastructure")}
-                    className="shrink-0 px-4 py-2 rounded-xl bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] shadow-2xs transition-all cursor-pointer flex items-center gap-1.5"
+                    onClick={() => setExportModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] text-[12px] font-bold text-[#2E2B1A] shadow-2xs transition-all cursor-pointer"
                   >
-                    <span>View Running Instances</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <Download className="w-3.5 h-3.5 text-[#8D8975]" />
+                    <span>Export</span>
                   </button>
-                </div>
-              )}
+                )}
 
-              {/* 4 Top KPI Metric Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
-                {/* 1. Total Cloud Spend */}
-                <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-warm-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] font-mono font-bold uppercase text-[#8D8975] tracking-wider">
-                        Total Cloud Spend
-                      </span>
-                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        {data?.forecast?.trendVelocity && (
-                          <span className={`inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full border ${data.forecast.trendVelocity === "accelerating"
+                {/* Encrypted Keys Button */}
+                {activeAccount && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCredAccessKeyId("");
+                      setCredSecretKey("");
+                      setCredsError(null);
+                      setCredentialsModalOpen(true);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[12px] font-bold shadow-2xs transition-all cursor-pointer ${activeAccount.hasEncryptedCredentials
+                      ? "bg-[#E2F5EF] hover:bg-[#D4EFE7] border-[#BDEBDD] text-[#1F8A70]"
+                      : "bg-white hover:bg-[#FAF6E8] border-[#ECE5CC] text-[#2E2B1A]"
+                      }`}
+                    title={
+                      activeAccount.hasEncryptedCredentials
+                        ? `AES-256 encrypted keys active (${activeAccount.maskedAccessKey || "configured"})`
+                        : "Configure secure AES-256 encrypted AWS credentials for live syncing"
+                    }
+                  >
+                    <Shield className="w-3.5 h-3.5 text-current" />
+                    <span>{activeAccount.hasEncryptedCredentials ? "Encrypted Keys Active" : "Encrypted Keys"}</span>
+                  </button>
+                )}
+
+                {/* Sync Telemetry Button */}
+                {activeAccount && (
+                  <button
+                    type="button"
+                    disabled={syncing}
+                    onClick={handleTriggerSync}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+                    <span>{syncing ? "Syncing..." : "Sync Telemetry"}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Sync Status Banner */}
+            {syncMessage && (
+              <div className="mt-2 p-2.5 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[12px] font-medium text-[#2E2B1A] flex items-center justify-between animate-in fade-in duration-150">
+                <div className="flex items-center gap-2">
+                  <Info className="w-4 h-4 text-[#9A6B00] shrink-0" />
+                  <span>{syncMessage}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSyncMessage(null)}
+                  className="text-[#8D8975] hover:text-[#2E2B1A]"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {actionSuccess && (
+              <div className="mt-2 p-2.5 rounded-xl bg-[#E2F5EF] border border-[#BDEBDD] text-[12px] font-bold text-[#1F8A70] flex items-center gap-2 animate-in fade-in duration-150">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{actionSuccess}</span>
+              </div>
+            )}
+
+            {dashboardError && (
+              <div className="mt-2 p-3 rounded-xl bg-red-50 border border-red-200 text-[12.5px] font-medium text-red-700 flex items-center justify-between animate-in fade-in duration-150">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>{dashboardError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => loadDashboard()}
+                  className="px-3 py-1 rounded-full bg-red-100 hover:bg-red-200 text-red-800 text-[11.5px] font-bold cursor-pointer"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+          </header>
+
+          {/* ========================================================================= */}
+          {/* 3. TAB VIEWS CONTENT                                                      */}
+          {/* ========================================================================= */}
+          <main className="p-4 sm:p-6 max-w-[1360px] mx-auto w-full space-y-6">
+            {/* Loading State Skeleton */}
+            {loading && (
+              <div className="space-y-6 animate-pulse">
+                <div className="h-24 bg-[#FAF6E8] rounded-2xl border border-[#ECE5CC]" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="h-32 bg-[#FAF6E8] rounded-2xl border border-[#ECE5CC]" />
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="lg:col-span-2 h-72 bg-[#FAF6E8] rounded-2xl border border-[#ECE5CC]" />
+                  <div className="h-72 bg-[#FAF6E8] rounded-2xl border border-[#ECE5CC]" />
+                </div>
+              </div>
+            )}
+
+            {/* If No Cloud Account Connected */}
+            {!activeAccount && !loading && (
+              <div className="max-w-md mx-auto text-center p-8 bg-white rounded-3xl border border-[#ECE5CC] shadow-warm-sm my-12">
+                <div className="w-12 h-12 rounded-2xl bg-[#FFF3D6] text-[#9A6B00] flex items-center justify-center mx-auto mb-4 border border-[#ECE5CC]">
+                  <Server className="w-6 h-6" />
+                </div>
+                <h2 className="text-[20px] font-bold text-[#2E2B1A] mb-1.5">No Cloud Account Connected</h2>
+                <p className="text-[13px] text-[#686450] mb-5 leading-relaxed">
+                  Connect your AWS account via read-only IAM credentials to begin discovering cost and carbon waste.
+                </p>
+                <Link
+                  href="/onboarding"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[13px] font-bold text-[#2E2B1A] shadow-xs"
+                >
+                  <span>Connect Cloud Account</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            )}
+
+            {/* TAB 1: CLOUD OVERVIEW */}
+            {currentTab === "overview" && activeAccount && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                {/* Multi-Region Active Running Compute Alert Banner */}
+                {data?.multiRegionAlert?.active && (
+                  <div className="p-4 sm:p-5 rounded-2xl bg-[#FFF8E6] border-2 border-[#E5B542] shadow-warm-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="flex items-start gap-3.5">
+                      <div className="p-2.5 rounded-xl bg-[#FFF3D6] text-[#9A6B00] border border-[#E5B542]/40 shrink-0 mt-0.5">
+                        <AlertTriangle className="w-5 h-5 text-[#9A6B00]" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-black text-[14px] text-[#2E2B1A]">
+                            {data.multiRegionAlert.title}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E5B542]/20 border border-[#E5B542]/60 text-[#845A00] uppercase tracking-wider">
+                            Credit Burn Guard Active
+                          </span>
+                        </div>
+                        <p className="text-[12.5px] text-[#5C4A1E] mt-1 leading-relaxed max-w-3xl">
+                          {data.multiRegionAlert.message}
+                        </p>
+                        <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                          <span className="text-[11px] font-mono font-bold text-[#845A00] uppercase">Active Regions:</span>
+                          {data.resources.byRegion?.filter(r => r.runningEc2 > 0).map(r => (
+                            <span key={r.region} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-[#E5B542]/60 text-[11.5px] font-bold text-[#2E2B1A] shadow-2xs">
+                              <span>{r.regionName}</span>
+                              <span className="text-[#8D8975] font-mono text-[10.5px]">({r.region})</span>
+                              <span className="text-[#1F8A70] font-mono text-[10.5px]">· {r.runningEc2} running</span>
+                            </span>
+                          ))}
+                          <span className="text-[11.5px] font-semibold text-[#845A00] ml-1">
+                            Continuous Spend Rate: <strong>${data.multiRegionAlert.monthlyBurnEstimate}/mo</strong>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentTab("infrastructure")}
+                      className="shrink-0 px-4 py-2 rounded-xl bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] shadow-2xs transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>View Running Instances</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* 4 Top KPI Metric Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+                  {/* 1. Total Cloud Spend */}
+                  <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-warm-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-mono font-bold uppercase text-[#8D8975] tracking-wider">
+                          Total Cloud Spend
+                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          {data?.forecast?.trendVelocity && (
+                            <span className={`inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full border ${data.forecast.trendVelocity === "accelerating"
                               ? "bg-[#FDE8E8] text-[#C84B31] border-[#F8B4B4]"
                               : data.forecast.trendVelocity === "decelerating"
                                 ? "bg-[#E2F5EF] text-[#1F8A70] border-[#BDEBDD]"
                                 : "bg-[#FAF6E8] text-[#9A6B00] border-[#ECE5CC]"
-                            }`}>
-                            {data.forecast.trendVelocity === "accelerating" ? (
-                              <>
-                                <TrendingUp className="w-3 h-3" />
-                                <span>Accelerating</span>
-                              </>
-                            ) : data.forecast.trendVelocity === "decelerating" ? (
-                              <>
-                                <TrendingDown className="w-3 h-3" />
-                                <span>Decelerating</span>
-                              </>
-                            ) : (
-                              <span>Stable Trend</span>
-                            )}
-                          </span>
-                        )}
-                        {data?.forecast?.budgetRisk && (
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${data.forecast.budgetRisk === "high"
+                              }`}>
+                              {data.forecast.trendVelocity === "accelerating" ? (
+                                <>
+                                  <TrendingUp className="w-3 h-3" />
+                                  <span>Accelerating</span>
+                                </>
+                              ) : data.forecast.trendVelocity === "decelerating" ? (
+                                <>
+                                  <TrendingDown className="w-3 h-3" />
+                                  <span>Decelerating</span>
+                                </>
+                              ) : (
+                                <span>Stable Trend</span>
+                              )}
+                            </span>
+                          )}
+                          {data?.forecast?.budgetRisk && (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${data.forecast.budgetRisk === "high"
                               ? "bg-[#FDE8E8] text-[#C84B31] border-[#F8B4B4]"
                               : data.forecast.budgetRisk === "medium"
                                 ? "bg-[#FEF3D6] text-[#9A6B00] border-[#F6DC9B]"
                                 : "bg-[#E2F5EF] text-[#1F8A70] border-[#BDEBDD]"
-                            }`}>
-                            {data.forecast.budgetRisk.toUpperCase()} RISK
+                              }`}>
+                              {data.forecast.budgetRisk.toUpperCase()} RISK
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-[28px] font-black text-[#2E2B1A] tracking-tight">
+                        {data?.costs.totalCost !== null ? `$${data?.costs.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--"}
+                      </div>
+                      <p className="text-[11.5px] text-[#686450] mt-1 font-medium truncate">
+                        Run rate: ${data?.costs?.dailyBurnRate != null ? (data.costs.dailyBurnRate * 30).toFixed(2) : (data?.costs?.totalCost != null ? data.costs.totalCost.toFixed(2) : "0.00")}/mo across active regions
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-2.5 border-t border-[#ECE5CC] text-[11.5px] text-[#8D8975] flex items-center justify-between">
+                      <span>Burn: {data?.costs?.dailyBurnRate !== null && data?.costs?.dailyBurnRate !== undefined ? `~$${data.costs.dailyBurnRate.toFixed(2)}/day` : "--"}</span>
+                      <span>
+                        {data?.scanCoverage?.activeRegionsWithRunningCompute && data.scanCoverage.activeRegionsWithRunningCompute.length > 0
+                          ? `${data.scanCoverage.activeRegionsWithRunningCompute.length} Region${data.scanCoverage.activeRegionsWithRunningCompute.length > 1 ? "s" : ""} Active`
+                          : "17 Regions Monitored"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 2. EC2 Compute (Accurately Distinguishes Running vs Stopped across ALL regions) */}
+                  <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-warm-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-mono font-bold uppercase text-[#8D8975] tracking-wider">
+                          EC2 Instances
+                        </span>
+                        <span className="text-[11px] font-bold text-[#686450] bg-[#FAF6E8] border border-[#ECE5CC] px-2 py-0.5 rounded">
+                          {ec2Total} Total EC2
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-[28px] font-black text-[#2E2B1A] tracking-tight">
+                          {ec2Total === 0 ? "--" : `${ec2Running} Running`}
+                        </span>
+                        {ec2Stopped > 0 && (
+                          <span className="text-[11.5px] font-bold text-[#9A6B00] bg-[#FFF3D6] border border-[#ECE5CC] px-2 py-0.5 rounded-md">
+                            {ec2Stopped} Stopped
                           </span>
                         )}
                       </div>
+                      <p className="text-[11.5px] text-[#686450] mt-1 font-mono font-medium truncate">
+                        {data?.resources.byRegion && data.resources.byRegion.filter(r => r.runningEc2 > 0).length > 0
+                          ? data.resources.byRegion.filter(r => r.runningEc2 > 0).map(r => `${r.region}: ${r.runningEc2} running`).join(" · ")
+                          : "All regions nominal"}
+                      </p>
                     </div>
-                    <div className="text-[28px] font-black text-[#2E2B1A] tracking-tight">
-                      {data?.costs.totalCost !== null ? `$${data?.costs.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--"}
+                    <div className="mt-3 pt-2.5 border-t border-[#ECE5CC] text-[11.5px] text-[#8D8975] flex items-center justify-between">
+                      <span>{data?.resources.byState.healthy || 0} Healthy</span>
+                      <span>{data?.resources.byState.underutilized || 0} Underutilized</span>
+                      <span className={ec2Stopped > 0 ? "text-[#9A6B00] font-bold" : ""}>
+                        {ec2Stopped} Stopped
+                      </span>
                     </div>
-                    <p className="text-[11.5px] text-[#686450] mt-1 font-medium truncate">
-                      Run rate: ${data?.costs?.dailyBurnRate != null ? (data.costs.dailyBurnRate * 30).toFixed(2) : (data?.costs?.totalCost != null ? data.costs.totalCost.toFixed(2) : "0.00")}/mo across active regions
-                    </p>
                   </div>
-                  <div className="mt-3 pt-2.5 border-t border-[#ECE5CC] text-[11.5px] text-[#8D8975] flex items-center justify-between">
-                    <span>Burn: {data?.costs?.dailyBurnRate !== null && data?.costs?.dailyBurnRate !== undefined ? `~$${data.costs.dailyBurnRate.toFixed(2)}/day` : "--"}</span>
-                    <span>
-                      {data?.scanCoverage?.activeRegionsWithRunningCompute && data.scanCoverage.activeRegionsWithRunningCompute.length > 0
-                        ? `${data.scanCoverage.activeRegionsWithRunningCompute.length} Region${data.scanCoverage.activeRegionsWithRunningCompute.length > 1 ? "s" : ""} Active`
-                        : "17 Regions Monitored"}
-                    </span>
-                  </div>
-                </div>
 
-                {/* 2. EC2 Compute (Accurately Distinguishes Running vs Stopped across ALL regions) */}
-                <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-warm-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] font-mono font-bold uppercase text-[#8D8975] tracking-wider">
-                        EC2 Instances
-                      </span>
-                      <span className="text-[11px] font-bold text-[#686450] bg-[#FAF6E8] border border-[#ECE5CC] px-2 py-0.5 rounded">
-                        {ec2Total} Total EC2
-                      </span>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-[28px] font-black text-[#2E2B1A] tracking-tight">
-                        {ec2Total === 0 ? "--" : `${ec2Running} Running`}
-                      </span>
-                      {ec2Stopped > 0 && (
-                        <span className="text-[11.5px] font-bold text-[#9A6B00] bg-[#FFF3D6] border border-[#ECE5CC] px-2 py-0.5 rounded-md">
-                          {ec2Stopped} Stopped
+                  {/* 3. Potential Savings */}
+                  <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-warm-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-mono font-bold uppercase text-[#8D8975] tracking-wider">
+                          Potential Savings
                         </span>
-                      )}
+                        <span className="text-[11px] font-bold text-[#9A6B00] bg-[#FFF3D6] px-2 py-0.5 rounded">
+                          {data?.recommendations.activeCount || 0} Actions
+                        </span>
+                      </div>
+                      <div className="text-[28px] font-black text-[#1F8A70] tracking-tight">
+                        {data?.recommendations.totalSavings !== null ? `$${data?.recommendations.totalSavings.toLocaleString()} / mo` : "--"}
+                      </div>
+                      <p className="text-[11.5px] text-[#686450] mt-1 font-medium truncate">
+                        {data?.recommendations.activeCount || 0} idle waste reduction actions identified
+                      </p>
                     </div>
-                    <p className="text-[11.5px] text-[#686450] mt-1 font-mono font-medium truncate">
-                      {data?.resources.byRegion && data.resources.byRegion.filter(r => r.runningEc2 > 0).length > 0
-                        ? data.resources.byRegion.filter(r => r.runningEc2 > 0).map(r => `${r.region}: ${r.runningEc2} running`).join(" · ")
-                        : "All regions nominal"}
-                    </p>
+                    <div className="mt-3 pt-2.5 border-t border-[#ECE5CC] text-[11.5px] text-[#8D8975] flex items-center justify-between">
+                      <span>
+                        {data?.recommendations.totalSavings && data.recommendations.totalSavings > 0
+                          ? `$${data.recommendations.totalSavings}/mo identified`
+                          : "0 Waste Actions Active"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentTab("recommendations")}
+                        className="font-bold text-[#1F8A70] hover:underline cursor-pointer"
+                      >
+                        View Actions →
+                      </button>
+                    </div>
                   </div>
-                  <div className="mt-3 pt-2.5 border-t border-[#ECE5CC] text-[11.5px] text-[#8D8975] flex items-center justify-between">
-                    <span>{data?.resources.byState.healthy || 0} Healthy</span>
-                    <span>{data?.resources.byState.underutilized || 0} Underutilized</span>
-                    <span className={ec2Stopped > 0 ? "text-[#9A6B00] font-bold" : ""}>
-                      {ec2Stopped} Stopped
+
+                  {/* 4. Estimated Carbon Footprint */}
+                  <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-warm-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-mono font-bold uppercase text-[#8D8975] tracking-wider">
+                          Estimated Carbon
+                        </span>
+                        <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-[#1F8A70] bg-[#E2F5EF] px-1.5 py-0.5 rounded">
+                          <TrendingDown className="w-3 h-3" />
+                          {data?.carbon.totalOperationalCarbon !== null ? `${data.carbon.totalOperationalCarbon} gCO2e` : "--"}
+                        </span>
+                      </div>
+                      <div className="text-[28px] font-black text-[#2E2B1A] tracking-tight">
+                        {data?.carbon.totalCarbon !== null ? `${data.carbon.totalCarbon} kgCO2e` : "--"}
+                      </div>
+                      <p className="text-[11.5px] text-[#686450] mt-1 font-medium truncate">
+                        Live regional grid factor calculation active
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-2.5 border-t border-[#ECE5CC] text-[11.5px] text-[#8D8975] flex items-center justify-between">
+                      <span>Operational Grid</span>
+                      <span className="font-mono text-[11px]">
+                        {data?.resources.byRegion && data.resources.byRegion.filter(r => r.runningEc2 > 0).length > 0
+                          ? data.resources.byRegion.filter(r => r.runningEc2 > 0).map(r => `${r.region} (${r.gridIntensity}g)`).join(" · ")
+                          : "17 Regions Monitored"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Resource Health Donut Gauge & Quick Inventory Counts */}
+                <div className="bg-white rounded-3xl border border-[#ECE5CC] p-5 sm:p-6 shadow-warm-sm">
+                  <div className="flex items-center justify-between pb-3 border-b border-[#ECE5CC] mb-5">
+                    <div>
+                      <h2 className="font-bold text-[16px] text-[#2E2B1A]">Resource Health & Compute Distribution</h2>
+                      <p className="text-[12px] text-[#686450]">
+                        Operational condition across live compute and attached storage dependencies.
+                      </p>
+                    </div>
+                    <span className="text-[11px] font-mono font-bold text-[#1F8A70] bg-[#E2F5EF] px-2.5 py-1 rounded-full border border-[#BDEBDD]">
+                      ● Telemetry Active
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                    {/* Donut Gauge Visual (4 cols) */}
+                    <div className="md:col-span-4 flex flex-col items-center justify-center p-4 bg-[#FAF6E8]/30 rounded-2xl border border-[#ECE5CC]/60">
+                      <div className="relative w-36 h-36 flex items-center justify-center">
+                        <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                          {/* Background track */}
+                          <circle cx="50" cy="50" r="40" fill="transparent" stroke="#ECE5CC" strokeWidth="10" />
+                          {/* If only stopped instances */}
+                          {ec2Total > 0 && ec2Running === 0 && ec2Stopped > 0 && (
+                            <circle cx="50" cy="50" r="40" fill="transparent" stroke="#DFD6B5" strokeWidth="10" strokeDasharray="251.3 251.3" />
+                          )}
+                          {/* If running instances exist */}
+                          {ec2Total > 0 && ec2Running > 0 && (
+                            <>
+                              {/* Healthy segment */}
+                              {(data?.resources.byState.healthy || 0) > 0 && (
+                                <circle
+                                  cx="50" cy="50" r="40" fill="transparent" stroke="#1F8A70" strokeWidth="10"
+                                  strokeDasharray={`${((data?.resources.byState.healthy || 0) / ec2Total) * 251.3} 251.3`}
+                                  strokeDashoffset="0"
+                                />
+                              )}
+                              {/* Underutilized segment */}
+                              {(data?.resources.byState.underutilized || 0) > 0 && (
+                                <circle
+                                  cx="50" cy="50" r="40" fill="transparent" stroke="#F5EC50" strokeWidth="10"
+                                  strokeDasharray={`${((data?.resources.byState.underutilized || 0) / ec2Total) * 251.3} 251.3`}
+                                  strokeDashoffset={`-${((data?.resources.byState.healthy || 0) / ec2Total) * 251.3}`}
+                                />
+                              )}
+                              {/* Peak segment */}
+                              {(data?.resources.byState.peak || 0) > 0 && (
+                                <circle
+                                  cx="50" cy="50" r="40" fill="transparent" stroke="#D32F2F" strokeWidth="10"
+                                  strokeDasharray={`${((data?.resources.byState.peak || 0) / ec2Total) * 251.3} 251.3`}
+                                  strokeDashoffset={`-${(((data?.resources.byState.healthy || 0) + (data?.resources.byState.underutilized || 0)) / ec2Total) * 251.3}`}
+                                />
+                              )}
+                              {/* Stopped segment */}
+                              {ec2Stopped > 0 && (
+                                <circle
+                                  cx="50" cy="50" r="40" fill="transparent" stroke="#DFD6B5" strokeWidth="10"
+                                  strokeDasharray={`${(ec2Stopped / ec2Total) * 251.3} 251.3`}
+                                  strokeDashoffset={`-${(ec2Running / ec2Total) * 251.3}`}
+                                />
+                              )}
+                            </>
+                          )}
+                        </svg>
+                        <div className="absolute flex flex-col items-center text-center">
+                          {ec2Total === 0 ? (
+                            <>
+                              <span className="text-[22px] font-black text-[#8D8975]">--</span>
+                              <span className="text-[10px] font-mono font-bold text-[#8D8975] uppercase">
+                                No EC2
+                              </span>
+                            </>
+                          ) : ec2Running > 0 ? (
+                            <>
+                              <span className="text-[26px] font-black text-[#2E2B1A]">
+                                {ec2Running}
+                              </span>
+                              <span className="text-[10px] font-mono font-bold text-[#1F8A70] uppercase">
+                                Running
+                              </span>
+                              {ec2Stopped > 0 && (
+                                <span className="text-[9.5px] font-mono text-[#9A6B00]">
+                                  {ec2Stopped} stopped
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-[26px] font-black text-[#9A6B00]">
+                                {ec2Stopped}
+                              </span>
+                              <span className="text-[10px] font-mono font-bold text-[#9A6B00] uppercase">
+                                Stopped
+                              </span>
+                              <span className="text-[9.5px] font-mono text-[#8D8975]">
+                                0 running
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 4 Health Cards Breakdown (8 cols) */}
+                    <div className="md:col-span-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {/* 1. Healthy */}
+                      <div className="p-3.5 rounded-2xl bg-[#FAF6E8]/50 border border-[#ECE5CC]">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11.5px] font-bold text-[#2E2B1A]">Healthy</span>
+                          <span className="text-[10.5px] font-mono font-bold text-[#1F8A70]">
+                            {ec2Total > 0 ? Math.round(((data?.resources.byState.healthy || 0) / ec2Total) * 100) : 0}%
+                          </span>
+                        </div>
+                        <div className="text-[18px] font-black text-[#2E2B1A] mb-0.5">
+                          {data?.resources.byState.healthy || 0} Instances
+                        </div>
+                        <p className="text-[10.5px] text-[#686450] leading-snug">
+                          Nominal CPU envelope (20%-80%).
+                        </p>
+                      </div>
+
+                      {/* 2. Underutilized */}
+                      <div className="p-3.5 rounded-2xl bg-[#FFF3D6]/50 border border-[#F3E5BC]">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11.5px] font-bold text-[#2E2B1A]">Underutilized</span>
+                          <span className="text-[10.5px] font-mono font-bold text-[#9A6B00]">
+                            {ec2Total > 0 ? Math.round(((data?.resources.byState.underutilized || 0) / ec2Total) * 100) : 0}%
+                          </span>
+                        </div>
+                        <div className="text-[18px] font-black text-[#9A6B00] mb-0.5">
+                          {data?.resources.byState.underutilized || 0} Instances
+                        </div>
+                        <p className="text-[10.5px] text-[#686450] leading-snug">
+                          &lt;10% average CPU. Downsizing candidate.
+                        </p>
+                      </div>
+
+                      {/* 3. High Load / Peak */}
+                      <div className="p-3.5 rounded-2xl bg-[#FFE8E8]/50 border border-[#FFCCCC]">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11.5px] font-bold text-[#2E2B1A]">High Load</span>
+                          <span className="text-[10.5px] font-mono font-bold text-[#D32F2F]">
+                            {ec2Total > 0 ? Math.round(((data?.resources.byState.peak || 0) / ec2Total) * 100) : 0}%
+                          </span>
+                        </div>
+                        <div className="text-[18px] font-black text-[#D32F2F] mb-0.5">
+                          {data?.resources.byState.peak || 0} Instances
+                        </div>
+                        <p className="text-[10.5px] text-[#686450] leading-snug">
+                          &gt;85% load during core peak shifts.
+                        </p>
+                      </div>
+
+                      {/* 4. Stopped / Inactive */}
+                      <div className="p-3.5 rounded-2xl bg-[#FAF6E8] border border-[#DFD6B5]">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11.5px] font-bold text-[#2E2B1A]">Stopped</span>
+                          <span className="text-[10.5px] font-mono font-bold text-[#9A6B00]">
+                            {ec2Total > 0 ? Math.round((ec2Stopped / ec2Total) * 100) : 0}%
+                          </span>
+                        </div>
+                        <div className="text-[18px] font-black text-[#9A6B00] mb-0.5">
+                          {ec2Stopped} Instances
+                        </div>
+                        <p className="text-[10.5px] text-[#686450] leading-snug">
+                          0% CPU, stopped state. Root disk may accrue cost.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Asset Pill Counts (5 AWS Primitives matching reference) */}
+                  <div className="mt-5 pt-3 border-t border-[#ECE5CC] flex flex-wrap gap-2 text-[12px]">
+                    <span className="px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A] font-bold flex items-center gap-1.5">
+                      <Cpu className="w-3.5 h-3.5 text-[#9A6B00]" />
+                      EC2 Instances:{" "}
+                      {ec2Total === 0
+                        ? "0"
+                        : ec2Running > 0
+                          ? `${ec2Running} Active (${ec2Stopped} Stopped)`
+                          : `${ec2Stopped} Stopped`}
+                    </span>
+                    <span className="px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A] font-bold flex items-center gap-1.5">
+                      <HardDrive className="w-3.5 h-3.5 text-[#1F8A70]" />
+                      EBS Volumes: {data?.resources.ebs.length || 0}
+                    </span>
+                    <span className="px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A] font-bold flex items-center gap-1.5">
+                      <Network className="w-3.5 h-3.5 text-[#9A6B00]" />
+                      Elastic IPs: {data?.resources.eip.length || 0}
+                    </span>
+                    <span className="px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A] font-bold flex items-center gap-1.5">
+                      <Server className="w-3.5 h-3.5 text-[#1F8A70]" />
+                      RDS Databases: {data?.inventory?.rdsCount || 0}
+                    </span>
+                    <span className="px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A] font-bold flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5 text-[#686450]" />
+                      NAT Gateways: {data?.inventory?.natCount || 0}
+                    </span>
+                    <span className="px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A] font-bold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-[#1F8A70]" />
+                      {data?.inventory?.activeRegions.length || 1} Active Region{data?.inventory?.activeRegions.length === 1 ? "" : "s"}
                     </span>
                   </div>
                 </div>
 
-                {/* 3. Potential Savings */}
-                <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-warm-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] font-mono font-bold uppercase text-[#8D8975] tracking-wider">
-                        Potential Savings
-                      </span>
-                      <span className="text-[11px] font-bold text-[#9A6B00] bg-[#FFF3D6] px-2 py-0.5 rounded">
-                        {data?.recommendations.activeCount || 0} Actions
-                      </span>
+                {/* Executive Quick Actions & Deep-Dive Hub */}
+                <div className="bg-white rounded-3xl border border-[#ECE5CC] p-5 sm:p-6 shadow-warm-sm space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#ECE5CC] gap-2">
+                    <div>
+                      <h2 className="font-bold text-[16px] text-[#2E2B1A]">
+                        Executive Cloud Cockpit &amp; Deep-Dive Hub
+                      </h2>
+                      <p className="text-[12px] text-[#686450]">
+                        Direct entry points to specialized FinOps, GreenOps, and Infrastructure telemetry modules.
+                      </p>
                     </div>
-                    <div className="text-[28px] font-black text-[#1F8A70] tracking-tight">
-                      {data?.recommendations.totalSavings !== null ? `$${data?.recommendations.totalSavings.toLocaleString()} / mo` : "--"}
-                    </div>
-                    <p className="text-[11.5px] text-[#686450] mt-1 font-medium truncate">
-                      {data?.recommendations.activeCount || 0} idle waste reduction actions identified
-                    </p>
-                  </div>
-                  <div className="mt-3 pt-2.5 border-t border-[#ECE5CC] text-[11.5px] text-[#8D8975] flex items-center justify-between">
-                    <span>
-                      {data?.recommendations.totalSavings && data.recommendations.totalSavings > 0
-                        ? `$${data.recommendations.totalSavings}/mo identified`
-                        : "0 Waste Actions Active"}
+                    <span className="text-[11px] font-mono font-bold text-[#8D8975]">
+                      17 AWS Regions Monitored
                     </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Jump 1: Cost Explorer */}
+                    <div
+                      onClick={() => {
+                        setCurrentTab("cost");
+                        setActiveNavItem("cost-explorer");
+                      }}
+                      className="p-4 rounded-2xl bg-[#FAF6E8]/30 hover:bg-[#FAF6E8]/60 border border-[#ECE5CC] transition-all cursor-pointer group flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="w-8 h-8 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70] mb-2.5 shadow-2xs">
+                          <DollarSign className="w-4 h-4" />
+                        </div>
+                        <h3 className="font-bold text-[13.5px] text-[#2E2B1A] group-hover:text-[#1F8A70] transition-colors">
+                          Cost Explorer
+                        </h3>
+                        <p className="text-[11.5px] text-[#686450] mt-1 leading-snug">
+                          Inspect service spend ledger, usage breakdown, and daily CUR trends.
+                        </p>
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] font-bold text-[#1F8A70]">
+                        <span>Open Ledger</span>
+                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </div>
+
+                    {/* Jump 2: Cost Allocation */}
+                    <div
+                      onClick={() => {
+                        setCurrentTab("cost");
+                        setActiveNavItem("cost-allocation");
+                      }}
+                      className="p-4 rounded-2xl bg-[#FAF6E8]/30 hover:bg-[#FAF6E8]/60 border border-[#ECE5CC] transition-all cursor-pointer group flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="w-8 h-8 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-center text-[#9A6B00] mb-2.5 shadow-2xs">
+                          <Tag className="w-4 h-4" />
+                        </div>
+                        <h3 className="font-bold text-[13.5px] text-[#2E2B1A] group-hover:text-[#9A6B00] transition-colors">
+                          Tag Showback
+                        </h3>
+                        <p className="text-[11.5px] text-[#686450] mt-1 leading-snug">
+                          Environment allocation ({data?.tagAllocation?.hygieneScore || 0}% compliant) &amp; untagged assets.
+                        </p>
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] font-bold text-[#9A6B00]">
+                        <span>Review Tags</span>
+                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </div>
+
+                    {/* Jump 3: Budgets */}
+                    <div
+                      onClick={() => {
+                        setCurrentTab("cost");
+                        setActiveNavItem("cost-budgets");
+                      }}
+                      className="p-4 rounded-2xl bg-[#FAF6E8]/30 hover:bg-[#FAF6E8]/60 border border-[#ECE5CC] transition-all cursor-pointer group flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="w-8 h-8 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70] mb-2.5 shadow-2xs">
+                          <Target className="w-4 h-4" />
+                        </div>
+                        <h3 className="font-bold text-[13.5px] text-[#2E2B1A] group-hover:text-[#1F8A70] transition-colors">
+                          Budgets &amp; Pacing
+                        </h3>
+                        <p className="text-[11.5px] text-[#686450] mt-1 leading-snug">
+                          ${data?.budget?.spent !== undefined ? data.budget.spent.toFixed(2) : "0.00"} spent of ${data?.budget?.target || 50}.00 target.
+                        </p>
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] font-bold text-[#1F8A70]">
+                        <span>Check Pacing</span>
+                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </div>
+
+                    {/* Jump 4: Predictive Forecast */}
+                    <div
+                      onClick={() => {
+                        setCurrentTab("cost");
+                        setActiveNavItem("cost-forecast");
+                      }}
+                      className="p-4 rounded-2xl bg-[#FAF6E8]/30 hover:bg-[#FAF6E8]/60 border border-[#ECE5CC] transition-all cursor-pointer group flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="w-8 h-8 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70] mb-2.5 shadow-2xs">
+                          <LineChart className="w-4 h-4" />
+                        </div>
+                        <h3 className="font-bold text-[13.5px] text-[#2E2B1A] group-hover:text-[#1F8A70] transition-colors">
+                          30-Day Forecast
+                        </h3>
+                        <p className="text-[11.5px] text-[#686450] mt-1 leading-snug">
+                          Holt&apos;s double smoothing model with 95% confidence interval bounds.
+                        </p>
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] font-bold text-[#1F8A70]">
+                        <span>Launch Studio</span>
+                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3 Bottom Columns: Carbon Snapshot, Pipeline Health, Recent Signals */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  {/* 1. Carbon Snapshot (GreenOps) */}
+                  <div className="bg-white rounded-3xl border border-[#ECE5CC] p-5 shadow-warm-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between pb-3 border-b border-[#ECE5CC] mb-3">
+                        <span className="font-bold text-[14px] text-[#2E2B1A]">Carbon Snapshot</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#E2F5EF] text-[#1F8A70]">
+                          GreenOps
+                        </span>
+                      </div>
+
+                      <div className="mb-3">
+                        <span className="text-[22px] font-black text-[#2E2B1A]">
+                          {data?.carbon.totalCarbon !== null ? `${data?.carbon.totalCarbon} kgCO2e` : "--"}
+                        </span>
+                        <span className="text-[11px] text-[#1F8A70] font-bold block">
+                          {data?.carbon.totalOperationalCarbon !== null
+                            ? `${data.carbon.totalOperationalCarbon} gCO2e operational grid energy`
+                            : "Carbon telemetry active"}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 text-[11px] font-mono text-[#686450] bg-[#FAF6E8]/40 p-2.5 rounded-xl border border-[#ECE5CC]/60 mb-3">
+                        {data?.resources.byRegion && data.resources.byRegion.length > 0 ? (
+                          data.resources.byRegion.slice(0, 3).map((r) => (
+                            <div key={r.region} className="flex justify-between">
+                              <span>{r.region} ({r.regionName.replace(/^(US East |Asia Pacific )/, "")}):</span>
+                              <strong className={r.gridIntensity > 500 ? "text-[#9A6B00]" : "text-[#1F8A70]"}>
+                                {r.gridIntensity} gCO2/kWh
+                              </strong>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="flex justify-between">
+                            <span>us-east-1 (VA):</span>
+                            <strong className="text-[#2E2B1A]">420 gCO2/kWh</strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     <button
                       type="button"
-                      onClick={() => setCurrentTab("recommendations")}
-                      className="font-bold text-[#1F8A70] hover:underline cursor-pointer"
+                      onClick={() => setCurrentTab("carbon")}
+                      className="text-[11.5px] font-bold text-[#1F8A70] hover:underline text-left pt-2 border-t border-[#ECE5CC] cursor-pointer"
                     >
-                      View Actions →
+                      Open GreenOps Studio →
+                    </button>
+                  </div>
+
+                  {/* 2. Data Pipeline Health */}
+                  <div className="bg-white rounded-3xl border border-[#ECE5CC] p-5 shadow-warm-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between pb-3 border-b border-[#ECE5CC] mb-3">
+                        <span className="font-bold text-[14px] text-[#2E2B1A]">Pipeline Health</span>
+                        <span className="w-2 h-2 rounded-full bg-[#1F8A70]"></span>
+                      </div>
+
+                      <div className="space-y-2.5 text-[12px]">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[#686450]">AWS IAM Connection</span>
+                          <span className="font-bold text-[#1F8A70] bg-[#E2F5EF] px-2 py-0.5 rounded text-[11px]">
+                            Connected
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[#686450]">CUR Billing Export</span>
+                          <span className="font-bold text-[#1F8A70] bg-[#E2F5EF] px-2 py-0.5 rounded text-[11px]">
+                            Available
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[#686450]">CloudWatch Metrics</span>
+                          <span className="font-bold text-[#1F8A70] bg-[#E2F5EF] px-2 py-0.5 rounded text-[11px]">
+                            Live (5m)
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-[#8D8975] pt-1">
+                          <span>Last Ingest:</span>
+                          <span>{getRelativeTime(activeAccount.syncFreshness)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleTriggerSync}
+                      className="text-[11.5px] font-bold text-[#9A6B00] hover:underline text-left pt-2 border-t border-[#ECE5CC] cursor-pointer"
+                    >
+                      Sync All Telemetry Now →
+                    </button>
+                  </div>
+
+                  {/* 3. Recent Signals & Audit Feed (Real-Time from Audit Ledger) */}
+                  <div className="bg-white rounded-3xl border border-[#ECE5CC] p-5 shadow-warm-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between pb-3 border-b border-[#ECE5CC] mb-3">
+                        <span className="font-bold text-[14px] text-[#2E2B1A]">Recent Signals</span>
+                        <span className="text-[10px] font-mono text-[#8D8975]">Feed</span>
+                      </div>
+
+                      <div className="space-y-2 text-[11.5px]">
+                        {data?.auditLogs && data.auditLogs.length > 0 ? (
+                          data.auditLogs.slice(0, 3).map((log, i) => {
+                            const isGreen = log.action.includes("complete") || log.action.includes("approved");
+                            return (
+                              <div key={log.id || i} className="flex items-start gap-2">
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isGreen ? "bg-[#1F8A70]" : "bg-[#9A6B00]"
+                                    }`}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[#686450] leading-snug truncate">
+                                    <strong className="text-[#2E2B1A] capitalize">
+                                      {log.action.replace(/_/g, " ")}:
+                                    </strong>{" "}
+                                    by {log.actor}
+                                  </p>
+                                  <span className="text-[10px] text-[#8D8975] font-mono">
+                                    {getRelativeTime(log.ts)}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="text-[#8D8975] text-[11.5px]">
+                            No audit signals recorded yet.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setCurrentTab("audit")}
+                      className="text-[11.5px] font-bold text-[#1F8A70] hover:underline text-left pt-2 border-t border-[#ECE5CC]"
+                    >
+                      View full audit log →
                     </button>
                   </div>
                 </div>
-
-                {/* 4. Estimated Carbon Footprint */}
-                <div className="bg-white rounded-2xl p-5 border border-[#ECE5CC] shadow-warm-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] font-mono font-bold uppercase text-[#8D8975] tracking-wider">
-                        Estimated Carbon
-                      </span>
-                      <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-[#1F8A70] bg-[#E2F5EF] px-1.5 py-0.5 rounded">
-                        <TrendingDown className="w-3 h-3" />
-                        {data?.carbon.totalOperationalCarbon !== null ? `${data.carbon.totalOperationalCarbon} gCO2e` : "--"}
-                      </span>
-                    </div>
-                    <div className="text-[28px] font-black text-[#2E2B1A] tracking-tight">
-                      {data?.carbon.totalCarbon !== null ? `${data.carbon.totalCarbon} kgCO2e` : "--"}
-                    </div>
-                    <p className="text-[11.5px] text-[#686450] mt-1 font-medium truncate">
-                      Live regional grid factor calculation active
-                    </p>
-                  </div>
-                  <div className="mt-3 pt-2.5 border-t border-[#ECE5CC] text-[11.5px] text-[#8D8975] flex items-center justify-between">
-                    <span>Operational Grid</span>
-                    <span className="font-mono text-[11px]">
-                      {data?.resources.byRegion && data.resources.byRegion.filter(r => r.runningEc2 > 0).length > 0
-                        ? data.resources.byRegion.filter(r => r.runningEc2 > 0).map(r => `${r.region} (${r.gridIntensity}g)`).join(" · ")
-                        : "17 Regions Monitored"}
-                    </span>
-                  </div>
-                </div>
               </div>
+            )}
 
-              {/* Resource Health Donut Gauge & Quick Inventory Counts */}
-              <div className="bg-white rounded-3xl border border-[#ECE5CC] p-5 sm:p-6 shadow-warm-sm">
-                <div className="flex items-center justify-between pb-3 border-b border-[#ECE5CC] mb-5">
-                  <div>
-                    <h2 className="font-bold text-[16px] text-[#2E2B1A]">Resource Health & Compute Distribution</h2>
-                    <p className="text-[12px] text-[#686450]">
-                      Operational condition across live compute and attached storage dependencies.
-                    </p>
-                  </div>
-                  <span className="text-[11px] font-mono font-bold text-[#1F8A70] bg-[#E2F5EF] px-2.5 py-1 rounded-full border border-[#BDEBDD]">
-                    ● Telemetry Active
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                  {/* Donut Gauge Visual (4 cols) */}
-                  <div className="md:col-span-4 flex flex-col items-center justify-center p-4 bg-[#FAF6E8]/30 rounded-2xl border border-[#ECE5CC]/60">
-                    <div className="relative w-36 h-36 flex items-center justify-center">
-                      <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                        {/* Background track */}
-                        <circle cx="50" cy="50" r="40" fill="transparent" stroke="#ECE5CC" strokeWidth="10" />
-                        {/* If only stopped instances */}
-                        {ec2Total > 0 && ec2Running === 0 && ec2Stopped > 0 && (
-                          <circle cx="50" cy="50" r="40" fill="transparent" stroke="#DFD6B5" strokeWidth="10" strokeDasharray="251.3 251.3" />
-                        )}
-                        {/* If running instances exist */}
-                        {ec2Total > 0 && ec2Running > 0 && (
-                          <>
-                            {/* Healthy segment */}
-                            {(data?.resources.byState.healthy || 0) > 0 && (
-                              <circle
-                                cx="50" cy="50" r="40" fill="transparent" stroke="#1F8A70" strokeWidth="10"
-                                strokeDasharray={`${((data?.resources.byState.healthy || 0) / ec2Total) * 251.3} 251.3`}
-                                strokeDashoffset="0"
-                              />
-                            )}
-                            {/* Underutilized segment */}
-                            {(data?.resources.byState.underutilized || 0) > 0 && (
-                              <circle
-                                cx="50" cy="50" r="40" fill="transparent" stroke="#F5EC50" strokeWidth="10"
-                                strokeDasharray={`${((data?.resources.byState.underutilized || 0) / ec2Total) * 251.3} 251.3`}
-                                strokeDashoffset={`-${((data?.resources.byState.healthy || 0) / ec2Total) * 251.3}`}
-                              />
-                            )}
-                            {/* Peak segment */}
-                            {(data?.resources.byState.peak || 0) > 0 && (
-                              <circle
-                                cx="50" cy="50" r="40" fill="transparent" stroke="#D32F2F" strokeWidth="10"
-                                strokeDasharray={`${((data?.resources.byState.peak || 0) / ec2Total) * 251.3} 251.3`}
-                                strokeDashoffset={`-${(((data?.resources.byState.healthy || 0) + (data?.resources.byState.underutilized || 0)) / ec2Total) * 251.3}`}
-                              />
-                            )}
-                            {/* Stopped segment */}
-                            {ec2Stopped > 0 && (
-                              <circle
-                                cx="50" cy="50" r="40" fill="transparent" stroke="#DFD6B5" strokeWidth="10"
-                                strokeDasharray={`${(ec2Stopped / ec2Total) * 251.3} 251.3`}
-                                strokeDashoffset={`-${(ec2Running / ec2Total) * 251.3}`}
-                              />
-                            )}
-                          </>
-                        )}
-                      </svg>
-                      <div className="absolute flex flex-col items-center text-center">
-                        {ec2Total === 0 ? (
-                          <>
-                            <span className="text-[22px] font-black text-[#8D8975]">--</span>
-                            <span className="text-[10px] font-mono font-bold text-[#8D8975] uppercase">
-                              No EC2
-                            </span>
-                          </>
-                        ) : ec2Running > 0 ? (
-                          <>
-                            <span className="text-[26px] font-black text-[#2E2B1A]">
-                              {ec2Running}
-                            </span>
-                            <span className="text-[10px] font-mono font-bold text-[#1F8A70] uppercase">
-                              Running
-                            </span>
-                            {ec2Stopped > 0 && (
-                              <span className="text-[9.5px] font-mono text-[#9A6B00]">
-                                {ec2Stopped} stopped
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-[26px] font-black text-[#9A6B00]">
-                              {ec2Stopped}
-                            </span>
-                            <span className="text-[10px] font-mono font-bold text-[#9A6B00] uppercase">
-                              Stopped
-                            </span>
-                            <span className="text-[9.5px] font-mono text-[#8D8975]">
-                              0 running
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 4 Health Cards Breakdown (8 cols) */}
-                  <div className="md:col-span-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {/* 1. Healthy */}
-                    <div className="p-3.5 rounded-2xl bg-[#FAF6E8]/50 border border-[#ECE5CC]">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[11.5px] font-bold text-[#2E2B1A]">Healthy</span>
-                        <span className="text-[10.5px] font-mono font-bold text-[#1F8A70]">
-                          {ec2Total > 0 ? Math.round(((data?.resources.byState.healthy || 0) / ec2Total) * 100) : 0}%
-                        </span>
-                      </div>
-                      <div className="text-[18px] font-black text-[#2E2B1A] mb-0.5">
-                        {data?.resources.byState.healthy || 0} Instances
-                      </div>
-                      <p className="text-[10.5px] text-[#686450] leading-snug">
-                        Nominal CPU envelope (20%-80%).
-                      </p>
-                    </div>
-
-                    {/* 2. Underutilized */}
-                    <div className="p-3.5 rounded-2xl bg-[#FFF3D6]/50 border border-[#F3E5BC]">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[11.5px] font-bold text-[#2E2B1A]">Underutilized</span>
-                        <span className="text-[10.5px] font-mono font-bold text-[#9A6B00]">
-                          {ec2Total > 0 ? Math.round(((data?.resources.byState.underutilized || 0) / ec2Total) * 100) : 0}%
-                        </span>
-                      </div>
-                      <div className="text-[18px] font-black text-[#9A6B00] mb-0.5">
-                        {data?.resources.byState.underutilized || 0} Instances
-                      </div>
-                      <p className="text-[10.5px] text-[#686450] leading-snug">
-                        &lt;10% average CPU. Downsizing candidate.
-                      </p>
-                    </div>
-
-                    {/* 3. High Load / Peak */}
-                    <div className="p-3.5 rounded-2xl bg-[#FFE8E8]/50 border border-[#FFCCCC]">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[11.5px] font-bold text-[#2E2B1A]">High Load</span>
-                        <span className="text-[10.5px] font-mono font-bold text-[#D32F2F]">
-                          {ec2Total > 0 ? Math.round(((data?.resources.byState.peak || 0) / ec2Total) * 100) : 0}%
-                        </span>
-                      </div>
-                      <div className="text-[18px] font-black text-[#D32F2F] mb-0.5">
-                        {data?.resources.byState.peak || 0} Instances
-                      </div>
-                      <p className="text-[10.5px] text-[#686450] leading-snug">
-                        &gt;85% load during core peak shifts.
-                      </p>
-                    </div>
-
-                    {/* 4. Stopped / Inactive */}
-                    <div className="p-3.5 rounded-2xl bg-[#FAF6E8] border border-[#DFD6B5]">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[11.5px] font-bold text-[#2E2B1A]">Stopped</span>
-                        <span className="text-[10.5px] font-mono font-bold text-[#9A6B00]">
-                          {ec2Total > 0 ? Math.round((ec2Stopped / ec2Total) * 100) : 0}%
-                        </span>
-                      </div>
-                      <div className="text-[18px] font-black text-[#9A6B00] mb-0.5">
-                        {ec2Stopped} Instances
-                      </div>
-                      <p className="text-[10.5px] text-[#686450] leading-snug">
-                        0% CPU, stopped state. Root disk may accrue cost.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Asset Pill Counts (5 AWS Primitives matching reference) */}
-                <div className="mt-5 pt-3 border-t border-[#ECE5CC] flex flex-wrap gap-2 text-[12px]">
-                  <span className="px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A] font-bold flex items-center gap-1.5">
-                    <Cpu className="w-3.5 h-3.5 text-[#9A6B00]" />
-                    EC2 Instances:{" "}
-                    {ec2Total === 0
-                      ? "0"
-                      : ec2Running > 0
-                        ? `${ec2Running} Active (${ec2Stopped} Stopped)`
-                        : `${ec2Stopped} Stopped`}
-                  </span>
-                  <span className="px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A] font-bold flex items-center gap-1.5">
-                    <HardDrive className="w-3.5 h-3.5 text-[#1F8A70]" />
-                    EBS Volumes: {data?.resources.ebs.length || 0}
-                  </span>
-                  <span className="px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A] font-bold flex items-center gap-1.5">
-                    <Network className="w-3.5 h-3.5 text-[#9A6B00]" />
-                    Elastic IPs: {data?.resources.eip.length || 0}
-                  </span>
-                  <span className="px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A] font-bold flex items-center gap-1.5">
-                    <Server className="w-3.5 h-3.5 text-[#1F8A70]" />
-                    RDS Databases: {data?.inventory?.rdsCount || 0}
-                  </span>
-                  <span className="px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A] font-bold flex items-center gap-1.5">
-                    <Shield className="w-3.5 h-3.5 text-[#686450]" />
-                    NAT Gateways: {data?.inventory?.natCount || 0}
-                  </span>
-                  <span className="px-3 py-1 rounded-xl bg-[#FAF6E8] border border-[#ECE5CC] text-[#2E2B1A] font-bold flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-[#1F8A70]" />
-                    {data?.inventory?.activeRegions.length || 1} Active Region{data?.inventory?.activeRegions.length === 1 ? "" : "s"}
-                  </span>
-                </div>
+            {/* TAB 2: COST INTELLIGENCE (DEDICATED SUB-PAGES) */}
+            {currentTab === "cost" && activeAccount && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                {activeNavItem === "cost-explorer" && (
+                  <CostExplorerView
+                    data={data}
+                    onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                  />
+                )}
+                {activeNavItem === "cost-allocation" && (
+                  <CostAllocationView
+                    data={data}
+                    onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                  />
+                )}
+                {activeNavItem === "cost-budgets" && (
+                  <CostBudgetsView
+                    data={data}
+                    onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                  />
+                )}
+                {activeNavItem === "cost-anomalies" && (
+                  <CostAnomaliesView
+                    data={data}
+                    onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                  />
+                )}
+                {activeNavItem === "cost-forecast" && (
+                  <CostForecastView
+                    data={data}
+                    onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                  />
+                )}
+                {(activeNavItem === "cost-overview" ||
+                  !["cost-explorer", "cost-allocation", "cost-budgets", "cost-anomalies", "cost-forecast"].includes(activeNavItem)) && (
+                    <CostOverviewView
+                      data={data}
+                      onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                    />
+                  )}
               </div>
+            )}
 
-              {/* Executive Quick Actions & Deep-Dive Hub */}
-              <div className="bg-white rounded-3xl border border-[#ECE5CC] p-5 sm:p-6 shadow-warm-sm space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#ECE5CC] gap-2">
-                  <div>
-                    <h2 className="font-bold text-[16px] text-[#2E2B1A]">
-                      Executive Cloud Cockpit &amp; Deep-Dive Hub
-                    </h2>
-                    <p className="text-[12px] text-[#686450]">
-                      Direct entry points to specialized FinOps, GreenOps, and Infrastructure telemetry modules.
-                    </p>
-                  </div>
-                  <span className="text-[11px] font-mono font-bold text-[#8D8975]">
-                    17 AWS Regions Monitored
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* Jump 1: Cost Explorer */}
-                  <div
-                    onClick={() => {
-                      setCurrentTab("cost");
-                      setActiveNavItem("cost-explorer");
-                    }}
-                    className="p-4 rounded-2xl bg-[#FAF6E8]/30 hover:bg-[#FAF6E8]/60 border border-[#ECE5CC] transition-all cursor-pointer group flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="w-8 h-8 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70] mb-2.5 shadow-2xs">
-                        <DollarSign className="w-4 h-4" />
-                      </div>
-                      <h3 className="font-bold text-[13.5px] text-[#2E2B1A] group-hover:text-[#1F8A70] transition-colors">
-                        Cost Explorer
-                      </h3>
-                      <p className="text-[11.5px] text-[#686450] mt-1 leading-snug">
-                        Inspect service spend ledger, usage breakdown, and daily CUR trends.
-                      </p>
-                    </div>
-                    <div className="mt-3 pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] font-bold text-[#1F8A70]">
-                      <span>Open Ledger</span>
-                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-
-                  {/* Jump 2: Cost Allocation */}
-                  <div
-                    onClick={() => {
-                      setCurrentTab("cost");
-                      setActiveNavItem("cost-allocation");
-                    }}
-                    className="p-4 rounded-2xl bg-[#FAF6E8]/30 hover:bg-[#FAF6E8]/60 border border-[#ECE5CC] transition-all cursor-pointer group flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="w-8 h-8 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-center text-[#9A6B00] mb-2.5 shadow-2xs">
-                        <Tag className="w-4 h-4" />
-                      </div>
-                      <h3 className="font-bold text-[13.5px] text-[#2E2B1A] group-hover:text-[#9A6B00] transition-colors">
-                        Tag Showback
-                      </h3>
-                      <p className="text-[11.5px] text-[#686450] mt-1 leading-snug">
-                        Environment allocation ({data?.tagAllocation?.hygieneScore || 0}% compliant) &amp; untagged assets.
-                      </p>
-                    </div>
-                    <div className="mt-3 pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] font-bold text-[#9A6B00]">
-                      <span>Review Tags</span>
-                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-
-                  {/* Jump 3: Budgets */}
-                  <div
-                    onClick={() => {
-                      setCurrentTab("cost");
-                      setActiveNavItem("cost-budgets");
-                    }}
-                    className="p-4 rounded-2xl bg-[#FAF6E8]/30 hover:bg-[#FAF6E8]/60 border border-[#ECE5CC] transition-all cursor-pointer group flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="w-8 h-8 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70] mb-2.5 shadow-2xs">
-                        <Target className="w-4 h-4" />
-                      </div>
-                      <h3 className="font-bold text-[13.5px] text-[#2E2B1A] group-hover:text-[#1F8A70] transition-colors">
-                        Budgets &amp; Pacing
-                      </h3>
-                      <p className="text-[11.5px] text-[#686450] mt-1 leading-snug">
-                        ${data?.budget?.spent !== undefined ? data.budget.spent.toFixed(2) : "0.00"} spent of ${data?.budget?.target || 50}.00 target.
-                      </p>
-                    </div>
-                    <div className="mt-3 pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] font-bold text-[#1F8A70]">
-                      <span>Check Pacing</span>
-                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-
-                  {/* Jump 4: Predictive Forecast */}
-                  <div
-                    onClick={() => {
-                      setCurrentTab("cost");
-                      setActiveNavItem("cost-forecast");
-                    }}
-                    className="p-4 rounded-2xl bg-[#FAF6E8]/30 hover:bg-[#FAF6E8]/60 border border-[#ECE5CC] transition-all cursor-pointer group flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="w-8 h-8 rounded-xl bg-white border border-[#ECE5CC] flex items-center justify-center text-[#1F8A70] mb-2.5 shadow-2xs">
-                        <LineChart className="w-4 h-4" />
-                      </div>
-                      <h3 className="font-bold text-[13.5px] text-[#2E2B1A] group-hover:text-[#1F8A70] transition-colors">
-                        30-Day Forecast
-                      </h3>
-                      <p className="text-[11.5px] text-[#686450] mt-1 leading-snug">
-                        Holt&apos;s double smoothing model with 95% confidence interval bounds.
-                      </p>
-                    </div>
-                    <div className="mt-3 pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] font-bold text-[#1F8A70]">
-                      <span>Launch Studio</span>
-                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                </div>
+            {/* TAB 3: CARBON INTELLIGENCE (GREENOPS) */}
+            {currentTab === "carbon" && activeAccount && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                {activeNavItem === "sustainability-carbon" && (
+                  <CarbonAccountingView
+                    data={data}
+                    onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                  />
+                )}
+                {activeNavItem === "sustainability-resources" && (
+                  <ResourceCarbonView
+                    data={data}
+                    onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                  />
+                )}
+                {activeNavItem === "sustainability-regions" && (
+                  <RegionalGridMatrixView
+                    data={data}
+                    onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                  />
+                )}
+                {activeNavItem === "sustainability-sci" && (
+                  <SciTunerGovernanceView
+                    data={data}
+                    sciFunctionalUnit={sciFunctionalUnit}
+                    setSciFunctionalUnit={setSciFunctionalUnit}
+                    onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                  />
+                )}
+                {activeNavItem === "sustainability-recommendations" && (
+                  <RecommendationsView
+                    data={data}
+                    onSelectRecommendation={setSelectedRecommendation}
+                    onApproveRecommendation={handleApproveRecommendation}
+                    onNavigateSubTab={(sub: string) => setActiveNavItem(sub)}
+                  />
+                )}
+                {activeNavItem === "sustainability-opportunities" && (
+                  <OpportunitiesView
+                    data={data}
+                    onNavigateSubTab={(sub: string) => setActiveNavItem(sub)}
+                    onSelectRecommendation={setSelectedRecommendation}
+                  />
+                )}
+                {(activeNavItem === "sustainability-overview" ||
+                  !["sustainability-carbon", "sustainability-resources", "sustainability-regions", "sustainability-sci", "sustainability-recommendations", "sustainability-opportunities"].includes(activeNavItem)) && (
+                    <SustainabilityOverviewView
+                      data={data}
+                      sciFunctionalUnit={sciFunctionalUnit}
+                      onNavigateSubTab={(sub) => setActiveNavItem(sub)}
+                    />
+                  )}
               </div>
+            )}
 
-              {/* 3 Bottom Columns: Carbon Snapshot, Pipeline Health, Recent Signals */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                {/* 1. Carbon Snapshot (GreenOps) */}
-                <div className="bg-white rounded-3xl border border-[#ECE5CC] p-5 shadow-warm-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between pb-3 border-b border-[#ECE5CC] mb-3">
-                      <span className="font-bold text-[14px] text-[#2E2B1A]">Carbon Snapshot</span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#E2F5EF] text-[#1F8A70]">
-                        GreenOps
-                      </span>
+            {/* TAB 4: INFRASTRUCTURE OVERVIEW */}
+            {/* TAB 4: INFRASTRUCTURE OVERVIEW */}
+            {currentTab === "infrastructure" && activeAccount && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                <div className="bg-white rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-sm space-y-5">
+                  {/* Infrastructure Sub-Navigation Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#ECE5CC]">
+                    <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC]">
+                      <button
+                        type="button"
+                        onClick={() => setActiveNavItem("infra-resources")}
+                        className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer ${activeNavItem === "infra-resources" || (activeNavItem !== "infra-accounts" && activeNavItem !== "infra-regions")
+                          ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                          : "text-[#686450] hover:text-[#2E2B1A]"
+                          }`}
+                      >
+                        Resources ({filteredResources.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveNavItem("infra-accounts")}
+                        className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeNavItem === "infra-accounts"
+                          ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                          : "text-[#686450] hover:text-[#2E2B1A]"
+                          }`}
+                      >
+                        <Cloud className="w-3.5 h-3.5" />
+                        <span>Accounts ({accountsList.length})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveNavItem("infra-regions")}
+                        className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer ${activeNavItem === "infra-regions"
+                          ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                          : "text-[#686450] hover:text-[#2E2B1A]"
+                          }`}
+                      >
+                        Regions ({data?.resources.byRegion?.length || 0})
+                      </button>
                     </div>
 
-                    <div className="mb-3">
-                      <span className="text-[22px] font-black text-[#2E2B1A]">
-                        {data?.carbon.totalCarbon !== null ? `${data?.carbon.totalCarbon} kgCO2e` : "--"}
-                      </span>
-                      <span className="text-[11px] text-[#1F8A70] font-bold block">
-                        {data?.carbon.totalOperationalCarbon !== null
-                          ? `${data.carbon.totalOperationalCarbon} gCO2e operational grid energy`
-                          : "Carbon telemetry active"}
-                      </span>
-                    </div>
-
-                    <div className="space-y-1.5 text-[11px] font-mono text-[#686450] bg-[#FAF6E8]/40 p-2.5 rounded-xl border border-[#ECE5CC]/60 mb-3">
-                      {data?.resources.byRegion && data.resources.byRegion.length > 0 ? (
-                        data.resources.byRegion.slice(0, 3).map((r) => (
-                          <div key={r.region} className="flex justify-between">
-                            <span>{r.region} ({r.regionName.replace(/^(US East |Asia Pacific )/, "")}):</span>
-                            <strong className={r.gridIntensity > 500 ? "text-[#9A6B00]" : "text-[#1F8A70]"}>
-                              {r.gridIntensity} gCO2/kWh
-                            </strong>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="flex justify-between">
-                          <span>us-east-1 (VA):</span>
-                          <strong className="text-[#2E2B1A]">420 gCO2/kWh</strong>
+                    {/* Actions according to subview */}
+                    <div className="flex items-center gap-2">
+                      {activeNavItem === "infra-accounts" ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleCleanDuplicates}
+                            disabled={cleaningDuplicates}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8] text-[11.5px] font-bold text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            <RefreshCw className={`w-3 h-3 ${cleaningDuplicates ? "animate-spin" : ""}`} />
+                            <span>Purge Duplicate Stubs</span>
+                          </button>
+                          <Link
+                            href="/onboarding"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] shadow-2xs transition-colors"
+                          >
+                            <PlusCircle className="w-3.5 h-3.5" />
+                            <span>Connect Account</span>
+                          </Link>
                         </div>
+                      ) : (
+                        <select
+                          value={infraRegionFilter}
+                          onChange={(e) => setInfraRegionFilter(e.target.value)}
+                          className="px-3 py-1.5 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8] text-[12px] font-bold text-[#2E2B1A]"
+                        >
+                          <option value="all">
+                            All Regions ({data?.resources.byRegion?.length || 0})
+                          </option>
+                          {data?.resources.byRegion?.map((r) => (
+                            <option key={r.region} value={r.region}>
+                              {r.region} — {r.regionName} ({r.resourcesCount})
+                            </option>
+                          ))}
+                        </select>
                       )}
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setCurrentTab("carbon")}
-                    className="text-[11.5px] font-bold text-[#1F8A70] hover:underline text-left pt-2 border-t border-[#ECE5CC] cursor-pointer"
-                  >
-                    Open GreenOps Studio →
-                  </button>
-                </div>
-
-                {/* 2. Data Pipeline Health */}
-                <div className="bg-white rounded-3xl border border-[#ECE5CC] p-5 shadow-warm-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between pb-3 border-b border-[#ECE5CC] mb-3">
-                      <span className="font-bold text-[14px] text-[#2E2B1A]">Pipeline Health</span>
-                      <span className="w-2 h-2 rounded-full bg-[#1F8A70]"></span>
-                    </div>
-
-                    <div className="space-y-2.5 text-[12px]">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[#686450]">AWS IAM Connection</span>
-                        <span className="font-bold text-[#1F8A70] bg-[#E2F5EF] px-2 py-0.5 rounded text-[11px]">
-                          Connected
-                        </span>
+                  {/* SUB-VIEW 1: ACCOUNTS LIST */}
+                  {activeNavItem === "infra-accounts" && (
+                    <div className="space-y-4 animate-in fade-in duration-150">
+                      <div>
+                        <h3 className="text-[16px] font-bold text-[#2E2B1A]">Connected Cloud Accounts</h3>
+                        <p className="text-[12.5px] text-[#686450]">
+                          Manage authenticated AWS cross-account IAM roles linked to GreenCloud AI.
+                        </p>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[#686450]">CUR Billing Export</span>
-                        <span className="font-bold text-[#1F8A70] bg-[#E2F5EF] px-2 py-0.5 rounded text-[11px]">
-                          Available
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[#686450]">CloudWatch Metrics</span>
-                        <span className="font-bold text-[#1F8A70] bg-[#E2F5EF] px-2 py-0.5 rounded text-[11px]">
-                          Live (5m)
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] text-[#8D8975] pt-1">
-                        <span>Last Ingest:</span>
-                        <span>{getRelativeTime(activeAccount.syncFreshness)}</span>
-                      </div>
-                    </div>
-                  </div>
 
-                  <button
-                    type="button"
-                    onClick={handleTriggerSync}
-                    className="text-[11.5px] font-bold text-[#9A6B00] hover:underline text-left pt-2 border-t border-[#ECE5CC] cursor-pointer"
-                  >
-                    Sync All Telemetry Now →
-                  </button>
-                </div>
+                      <div className="space-y-3">
+                        {accountsList.map((acc) => {
+                          const isActive = acc.id === activeAccount?.id;
+                          const isDeleting = deletingAccountId === acc.id;
 
-                {/* 3. Recent Signals & Audit Feed (Real-Time from Audit Ledger) */}
-                <div className="bg-white rounded-3xl border border-[#ECE5CC] p-5 shadow-warm-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between pb-3 border-b border-[#ECE5CC] mb-3">
-                      <span className="font-bold text-[14px] text-[#2E2B1A]">Recent Signals</span>
-                      <span className="text-[10px] font-mono text-[#8D8975]">Feed</span>
-                    </div>
-
-                    <div className="space-y-2 text-[11.5px]">
-                      {data?.auditLogs && data.auditLogs.length > 0 ? (
-                        data.auditLogs.slice(0, 3).map((log, i) => {
-                          const isGreen = log.action.includes("complete") || log.action.includes("approved");
                           return (
-                            <div key={log.id || i} className="flex items-start gap-2">
-                              <span
-                                className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isGreen ? "bg-[#1F8A70]" : "bg-[#9A6B00]"
-                                  }`}
-                              />
-                              <div className="min-w-0 flex-1">
-                                <p className="text-[#686450] leading-snug truncate">
-                                  <strong className="text-[#2E2B1A] capitalize">
-                                    {log.action.replace(/_/g, " ")}:
-                                  </strong>{" "}
-                                  by {log.actor}
-                                </p>
-                                <span className="text-[10px] text-[#8D8975] font-mono">
-                                  {getRelativeTime(log.ts)}
-                                </span>
+                            <div
+                              key={acc.id}
+                              className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isActive
+                                ? "bg-white border-[#1F8A70]/50 ring-1 ring-[#1F8A70]/20 shadow-warm-xs"
+                                : "bg-[#FAF6E8]/30 border-[#ECE5CC] hover:bg-white"
+                                }`}
+                            >
+                              <div className="flex items-center gap-3.5 min-w-0">
+                                <div className="w-10 h-10 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A] shrink-0">
+                                  <Cloud className="w-5 h-5 text-[#9A6B00]" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <strong className="text-[14px] text-[#2E2B1A] truncate">{acc.name}</strong>
+                                    {isActive ? (
+                                      <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD] flex items-center gap-1">
+                                        <Check className="w-3 h-3" />
+                                        <span>Active Account</span>
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-full text-[10.5px] font-mono text-[#8D8975] bg-[#FAF6E8] border border-[#ECE5CC]">
+                                        Connected
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 text-[12px] text-[#686450] mt-0.5 font-mono">
+                                    <span>AWS Account: {acc.externalAccountId}</span>
+                                    <span>•</span>
+                                    <span>Status: {acc.status || "active"}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
+                                {!isActive && (
+                                  <button
+                                    type="button"
+                                    onClick={() => loadDashboard(acc.id)}
+                                    className="px-3.5 py-1.5 rounded-full bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] text-[12px] font-bold text-[#2E2B1A] transition-colors cursor-pointer"
+                                  >
+                                    Switch to Account
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAccount(acc.id)}
+                                  disabled={isDeleting}
+                                  title="Disconnect account"
+                                  className="p-2 rounded-xl text-[#8D8975] hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors cursor-pointer disabled:opacity-50"
+                                >
+                                  {isDeleting ? (
+                                    <RefreshCw className="w-4 h-4 animate-spin text-red-600" />
+                                  ) : (
+                                    <Trash2 className="w-4 h-4" />
+                                  )}
+                                </button>
                               </div>
                             </div>
                           );
-                        })
-                      ) : (
-                        <div className="text-[#8D8975] text-[11.5px]">
-                          No audit signals recorded yet.
-                        </div>
-                      )}
+                        })}
+                      </div>
                     </div>
+                  )}
+
+                  {/* SUB-VIEW 2: REGIONAL BREAKDOWN */}
+                  {activeNavItem === "infra-regions" && (
+                    <div className="space-y-4 animate-in fade-in duration-150">
+                      <div>
+                        <h3 className="text-[16px] font-bold text-[#2E2B1A]">AWS Regional Breakdown</h3>
+                        <p className="text-[12.5px] text-[#686450]">
+                          Geographic spread, clean grid intensity, and monthly compute spend.
+                        </p>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-[12.5px]">
+                          <thead>
+                            <tr className="border-b border-[#ECE5CC] font-mono text-[11px] text-[#8D8975] uppercase">
+                              <th className="py-2">AWS Region</th>
+                              <th className="py-2">Location</th>
+                              <th className="py-2">Running EC2</th>
+                              <th className="py-2">Stopped EC2</th>
+                              <th className="py-2">Grid Carbon Intensity</th>
+                              <th className="py-2">Monthly Spend</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#ECE5CC]/50">
+                            {data?.resources.byRegion && data.resources.byRegion.length > 0 ? (
+                              data.resources.byRegion.map((r) => (
+                                <tr key={r.region} className="hover:bg-[#FAF6E8]/40">
+                                  <td className="py-2.5">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[16px]">{r.flag || "🌐"}</span>
+                                      <span className="font-mono font-bold text-[#2E2B1A]">{r.region}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-2.5 text-[#686450]">{r.regionName}</td>
+                                  <td className="py-2.5">
+                                    <span className="font-mono font-bold text-[#1F8A70]">{r.runningEc2}</span>
+                                  </td>
+                                  <td className="py-2.5">
+                                    <span className="font-mono text-[#8D8975]">{r.stoppedEc2}</span>
+                                  </td>
+                                  <td className="py-2.5">
+                                    <span className="font-mono font-bold text-[#2E2B1A]">
+                                      {r.gridIntensity} gCO2e/kWh
+                                    </span>
+                                    <span className="text-[11px] text-[#8D8975] block">{r.mix}</span>
+                                  </td>
+                                  <td className="py-2.5 font-mono font-bold text-[#2E2B1A]">
+                                    ${r.monthlyCost.toFixed(2)}/mo
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={6} className="py-6 text-center text-[#8D8975]">
+                                  No regional telemetry data available.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUB-VIEW 3: RESOURCES INVENTORY (DEFAULT) */}
+                  {activeNavItem !== "infra-accounts" && activeNavItem !== "infra-regions" && (
+                    <div className="space-y-4 animate-in fade-in duration-150">
+                      <div>
+                        <h2 className="text-[16px] font-bold text-[#2E2B1A]">Cloud Resources Inventory</h2>
+                        <p className="text-[12.5px] text-[#686450]">
+                          Monitored virtual machines, block volumes, and network assets in {activeAccount.name}.
+                        </p>
+                      </div>
+
+                      {/* Resource Inventory Table */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-[12.5px]">
+                          <thead>
+                            <tr className="border-b border-[#ECE5CC] font-mono text-[11px] text-[#8D8975] uppercase">
+                              <th className="py-2">Resource Name & ID</th>
+                              <th className="py-2">Type & Specs</th>
+                              <th className="py-2">AWS Region</th>
+                              <th className="py-2">Resource State</th>
+                              <th className="py-2">Estimated Cost</th>
+                              <th className="py-2">Carbon Footprint</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#ECE5CC]/50">
+                            {filteredResources.length ? (
+                              filteredResources.map((res) => (
+                                <tr key={res.id} className="hover:bg-[#FAF6E8]/40">
+                                  <td className="py-2.5">
+                                    <span className="font-bold text-[#2E2B1A] block">
+                                      {res.instanceName || res.providerResourceId}
+                                    </span>
+                                    {res.instanceName && res.instanceName !== res.providerResourceId && (
+                                      <span className="font-mono text-[10.5px] text-[#8D8975] block">
+                                        {res.providerResourceId}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-2.5 text-[#686450]">
+                                    <span className="font-mono font-bold text-[#2E2B1A] uppercase">
+                                      {res.resourceType}
+                                    </span>{" "}
+                                    {res.instanceType ? (
+                                      <span className="px-1.5 py-0.5 rounded bg-[#FAF6E8] text-[#2E2B1A] font-mono text-[11px] border border-[#ECE5CC]">
+                                        {res.instanceType}
+                                      </span>
+                                    ) : ""}
+                                    {res.sizeGb ? (
+                                      <span className="text-[#8D8975] ml-1">
+                                        {res.sizeGb} GB
+                                      </span>
+                                    ) : ""}
+                                  </td>
+                                  <td className="py-2.5">
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px] font-bold text-[#2E2B1A]">
+                                      <span>{res.regionFlag || "🌐"}</span>
+                                      <span className="font-mono">{res.region}</span>
+                                    </span>
+                                    {res.regionName && (
+                                      <span className="text-[10.5px] text-[#8D8975] block mt-0.5">
+                                        {res.regionName}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-2.5">
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase ${res.lifecycleState === "running" || res.lifecycleState === "in-use"
+                                      ? "bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]"
+                                      : "bg-[#FFF3D6] text-[#9A6B00] border border-[#ECE5CC]"
+                                      }`}>
+                                      {res.lifecycleState === "running" && (
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[#1F8A70] animate-pulse"></span>
+                                      )}
+                                      <span>{res.lifecycleState}</span>
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 font-mono font-bold text-[#2E2B1A]">
+                                    {res.monthlyCost !== null ? `$${res.monthlyCost.toFixed(2)}/mo` : "--"}
+                                  </td>
+                                  <td className="py-2.5 font-mono text-[11.5px] text-[#686450]">
+                                    {res.carbonEmissions?.[0]
+                                      ? `${res.carbonEmissions[0].operationalGco2e.toFixed(1)} gCO2e/day`
+                                      : "--"}
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={6} className="py-6 text-center text-[#8D8975]">
+                                  No resources found. Click "Sync Telemetry" to discover assets via AWS APIs.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 5: RECOMMENDATIONS SUMMARY */}
+            {currentTab === "recommendations" && activeAccount && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                {activeNavItem === "opt-cross-cloud" ? (
+                  <CrossCloudAdvisorView accountId={activeAccount.id} />
+                ) : activeNavItem === "opt-opportunities" ? (
+                  <OpportunitiesView
+                    data={data}
+                    onNavigateSubTab={(sub: string) => setActiveNavItem(sub)}
+                    onSelectRecommendation={setSelectedRecommendation}
+                  />
+                ) : (
+                  <RecommendationsView
+                    data={data}
+                    onSelectRecommendation={setSelectedRecommendation}
+                    onApproveRecommendation={handleApproveRecommendation}
+                    onNavigateSubTab={(sub: string) => setActiveNavItem(sub)}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* TAB 6: AUDIT HISTORY */}
+            {currentTab === "audit" && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                <div className="bg-white rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-sm space-y-4">
+                  <div className="pb-3 border-b border-[#ECE5CC]">
+                    <h2 className="text-[18px] font-bold text-[#2E2B1A]">Immutable Audit History</h2>
+                    <p className="text-[13px] text-[#686450]">
+                      Complete chronological ledger of all account connections, sync triggers, and optimization approvals.
+                    </p>
                   </div>
 
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-[12px]">
+                      <thead>
+                        <tr className="border-b border-[#ECE5CC] font-mono text-[10.5px] text-[#8D8975] uppercase">
+                          <th className="py-2">Timestamp</th>
+                          <th className="py-2">Actor</th>
+                          <th className="py-2">Action</th>
+                          <th className="py-2">Target Type</th>
+                          <th className="py-2">Metadata Details</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#ECE5CC]/50">
+                        {data?.auditLogs.length ? (
+                          data.auditLogs.map((log) => (
+                            <tr key={log.id} className="hover:bg-[#FAF6E8]/40">
+                              <td className="py-2.5 font-mono text-[11px] text-[#8D8975]">
+                                {new Date(log.ts).toLocaleString()}
+                              </td>
+                              <td className="py-2.5 font-bold text-[#2E2B1A]">{log.actor}</td>
+                              <td className="py-2.5">
+                                <span className="px-2 py-0.5 rounded text-[10.5px] font-mono font-bold bg-[#FAF6E8] text-[#9A6B00] border border-[#ECE5CC]">
+                                  {log.action}
+                                </span>
+                              </td>
+                              <td className="py-2.5 text-[#686450]">{log.objectType}</td>
+                              <td className="py-2.5 font-mono text-[11px] text-[#686450] max-w-xs truncate">
+                                {log.metadata || "--"}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={5} className="py-4 text-center text-[#8D8975]">
+                              No audit log records found yet.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* ROOT-LEVEL MODALS (Full viewport overlay with z-[100])                    */}
+        {/* ========================================================================= */}
+
+        {/* CENTERED RECOMMENDATION INSPECTION MODAL */}
+        {selectedRecommendation && (
+          <div
+            className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-150"
+            onClick={() => setSelectedRecommendation(null)}
+          >
+            <div
+              className="w-full max-w-2xl bg-[#FFFDF4] rounded-3xl shadow-2xl flex flex-col max-h-[90vh] border border-[#ECE5CC] overflow-hidden animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="p-5 sm:p-6 border-b border-[#ECE5CC] bg-white flex items-start justify-between gap-4 shrink-0">
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded text-[10.5px] font-mono font-bold uppercase bg-[#FAF6E8] text-[#9A6B00] border border-[#ECE5CC]">
+                      {selectedRecommendation.category}
+                    </span>
+                    <span className="text-[11px] font-mono text-[#8D8975]">
+                      Risk: {(selectedRecommendation.riskScore * 100).toFixed(0)}%
+                    </span>
+                    <span className="text-[11px] font-mono text-[#1F8A70] font-bold">
+                      Confidence: {(selectedRecommendation.confidence * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <h3 className="font-bold text-[17px] text-[#2E2B1A] leading-snug">
+                    {selectedRecommendation.title}
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedRecommendation(null)}
+                  className="p-1.5 rounded-xl border border-[#ECE5CC] hover:bg-[#FAF6E8] text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body Scrollable */}
+              <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1">
+                {/* ROI & Sustainability Summary */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-[#E2F5EF]/60 border border-[#BDEBDD]">
+                    <span className="text-[10.5px] font-mono uppercase font-bold text-[#1F8A70] block mb-0.5">
+                      Financial ROI
+                    </span>
+                    <span className="text-[22px] font-black text-[#1F8A70]">
+                      +${selectedRecommendation.estimatedMonthlySavings.toFixed(2)}/mo
+                    </span>
+                    <span className="text-[11px] text-[#1F8A70] block">
+                      Annual: +${(selectedRecommendation.estimatedMonthlySavings * 12).toFixed(2)}/yr
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC]">
+                    <span className="text-[10.5px] font-mono uppercase font-bold text-[#9A6B00] block mb-0.5">
+                      Carbon Impact
+                    </span>
+                    <span className="text-[22px] font-black text-[#2E2B1A]">
+                      -{selectedRecommendation.estimatedGco2eSavings > 1000
+                        ? `${(selectedRecommendation.estimatedGco2eSavings / 1000).toFixed(2)} kgCO2e`
+                        : `${selectedRecommendation.estimatedGco2eSavings.toFixed(1)} gCO2e`}
+                    </span>
+                    <span className="text-[11px] text-[#686450] block">
+                      Estimated carbon reduction
+                    </span>
+                  </div>
+                </div>
+
+                {/* Telemetry Evidence Box */}
+                <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
+                  <span className="text-[11px] font-mono font-bold text-[#8D8975] uppercase block">
+                    Telemetry Evidence & Root Cause
+                  </span>
+                  <p className="text-[12.5px] text-[#2E2B1A] leading-relaxed">
+                    {(() => {
+                      try {
+                        const parsed = JSON.parse(selectedRecommendation.evidence);
+                        return parsed.reason || selectedRecommendation.evidence;
+                      } catch {
+                        return selectedRecommendation.evidence;
+                      }
+                    })()}
+                  </p>
+                  <div className="pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] text-[#8D8975] font-mono">
+                    <span>Source: CloudWatch Metrics & AWS EC2 API</span>
+                    <span>Verified: Real-Time</span>
+                  </div>
+                </div>
+
+                {/* Target Asset Details */}
+                {selectedRecommendation.resource && (
+                  <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
+                    <span className="text-[11px] font-mono font-bold text-[#8D8975] uppercase block">
+                      Target Asset Details
+                    </span>
+                    <div className="grid grid-cols-2 gap-2 text-[12px] font-mono">
+                      <div>
+                        <span className="text-[#8D8975] block text-[10.5px]">Resource ID:</span>
+                        <strong className="text-[#2E2B1A]">{selectedRecommendation.resource.providerResourceId}</strong>
+                      </div>
+                      <div>
+                        <span className="text-[#8D8975] block text-[10.5px]">Region:</span>
+                        <strong className="text-[#2E2B1A]">{selectedRecommendation.resource.region}</strong>
+                      </div>
+                      <div>
+                        <span className="text-[#8D8975] block text-[10.5px]">Type:</span>
+                        <strong className="text-[#2E2B1A]">{selectedRecommendation.resource.resourceType.toUpperCase()}</strong>
+                      </div>
+                      <div>
+                        <span className="text-[#8D8975] block text-[10.5px]">Current State:</span>
+                        <strong className="text-[#1F8A70]">{selectedRecommendation.resource.lifecycleState}</strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Generated Terraform IaC Snippet */}
+                <div className="p-4 rounded-2xl bg-[#2E2B1A] text-white space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Code className="w-4 h-4 text-[#FFF76A]" />
+                      <span className="font-mono text-[12px] font-bold text-[#FFF76A]">
+                        Terraform IaC Remediation Code
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const code = generateTerraformSnippet(selectedRecommendation);
+                        navigator.clipboard.writeText(code);
+                        setCopiedIaC(true);
+                        setTimeout(() => setCopiedIaC(false), 2000);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-mono text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      {copiedIaC ? <Check className="w-3.5 h-3.5 text-[#1F8A70]" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedIaC ? "Copied!" : "Copy Snippet"}</span>
+                    </button>
+                  </div>
+
+                  <pre className="font-mono text-[11px] text-[#FAF6E8] bg-black/30 p-3 rounded-xl overflow-x-auto leading-relaxed border border-white/10">
+                    {generateTerraformSnippet(selectedRecommendation)}
+                  </pre>
+                </div>
+
+                {/* 1-Click Ticket Generator (Jira / GitHub) */}
+                <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-mono font-bold text-[#8D8975] uppercase block">
+                      DevOps Ticket Integration
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ticket = generateTicketMarkdown(selectedRecommendation);
+                        navigator.clipboard.writeText(ticket);
+                        setCopiedTicket(true);
+                        setTimeout(() => setCopiedTicket(false), 2000);
+                      }}
+                      className="text-[11.5px] font-bold text-[#1F8A70] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      {copiedTicket ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedTicket ? "Ticket Copied to Clipboard!" : "Copy Jira / GitHub Markdown"}</span>
+                    </button>
+                  </div>
+                  <p className="text-[11.5px] text-[#686450]">
+                    Export formatted issue context to your engineering backlog (GitHub, Jira, or ServiceNow).
+                  </p>
+                </div>
+              </div>
+
+              {/* Drawer Footer Actions */}
+              <div className="p-4 sm:p-5 border-t border-[#ECE5CC] bg-white flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRecommendation(null)}
+                  className="px-4 py-2 rounded-full border border-[#ECE5CC] text-[12px] font-bold text-[#686450] hover:bg-[#FAF6E8] cursor-pointer"
+                >
+                  Close
+                </button>
+
+                <div className="flex items-center gap-2">
+                  {selectedRecommendation.status === "active" && !selectedRecommendation.id.startsWith("opp-") ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleApproveRecommendation(selectedRecommendation.id);
+                        setSelectedRecommendation(null);
+                      }}
+                      className="px-5 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12.5px] font-bold text-[#2E2B1A] shadow-xs cursor-pointer"
+                    >
+                      Approve Optimization
+                    </button>
+                  ) : (
+                    <span className="px-3 py-1.5 rounded-full bg-[#E2F5EF] text-[11.5px] font-bold text-[#1F8A70]">
+                      Action Active
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* AES-256 ENCRYPTED CREDENTIALS MODAL */}
+        {credentialsModalOpen && (
+          <div
+            className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+            onClick={() => setCredentialsModalOpen(false)}
+          >
+            <div
+              className="max-w-lg w-full bg-[#FFFDF4] rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-lg space-y-5 animate-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] flex items-center justify-center text-[#1F8A70] shrink-0">
+                    <Shield className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-[18px] text-[#2E2B1A]">
+                      Encrypted AWS Credentials
+                    </h3>
+                    <p className="text-[12px] text-[#686450]">
+                      AES-256-GCM authenticated cipher with in-memory decryption
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCredentialsModalOpen(false)}
+                  className="p-1 rounded-lg text-[#8D8975] hover:text-[#2E2B1A] transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Security Guarantee Box */}
+              <div className="p-3.5 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] space-y-1.5">
+                <div className="flex items-center gap-2 text-[12px] font-bold text-[#2E2B1A]">
+                  <Lock className="w-3.5 h-3.5 text-[#1F8A70]" />
+                  <span>Zero Plaintext Exposure Guarantee</span>
+                </div>
+                <p className="text-[11.5px] text-[#686450] leading-relaxed">
+                  Credentials are encrypted at rest using AES-256-GCM with a per-record initialization vector and authentication tag. Secret keys are never returned in API payloads, never committed to Git, and only decrypted in-memory (RAM) when performing live Cost Explorer & EC2 telemetry queries.
+                </p>
+              </div>
+
+              {/* Current Status Box */}
+              <div className="p-3.5 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-bold text-[#686450]">Active Account</span>
+                  <span className="text-[12px] font-bold text-[#2E2B1A]">{activeAccount?.name || "None"}</span>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-[#ECE5CC]">
+                  <span className="text-[12px] text-[#686450]">Credentials Status</span>
+                  {activeAccount?.hasEncryptedCredentials ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>AES-256 Keys Configured</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#FAF6E8] text-[#8D8975] border border-[#ECE5CC]">
+                      Server Environment Fallback
+                    </span>
+                  )}
+                </div>
+                {activeAccount?.hasEncryptedCredentials && (
+                  <div className="flex items-center justify-between pt-2 border-t border-[#ECE5CC] text-[12px]">
+                    <span className="text-[#686450]">Masked Access Key</span>
+                    <code className="font-mono font-bold text-[#2E2B1A] bg-[#FAF6E8] px-2 py-0.5 rounded-lg border border-[#ECE5CC]">
+                      {activeAccount.maskedAccessKey || "AKIA••••••••"}
+                    </code>
+                  </div>
+                )}
+              </div>
+
+              {/* Feedback Alerts */}
+              {credsError && (
+                <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-[12px] flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{credsError}</span>
+                </div>
+              )}
+              {credsSuccess && (
+                <div className="p-3 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] text-[12px] flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{credsSuccess}</span>
+                </div>
+              )}
+
+              {/* Form Fields */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
+                    AWS Access Key ID
+                  </label>
+                  <div className="relative">
+                    <Key className="w-4 h-4 text-[#8D8975] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder={activeAccount?.hasEncryptedCredentials ? "Enter new Access Key ID to update" : "AKIAIOSFODNN7EXAMPLE"}
+                      value={credAccessKeyId}
+                      onChange={(e) => setCredAccessKeyId(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-[#ECE5CC] text-[13px] text-[#2E2B1A] placeholder:text-[#8D8975]/60 focus:outline-none focus:border-[#1F8A70] focus:ring-1 focus:ring-[#1F8A70]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
+                    AWS Secret Access Key
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-[#8D8975] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type={showSecretKey ? "text" : "password"}
+                      placeholder={activeAccount?.hasEncryptedCredentials ? "Enter new Secret Key to update" : "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"}
+                      value={credSecretKey}
+                      onChange={(e) => setCredSecretKey(e.target.value)}
+                      className="w-full pl-9 pr-10 py-2 rounded-xl bg-white border border-[#ECE5CC] text-[13px] text-[#2E2B1A] placeholder:text-[#8D8975]/60 focus:outline-none focus:border-[#1F8A70] focus:ring-1 focus:ring-[#1F8A70]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSecretKey(!showSecretKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D8975] hover:text-[#2E2B1A] cursor-pointer"
+                    >
+                      {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-2 flex items-center justify-between gap-3 border-t border-[#ECE5CC]">
+                {activeAccount?.hasEncryptedCredentials ? (
                   <button
                     type="button"
-                    onClick={() => setCurrentTab("audit")}
-                    className="text-[11.5px] font-bold text-[#1F8A70] hover:underline text-left pt-2 border-t border-[#ECE5CC]"
+                    onClick={handlePurgeCredentials}
+                    disabled={purgingCreds || savingCreds}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 bg-white hover:bg-red-50 text-[12px] font-bold text-red-600 transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    View full audit log →
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{purgingCreds ? "Purging..." : "Purge Keys"}</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCredentialsModalOpen(false)}
+                    className="px-4 py-2 rounded-xl border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[12px] font-bold text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveCredentials}
+                    disabled={savingCreds || purgingCreds || !credAccessKeyId.trim() || !credSecretKey.trim()}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {savingCreds ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Encrypting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>Encrypt & Sync</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* TAB 2: COST INTELLIGENCE (DEDICATED SUB-PAGES) */}
-          {currentTab === "cost" && activeAccount && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              {activeNavItem === "cost-explorer" && (
-                <CostExplorerView
-                  data={data}
-                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
-                />
-              )}
-              {activeNavItem === "cost-allocation" && (
-                <CostAllocationView
-                  data={data}
-                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
-                />
-              )}
-              {activeNavItem === "cost-budgets" && (
-                <CostBudgetsView
-                  data={data}
-                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
-                />
-              )}
-              {activeNavItem === "cost-anomalies" && (
-                <CostAnomaliesView
-                  data={data}
-                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
-                />
-              )}
-              {activeNavItem === "cost-forecast" && (
-                <CostForecastView
-                  data={data}
-                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
-                />
-              )}
-              {(activeNavItem === "cost-overview" ||
-                !["cost-explorer", "cost-allocation", "cost-budgets", "cost-anomalies", "cost-forecast"].includes(activeNavItem)) && (
-                  <CostOverviewView
-                    data={data}
-                    onNavigateSubTab={(sub) => setActiveNavItem(sub)}
-                  />
-                )}
-            </div>
-          )}
+        {/* 1-CLICK EXPORT REPORT MODAL */}
+        {exportModalOpen && (
+          <div
+            className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+            onClick={() => setExportModalOpen(false)}
+          >
+            <div
+              className="max-w-md w-full bg-[#FFFDF4] rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-lg space-y-5 animate-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-black text-[18px] text-[#2E2B1A]">
+                    Export Telemetry & ESG Report
+                  </h3>
+                  <p className="text-[12px] text-[#686450] mt-0.5">
+                    Download audit-compliant records for FinOps showback and ESG compliance.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExportModalOpen(false)}
+                  className="p-1 rounded-lg text-[#8D8975] hover:text-[#2E2B1A]"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
-          {/* TAB 3: CARBON INTELLIGENCE (GREENOPS) */}
-          {currentTab === "carbon" && activeAccount && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              {activeNavItem === "sustainability-carbon" && (
-                <CarbonAccountingView
-                  data={data}
-                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
-                />
-              )}
-              {activeNavItem === "sustainability-resources" && (
-                <ResourceCarbonView
-                  data={data}
-                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
-                />
-              )}
-              {activeNavItem === "sustainability-regions" && (
-                <RegionalGridMatrixView
-                  data={data}
-                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
-                />
-              )}
-              {activeNavItem === "sustainability-sci" && (
-                <SciTunerGovernanceView
-                  data={data}
-                  sciFunctionalUnit={sciFunctionalUnit}
-                  setSciFunctionalUnit={setSciFunctionalUnit}
-                  onNavigateSubTab={(sub) => setActiveNavItem(sub)}
-                />
-              )}
-              {activeNavItem === "sustainability-recommendations" && (
-                <RecommendationsView
-                  data={data}
-                  onSelectRecommendation={setSelectedRecommendation}
-                  onApproveRecommendation={handleApproveRecommendation}
-                  onNavigateSubTab={(sub: string) => setActiveNavItem(sub)}
-                />
-              )}
-              {activeNavItem === "sustainability-opportunities" && (
-                <OpportunitiesView
-                  data={data}
-                  onNavigateSubTab={(sub: string) => setActiveNavItem(sub)}
-                  onSelectRecommendation={setSelectedRecommendation}
-                />
-              )}
-              {(activeNavItem === "sustainability-overview" ||
-                !["sustainability-carbon", "sustainability-resources", "sustainability-regions", "sustainability-sci", "sustainability-recommendations", "sustainability-opportunities"].includes(activeNavItem)) && (
-                  <SustainabilityOverviewView
-                    data={data}
-                    sciFunctionalUnit={sciFunctionalUnit}
-                    onNavigateSubTab={(sub) => setActiveNavItem(sub)}
-                  />
-                )}
-            </div>
-          )}
-
-          {/* TAB 4: INFRASTRUCTURE OVERVIEW */}
-          {/* TAB 4: INFRASTRUCTURE OVERVIEW */}
-          {currentTab === "infrastructure" && activeAccount && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-sm space-y-5">
-                {/* Infrastructure Sub-Navigation Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#ECE5CC]">
-                  <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC]">
-                    <button
-                      type="button"
-                      onClick={() => setActiveNavItem("infra-resources")}
-                      className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer ${activeNavItem === "infra-resources" || (activeNavItem !== "infra-accounts" && activeNavItem !== "infra-regions")
-                          ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
-                          : "text-[#686450] hover:text-[#2E2B1A]"
-                        }`}
-                    >
-                      Resources ({filteredResources.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveNavItem("infra-accounts")}
-                      className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeNavItem === "infra-accounts"
-                          ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
-                          : "text-[#686450] hover:text-[#2E2B1A]"
-                        }`}
-                    >
-                      <Cloud className="w-3.5 h-3.5" />
-                      <span>Accounts ({accountsList.length})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveNavItem("infra-regions")}
-                      className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer ${activeNavItem === "infra-regions"
-                          ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
-                          : "text-[#686450] hover:text-[#2E2B1A]"
-                        }`}
-                    >
-                      Regions ({data?.resources.byRegion?.length || 0})
-                    </button>
+              <div className="space-y-3">
+                {/* Option 1: CSV Export */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleExportCsv();
+                    setExportModalOpen(false);
+                  }}
+                  className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-between transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-[#E2F5EF] text-[#1F8A70] flex items-center justify-center shrink-0">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <strong className="block text-[13px] text-[#2E2B1A]">
+                        Cost & Resource Inventory (CSV)
+                      </strong>
+                      <span className="text-[11px] text-[#686450]">
+                        Detailed ledger of all resources, billing items, and savings
+                      </span>
+                    </div>
                   </div>
+                  <Download className="w-4 h-4 text-[#8D8975] group-hover:text-[#1F8A70]" />
+                </button>
 
-                  {/* Actions according to subview */}
-                  <div className="flex items-center gap-2">
-                    {activeNavItem === "infra-accounts" ? (
+                {/* Option 2: JSON Export */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleExportJson();
+                    setExportModalOpen(false);
+                  }}
+                  className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-between transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] text-[#9A6B00] flex items-center justify-center shrink-0">
+                      <Code className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <strong className="block text-[13px] text-[#2E2B1A]">
+                        Full System Telemetry JSON
+                      </strong>
+                      <span className="text-[11px] text-[#686450]">
+                        Raw API data payload for automation pipelines
+                      </span>
+                    </div>
+                  </div>
+                  <Download className="w-4 h-4 text-[#8D8975] group-hover:text-[#9A6B00]" />
+                </button>
+
+                {/* Option 3: Print Executive Summary */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExportModalOpen(false);
+                    setPreviewModalOpen(true);
+                  }}
+                  className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-between transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-[#FFF76A] text-[#2E2B1A] flex items-center justify-center shrink-0 border border-[#DFD6B5]">
+                      <Printer className="w-4 h-4" />
+                    </div>
+                    <div>
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={handleCleanDuplicates}
-                          disabled={cleaningDuplicates}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8] text-[11.5px] font-bold text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer disabled:opacity-50"
-                        >
-                          <RefreshCw className={`w-3 h-3 ${cleaningDuplicates ? "animate-spin" : ""}`} />
-                          <span>Purge Duplicate Stubs</span>
-                        </button>
-                        <Link
-                          href="/onboarding"
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] shadow-2xs transition-colors"
-                        >
-                          <PlusCircle className="w-3.5 h-3.5" />
-                          <span>Connect Account</span>
-                        </Link>
+                        <strong className="block text-[13px] text-[#2E2B1A]">
+                          Print Executive & ESG Brief
+                        </strong>
+                        <span className="text-[10px] font-bold text-[#1F8A70] bg-[#E2F5EF] px-1.5 py-0.5 rounded-full">
+                          1-2 Pages
+                        </span>
                       </div>
-                    ) : (
-                      <select
-                        value={infraRegionFilter}
-                        onChange={(e) => setInfraRegionFilter(e.target.value)}
-                        className="px-3 py-1.5 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8] text-[12px] font-bold text-[#2E2B1A]"
-                      >
-                        <option value="all">
-                          All Regions ({data?.resources.byRegion?.length || 0})
-                        </option>
-                        {data?.resources.byRegion?.map((r) => (
-                          <option key={r.region} value={r.region}>
-                            {r.region} — {r.regionName} ({r.resourcesCount})
-                          </option>
-                        ))}
-                      </select>
-                    )}
+                      <span className="text-[11px] text-[#686450]">
+                        Print-ready PDF overview for stakeholders
+                      </span>
+                    </div>
+                  </div>
+                  <Printer className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
+                </button>
+              </div>
+
+              <div className="pt-2 text-right">
+                <button
+                  type="button"
+                  onClick={() => setExportModalOpen(false)}
+                  className="px-4 py-1.5 rounded-full border border-[#ECE5CC] text-[12px] font-bold text-[#686450] hover:bg-[#FAF6E8]"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* EXECUTIVE REPORT PREVIEW MODAL */}
+        {mounted && (
+          <ReportPreviewModal
+            isOpen={previewModalOpen}
+            onClose={() => setPreviewModalOpen(false)}
+            summary={executiveBriefSummary}
+            onDownloadCsv={handleExportCsv}
+            onDownloadJson={handleExportJson}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* SETTINGS & CLOUD GOVERNANCE MODAL                                         */}
+        {/* ========================================================================= */}
+        {settingsModalOpen && (
+          <div
+            className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+            onClick={() => setSettingsModalOpen(false)}
+          >
+            <div
+              className="max-w-2xl w-full bg-[#FFFDF4] rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-lg space-y-5 animate-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-start justify-between pb-3 border-b border-[#ECE5CC]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A]">
+                    <Settings className="w-5 h-5 text-[#8D8975]" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-[18px] text-[#2E2B1A] leading-tight">
+                      Settings & Cloud Governance
+                    </h3>
+                    <p className="text-[12px] text-[#686450]">
+                      Manage connected AWS accounts, auto-sync schedules, and FinOps guardrails.
+                    </p>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setSettingsModalOpen(false)}
+                  className="p-1 rounded-lg text-[#8D8975] hover:text-[#2E2B1A] transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
-                {/* SUB-VIEW 1: ACCOUNTS LIST */}
-                {activeNavItem === "infra-accounts" && (
-                  <div className="space-y-4 animate-in fade-in duration-150">
-                    <div>
-                      <h3 className="text-[16px] font-bold text-[#2E2B1A]">Connected Cloud Accounts</h3>
-                      <p className="text-[12.5px] text-[#686450]">
-                        Manage authenticated AWS cross-account IAM roles linked to GreenCloud AI.
-                      </p>
+              {/* Toast Notification Banner */}
+              {settingsToast && (
+                <div className="p-3 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] text-[12.5px] font-medium flex items-center justify-between animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{settingsToast}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsToast(null)}
+                    className="text-[#1F8A70] hover:text-[#135A49] cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Settings Tabs */}
+              <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC]">
+                <button
+                  type="button"
+                  onClick={() => setSettingsTab("accounts")}
+                  className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${settingsTab === "accounts"
+                    ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                    : "text-[#686450] hover:text-[#2E2B1A]"
+                    }`}
+                >
+                  <Cloud className="w-4 h-4" />
+                  <span>Cloud Accounts</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10.5px] bg-[#FAF6E8] border border-[#ECE5CC] font-mono">
+                    {accountsList.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSettingsTab("sync")}
+                  className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${settingsTab === "sync"
+                    ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                    : "text-[#686450] hover:text-[#2E2B1A]"
+                    }`}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Sync & Discovery</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSettingsTab("guardrails")}
+                  className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${settingsTab === "guardrails"
+                    ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
+                    : "text-[#686450] hover:text-[#2E2B1A]"
+                    }`}
+                >
+                  <Shield className="w-4 h-4" />
+                  <span>FinOps Guardrails</span>
+                </button>
+              </div>
+
+              {/* Modal Body / Scrollable Content */}
+              <div className="overflow-y-auto space-y-4 pr-1 flex-1">
+                {/* TAB 1: CLOUD ACCOUNTS */}
+                {settingsTab === "accounts" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                          Connected AWS Accounts ({accountsList.length})
+                        </h4>
+                        <p className="text-[11.5px] text-[#686450]">
+                          Active and configured AWS cross-account IAM integrations.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCleanDuplicates}
+                        disabled={cleaningDuplicates}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[11.5px] font-bold text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${cleaningDuplicates ? "animate-spin" : ""}`} />
+                        <span>{cleaningDuplicates ? "Cleaning..." : "Purge Duplicate Stubs"}</span>
+                      </button>
                     </div>
 
-                    <div className="space-y-3">
+                    {/* Accounts Cards List */}
+                    <div className="space-y-2.5">
                       {accountsList.map((acc) => {
                         const isActive = acc.id === activeAccount?.id;
                         const isDeleting = deletingAccountId === acc.id;
@@ -2483,45 +3530,70 @@ Apply the proposed Terraform configuration change or safely update the resource 
                         return (
                           <div
                             key={acc.id}
-                            className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isActive
-                                ? "bg-white border-[#1F8A70]/50 ring-1 ring-[#1F8A70]/20 shadow-warm-xs"
-                                : "bg-[#FAF6E8]/30 border-[#ECE5CC] hover:bg-white"
+                            className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${isActive
+                              ? "bg-white border-[#1F8A70]/40 shadow-warm-xs ring-1 ring-[#1F8A70]/15"
+                              : "bg-white/80 border-[#ECE5CC] hover:bg-white"
                               }`}
                           >
-                            <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="flex items-center gap-3 min-w-0">
                               <div className="w-10 h-10 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A] shrink-0">
                                 <Cloud className="w-5 h-5 text-[#9A6B00]" />
                               </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <strong className="text-[14px] text-[#2E2B1A] truncate">{acc.name}</strong>
-                                  {isActive ? (
-                                    <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD] flex items-center gap-1">
+                                  <strong className="text-[13.5px] text-[#2E2B1A] truncate">
+                                    {acc.name}
+                                  </strong>
+                                  {isActive && (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD] flex items-center gap-1">
                                       <Check className="w-3 h-3" />
-                                      <span>Active Account</span>
-                                    </span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 rounded-full text-[10.5px] font-mono text-[#8D8975] bg-[#FAF6E8] border border-[#ECE5CC]">
-                                      Connected
+                                      <span>Active</span>
                                     </span>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-3 text-[12px] text-[#686450] mt-0.5 font-mono">
-                                  <span>AWS Account: {acc.externalAccountId}</span>
+                                <div className="flex items-center gap-3 text-[11.5px] text-[#686450] mt-0.5 font-mono">
+                                  <span>Account ID: {acc.externalAccountId}</span>
                                   <span>•</span>
-                                  <span>Status: {acc.status || "active"}</span>
+                                  <span className="uppercase">{acc.provider}</span>
+                                  {acc.hasEncryptedCredentials && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-[#1F8A70] font-sans font-bold flex items-center gap-1">
+                                        <Lock className="w-2.5 h-2.5" />
+                                        <span>AES-256 Keys</span>
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!isActive) loadDashboard(acc.id);
+                                  setCredAccessKeyId("");
+                                  setCredSecretKey("");
+                                  setCredsError(null);
+                                  setCredentialsModalOpen(true);
+                                }}
+                                className="p-2 rounded-xl border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer"
+                                title="Configure AES-256 encrypted credentials"
+                              >
+                                <Key className="w-4 h-4 text-[#8D8975]" />
+                              </button>
+
                               {!isActive && (
                                 <button
                                   type="button"
-                                  onClick={() => loadDashboard(acc.id)}
-                                  className="px-3.5 py-1.5 rounded-full bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] text-[12px] font-bold text-[#2E2B1A] transition-colors cursor-pointer"
+                                  onClick={() => {
+                                    loadDashboard(acc.id);
+                                    setSettingsToast(`Switched active context to ${acc.name}`);
+                                  }}
+                                  className="px-3 py-1.5 rounded-full bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px] font-bold text-[#2E2B1A] transition-colors cursor-pointer"
                                 >
-                                  Switch to Account
+                                  Switch Account
                                 </button>
                               )}
 
@@ -2529,7 +3601,7 @@ Apply the proposed Terraform configuration change or safely update the resource 
                                 type="button"
                                 onClick={() => handleDeleteAccount(acc.id)}
                                 disabled={isDeleting}
-                                title="Disconnect account"
+                                title="Disconnect cloud account"
                                 className="p-2 rounded-xl text-[#8D8975] hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors cursor-pointer disabled:opacity-50"
                               >
                                 {isDeleting ? (
@@ -2543,1197 +3615,219 @@ Apply the proposed Terraform configuration change or safely update the resource 
                         );
                       })}
                     </div>
-                  </div>
-                )}
 
-                {/* SUB-VIEW 2: REGIONAL BREAKDOWN */}
-                {activeNavItem === "infra-regions" && (
-                  <div className="space-y-4 animate-in fade-in duration-150">
-                    <div>
-                      <h3 className="text-[16px] font-bold text-[#2E2B1A]">AWS Regional Breakdown</h3>
-                      <p className="text-[12.5px] text-[#686450]">
-                        Geographic spread, clean grid intensity, and monthly compute spend.
-                      </p>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-[12.5px]">
-                        <thead>
-                          <tr className="border-b border-[#ECE5CC] font-mono text-[11px] text-[#8D8975] uppercase">
-                            <th className="py-2">AWS Region</th>
-                            <th className="py-2">Location</th>
-                            <th className="py-2">Running EC2</th>
-                            <th className="py-2">Stopped EC2</th>
-                            <th className="py-2">Grid Carbon Intensity</th>
-                            <th className="py-2">Monthly Spend</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#ECE5CC]/50">
-                          {data?.resources.byRegion && data.resources.byRegion.length > 0 ? (
-                            data.resources.byRegion.map((r) => (
-                              <tr key={r.region} className="hover:bg-[#FAF6E8]/40">
-                                <td className="py-2.5">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[16px]">{r.flag || "🌐"}</span>
-                                    <span className="font-mono font-bold text-[#2E2B1A]">{r.region}</span>
-                                  </div>
-                                </td>
-                                <td className="py-2.5 text-[#686450]">{r.regionName}</td>
-                                <td className="py-2.5">
-                                  <span className="font-mono font-bold text-[#1F8A70]">{r.runningEc2}</span>
-                                </td>
-                                <td className="py-2.5">
-                                  <span className="font-mono text-[#8D8975]">{r.stoppedEc2}</span>
-                                </td>
-                                <td className="py-2.5">
-                                  <span className="font-mono font-bold text-[#2E2B1A]">
-                                    {r.gridIntensity} gCO2e/kWh
-                                  </span>
-                                  <span className="text-[11px] text-[#8D8975] block">{r.mix}</span>
-                                </td>
-                                <td className="py-2.5 font-mono font-bold text-[#2E2B1A]">
-                                  ${r.monthlyCost.toFixed(2)}/mo
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan={6} className="py-6 text-center text-[#8D8975]">
-                                No regional telemetry data available.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
+                    {/* Connect New Account Action */}
+                    <div className="pt-2">
+                      <Link
+                        href="/onboarding"
+                        onClick={() => setSettingsModalOpen(false)}
+                        className="w-full py-3 rounded-2xl border border-dashed border-[#ECE5CC] hover:border-[#1F8A70] hover:bg-[#FAF6E8] text-[12.5px] font-bold text-[#2E2B1A] flex items-center justify-center gap-2 transition-all cursor-pointer group"
+                      >
+                        <PlusCircle className="w-4 h-4 text-[#8D8975] group-hover:text-[#1F8A70]" />
+                        <span>Connect Another Cloud Account</span>
+                      </Link>
                     </div>
                   </div>
                 )}
 
-                {/* SUB-VIEW 3: RESOURCES INVENTORY (DEFAULT) */}
-                {activeNavItem !== "infra-accounts" && activeNavItem !== "infra-regions" && (
-                  <div className="space-y-4 animate-in fade-in duration-150">
-                    <div>
-                      <h2 className="text-[16px] font-bold text-[#2E2B1A]">Cloud Resources Inventory</h2>
-                      <p className="text-[12.5px] text-[#686450]">
-                        Monitored virtual machines, block volumes, and network assets in {activeAccount.name}.
-                      </p>
-                    </div>
+                {/* TAB 2: SYNC & SCANNING */}
+                {settingsTab === "sync" && (
+                  <div className="space-y-4">
+                    {/* Auto-Sync Frequency */}
+                    <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
+                      <div>
+                        <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                          Telemetry Ingestion Cadence
+                        </h4>
+                        <p className="text-[11.5px] text-[#686450]">
+                          How frequently GreenCloud AI queries AWS CloudWatch, Cost Explorer, and EC2 APIs.
+                        </p>
+                      </div>
 
-                    {/* Resource Inventory Table */}
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-[12.5px]">
-                        <thead>
-                          <tr className="border-b border-[#ECE5CC] font-mono text-[11px] text-[#8D8975] uppercase">
-                            <th className="py-2">Resource Name & ID</th>
-                            <th className="py-2">Type & Specs</th>
-                            <th className="py-2">AWS Region</th>
-                            <th className="py-2">Resource State</th>
-                            <th className="py-2">Estimated Cost</th>
-                            <th className="py-2">Carbon Footprint</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#ECE5CC]/50">
-                          {filteredResources.length ? (
-                            filteredResources.map((res) => (
-                              <tr key={res.id} className="hover:bg-[#FAF6E8]/40">
-                                <td className="py-2.5">
-                                  <span className="font-bold text-[#2E2B1A] block">
-                                    {res.instanceName || res.providerResourceId}
-                                  </span>
-                                  {res.instanceName && res.instanceName !== res.providerResourceId && (
-                                    <span className="font-mono text-[10.5px] text-[#8D8975] block">
-                                      {res.providerResourceId}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="py-2.5 text-[#686450]">
-                                  <span className="font-mono font-bold text-[#2E2B1A] uppercase">
-                                    {res.resourceType}
-                                  </span>{" "}
-                                  {res.instanceType ? (
-                                    <span className="px-1.5 py-0.5 rounded bg-[#FAF6E8] text-[#2E2B1A] font-mono text-[11px] border border-[#ECE5CC]">
-                                      {res.instanceType}
-                                    </span>
-                                  ) : ""}
-                                  {res.sizeGb ? (
-                                    <span className="text-[#8D8975] ml-1">
-                                      {res.sizeGb} GB
-                                    </span>
-                                  ) : ""}
-                                </td>
-                                <td className="py-2.5">
-                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px] font-bold text-[#2E2B1A]">
-                                    <span>{res.regionFlag || "🌐"}</span>
-                                    <span className="font-mono">{res.region}</span>
-                                  </span>
-                                  {res.regionName && (
-                                    <span className="text-[10.5px] text-[#8D8975] block mt-0.5">
-                                      {res.regionName}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="py-2.5">
-                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase ${res.lifecycleState === "running" || res.lifecycleState === "in-use"
-                                      ? "bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]"
-                                      : "bg-[#FFF3D6] text-[#9A6B00] border border-[#ECE5CC]"
-                                    }`}>
-                                    {res.lifecycleState === "running" && (
-                                      <span className="w-1.5 h-1.5 rounded-full bg-[#1F8A70] animate-pulse"></span>
-                                    )}
-                                    <span>{res.lifecycleState}</span>
-                                  </span>
-                                </td>
-                                <td className="py-2.5 font-mono font-bold text-[#2E2B1A]">
-                                  {res.monthlyCost !== null ? `$${res.monthlyCost.toFixed(2)}/mo` : "--"}
-                                </td>
-                                <td className="py-2.5 font-mono text-[11.5px] text-[#686450]">
-                                  {res.carbonEmissions?.[0]
-                                    ? `${res.carbonEmissions[0].operationalGco2e.toFixed(1)} gCO2e/day`
-                                    : "--"}
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan={6} className="py-6 text-center text-[#8D8975]">
-                                No resources found. Click "Sync Telemetry" to discover assets via AWS APIs.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: RECOMMENDATIONS SUMMARY */}
-          {currentTab === "recommendations" && activeAccount && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              {activeNavItem === "opt-opportunities" ? (
-                <OpportunitiesView
-                  data={data}
-                  onNavigateSubTab={(sub: string) => setActiveNavItem(sub)}
-                  onSelectRecommendation={setSelectedRecommendation}
-                />
-              ) : (
-                <RecommendationsView
-                  data={data}
-                  onSelectRecommendation={setSelectedRecommendation}
-                  onApproveRecommendation={handleApproveRecommendation}
-                  onNavigateSubTab={(sub: string) => setActiveNavItem(sub)}
-                />
-              )}
-            </div>
-          )}
-
-          {/* TAB 6: AUDIT HISTORY */}
-          {currentTab === "audit" && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-sm space-y-4">
-                <div className="pb-3 border-b border-[#ECE5CC]">
-                  <h2 className="text-[18px] font-bold text-[#2E2B1A]">Immutable Audit History</h2>
-                  <p className="text-[13px] text-[#686450]">
-                    Complete chronological ledger of all account connections, sync triggers, and optimization approvals.
-                  </p>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-[12px]">
-                    <thead>
-                      <tr className="border-b border-[#ECE5CC] font-mono text-[10.5px] text-[#8D8975] uppercase">
-                        <th className="py-2">Timestamp</th>
-                        <th className="py-2">Actor</th>
-                        <th className="py-2">Action</th>
-                        <th className="py-2">Target Type</th>
-                        <th className="py-2">Metadata Details</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#ECE5CC]/50">
-                      {data?.auditLogs.length ? (
-                        data.auditLogs.map((log) => (
-                          <tr key={log.id} className="hover:bg-[#FAF6E8]/40">
-                            <td className="py-2.5 font-mono text-[11px] text-[#8D8975]">
-                              {new Date(log.ts).toLocaleString()}
-                            </td>
-                            <td className="py-2.5 font-bold text-[#2E2B1A]">{log.actor}</td>
-                            <td className="py-2.5">
-                              <span className="px-2 py-0.5 rounded text-[10.5px] font-mono font-bold bg-[#FAF6E8] text-[#9A6B00] border border-[#ECE5CC]">
-                                {log.action}
-                              </span>
-                            </td>
-                            <td className="py-2.5 text-[#686450]">{log.objectType}</td>
-                            <td className="py-2.5 font-mono text-[11px] text-[#686450] max-w-xs truncate">
-                              {log.metadata || "--"}
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={5} className="py-4 text-center text-[#8D8975]">
-                            No audit log records found yet.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-        </main>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* ROOT-LEVEL MODALS (Full viewport overlay with z-[100])                    */}
-      {/* ========================================================================= */}
-
-      {/* CENTERED RECOMMENDATION INSPECTION MODAL */}
-      {selectedRecommendation && (
-        <div
-          className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-150"
-          onClick={() => setSelectedRecommendation(null)}
-        >
-          <div
-            className="w-full max-w-2xl bg-[#FFFDF4] rounded-3xl shadow-2xl flex flex-col max-h-[90vh] border border-[#ECE5CC] overflow-hidden animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="p-5 sm:p-6 border-b border-[#ECE5CC] bg-white flex items-start justify-between gap-4 shrink-0">
-              <div className="space-y-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded text-[10.5px] font-mono font-bold uppercase bg-[#FAF6E8] text-[#9A6B00] border border-[#ECE5CC]">
-                    {selectedRecommendation.category}
-                  </span>
-                  <span className="text-[11px] font-mono text-[#8D8975]">
-                    Risk: {(selectedRecommendation.riskScore * 100).toFixed(0)}%
-                  </span>
-                  <span className="text-[11px] font-mono text-[#1F8A70] font-bold">
-                    Confidence: {(selectedRecommendation.confidence * 100).toFixed(0)}%
-                  </span>
-                </div>
-                <h3 className="font-bold text-[17px] text-[#2E2B1A] leading-snug">
-                  {selectedRecommendation.title}
-                </h3>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setSelectedRecommendation(null)}
-                className="p-1.5 rounded-xl border border-[#ECE5CC] hover:bg-[#FAF6E8] text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer shrink-0"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Body Scrollable */}
-            <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1">
-              {/* ROI & Sustainability Summary */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3.5 rounded-2xl bg-[#E2F5EF]/60 border border-[#BDEBDD]">
-                  <span className="text-[10.5px] font-mono uppercase font-bold text-[#1F8A70] block mb-0.5">
-                    Financial ROI
-                  </span>
-                  <span className="text-[22px] font-black text-[#1F8A70]">
-                    +${selectedRecommendation.estimatedMonthlySavings.toFixed(2)}/mo
-                  </span>
-                  <span className="text-[11px] text-[#1F8A70] block">
-                    Annual: +${(selectedRecommendation.estimatedMonthlySavings * 12).toFixed(2)}/yr
-                  </span>
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC]">
-                  <span className="text-[10.5px] font-mono uppercase font-bold text-[#9A6B00] block mb-0.5">
-                    Carbon Impact
-                  </span>
-                  <span className="text-[22px] font-black text-[#2E2B1A]">
-                    -{selectedRecommendation.estimatedGco2eSavings > 1000
-                      ? `${(selectedRecommendation.estimatedGco2eSavings / 1000).toFixed(2)} kgCO2e`
-                      : `${selectedRecommendation.estimatedGco2eSavings.toFixed(1)} gCO2e`}
-                  </span>
-                  <span className="text-[11px] text-[#686450] block">
-                    Estimated carbon reduction
-                  </span>
-                </div>
-              </div>
-
-              {/* Telemetry Evidence Box */}
-              <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
-                <span className="text-[11px] font-mono font-bold text-[#8D8975] uppercase block">
-                  Telemetry Evidence & Root Cause
-                </span>
-                <p className="text-[12.5px] text-[#2E2B1A] leading-relaxed">
-                  {(() => {
-                    try {
-                      const parsed = JSON.parse(selectedRecommendation.evidence);
-                      return parsed.reason || selectedRecommendation.evidence;
-                    } catch {
-                      return selectedRecommendation.evidence;
-                    }
-                  })()}
-                </p>
-                <div className="pt-2 border-t border-[#ECE5CC]/60 flex items-center justify-between text-[11px] text-[#8D8975] font-mono">
-                  <span>Source: CloudWatch Metrics & AWS EC2 API</span>
-                  <span>Verified: Real-Time</span>
-                </div>
-              </div>
-
-              {/* Target Asset Details */}
-              {selectedRecommendation.resource && (
-                <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
-                  <span className="text-[11px] font-mono font-bold text-[#8D8975] uppercase block">
-                    Target Asset Details
-                  </span>
-                  <div className="grid grid-cols-2 gap-2 text-[12px] font-mono">
-                    <div>
-                      <span className="text-[#8D8975] block text-[10.5px]">Resource ID:</span>
-                      <strong className="text-[#2E2B1A]">{selectedRecommendation.resource.providerResourceId}</strong>
-                    </div>
-                    <div>
-                      <span className="text-[#8D8975] block text-[10.5px]">Region:</span>
-                      <strong className="text-[#2E2B1A]">{selectedRecommendation.resource.region}</strong>
-                    </div>
-                    <div>
-                      <span className="text-[#8D8975] block text-[10.5px]">Type:</span>
-                      <strong className="text-[#2E2B1A]">{selectedRecommendation.resource.resourceType.toUpperCase()}</strong>
-                    </div>
-                    <div>
-                      <span className="text-[#8D8975] block text-[10.5px]">Current State:</span>
-                      <strong className="text-[#1F8A70]">{selectedRecommendation.resource.lifecycleState}</strong>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Generated Terraform IaC Snippet */}
-              <div className="p-4 rounded-2xl bg-[#2E2B1A] text-white space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Code className="w-4 h-4 text-[#FFF76A]" />
-                    <span className="font-mono text-[12px] font-bold text-[#FFF76A]">
-                      Terraform IaC Remediation Code
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const code = generateTerraformSnippet(selectedRecommendation);
-                      navigator.clipboard.writeText(code);
-                      setCopiedIaC(true);
-                      setTimeout(() => setCopiedIaC(false), 2000);
-                    }}
-                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-mono text-white flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    {copiedIaC ? <Check className="w-3.5 h-3.5 text-[#1F8A70]" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedIaC ? "Copied!" : "Copy Snippet"}</span>
-                  </button>
-                </div>
-
-                <pre className="font-mono text-[11px] text-[#FAF6E8] bg-black/30 p-3 rounded-xl overflow-x-auto leading-relaxed border border-white/10">
-                  {generateTerraformSnippet(selectedRecommendation)}
-                </pre>
-              </div>
-
-              {/* 1-Click Ticket Generator (Jira / GitHub) */}
-              <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-mono font-bold text-[#8D8975] uppercase block">
-                    DevOps Ticket Integration
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const ticket = generateTicketMarkdown(selectedRecommendation);
-                      navigator.clipboard.writeText(ticket);
-                      setCopiedTicket(true);
-                      setTimeout(() => setCopiedTicket(false), 2000);
-                    }}
-                    className="text-[11.5px] font-bold text-[#1F8A70] hover:underline flex items-center gap-1 cursor-pointer"
-                  >
-                    {copiedTicket ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedTicket ? "Ticket Copied to Clipboard!" : "Copy Jira / GitHub Markdown"}</span>
-                  </button>
-                </div>
-                <p className="text-[11.5px] text-[#686450]">
-                  Export formatted issue context to your engineering backlog (GitHub, Jira, or ServiceNow).
-                </p>
-              </div>
-            </div>
-
-            {/* Drawer Footer Actions */}
-            <div className="p-4 sm:p-5 border-t border-[#ECE5CC] bg-white flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => setSelectedRecommendation(null)}
-                className="px-4 py-2 rounded-full border border-[#ECE5CC] text-[12px] font-bold text-[#686450] hover:bg-[#FAF6E8] cursor-pointer"
-              >
-                Close
-              </button>
-
-              <div className="flex items-center gap-2">
-                {selectedRecommendation.status === "active" && !selectedRecommendation.id.startsWith("opp-") ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleApproveRecommendation(selectedRecommendation.id);
-                      setSelectedRecommendation(null);
-                    }}
-                    className="px-5 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12.5px] font-bold text-[#2E2B1A] shadow-xs cursor-pointer"
-                  >
-                    Approve Optimization
-                  </button>
-                ) : (
-                  <span className="px-3 py-1.5 rounded-full bg-[#E2F5EF] text-[11.5px] font-bold text-[#1F8A70]">
-                    Action Active
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* AES-256 ENCRYPTED CREDENTIALS MODAL */}
-      {credentialsModalOpen && (
-        <div
-          className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
-          onClick={() => setCredentialsModalOpen(false)}
-        >
-          <div
-            className="max-w-lg w-full bg-[#FFFDF4] rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-lg space-y-5 animate-in zoom-in-95 duration-150"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] flex items-center justify-center text-[#1F8A70] shrink-0">
-                  <Shield className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-black text-[18px] text-[#2E2B1A]">
-                    Encrypted AWS Credentials
-                  </h3>
-                  <p className="text-[12px] text-[#686450]">
-                    AES-256-GCM authenticated cipher with in-memory decryption
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setCredentialsModalOpen(false)}
-                className="p-1 rounded-lg text-[#8D8975] hover:text-[#2E2B1A] transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Security Guarantee Box */}
-            <div className="p-3.5 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] space-y-1.5">
-              <div className="flex items-center gap-2 text-[12px] font-bold text-[#2E2B1A]">
-                <Lock className="w-3.5 h-3.5 text-[#1F8A70]" />
-                <span>Zero Plaintext Exposure Guarantee</span>
-              </div>
-              <p className="text-[11.5px] text-[#686450] leading-relaxed">
-                Credentials are encrypted at rest using AES-256-GCM with a per-record initialization vector and authentication tag. Secret keys are never returned in API payloads, never committed to Git, and only decrypted in-memory (RAM) when performing live Cost Explorer & EC2 telemetry queries.
-              </p>
-            </div>
-
-            {/* Current Status Box */}
-            <div className="p-3.5 rounded-2xl bg-white border border-[#ECE5CC] space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] font-bold text-[#686450]">Active Account</span>
-                <span className="text-[12px] font-bold text-[#2E2B1A]">{activeAccount?.name || "None"}</span>
-              </div>
-              <div className="flex items-center justify-between pt-2 border-t border-[#ECE5CC]">
-                <span className="text-[12px] text-[#686450]">Credentials Status</span>
-                {activeAccount?.hasEncryptedCredentials ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD]">
-                    <CheckCircle2 className="w-3 h-3" />
-                    <span>AES-256 Keys Configured</span>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#FAF6E8] text-[#8D8975] border border-[#ECE5CC]">
-                    Server Environment Fallback
-                  </span>
-                )}
-              </div>
-              {activeAccount?.hasEncryptedCredentials && (
-                <div className="flex items-center justify-between pt-2 border-t border-[#ECE5CC] text-[12px]">
-                  <span className="text-[#686450]">Masked Access Key</span>
-                  <code className="font-mono font-bold text-[#2E2B1A] bg-[#FAF6E8] px-2 py-0.5 rounded-lg border border-[#ECE5CC]">
-                    {activeAccount.maskedAccessKey || "AKIA••••••••"}
-                  </code>
-                </div>
-              )}
-            </div>
-
-            {/* Feedback Alerts */}
-            {credsError && (
-              <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-[12px] flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>{credsError}</span>
-              </div>
-            )}
-            {credsSuccess && (
-              <div className="p-3 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] text-[12px] flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>{credsSuccess}</span>
-              </div>
-            )}
-
-            {/* Form Fields */}
-            <div className="space-y-3">
-              <div>
-                <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
-                  AWS Access Key ID
-                </label>
-                <div className="relative">
-                  <Key className="w-4 h-4 text-[#8D8975] absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder={activeAccount?.hasEncryptedCredentials ? "Enter new Access Key ID to update" : "AKIAIOSFODNN7EXAMPLE"}
-                    value={credAccessKeyId}
-                    onChange={(e) => setCredAccessKeyId(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-[#ECE5CC] text-[13px] text-[#2E2B1A] placeholder:text-[#8D8975]/60 focus:outline-none focus:border-[#1F8A70] focus:ring-1 focus:ring-[#1F8A70]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
-                  AWS Secret Access Key
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-[#8D8975] absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type={showSecretKey ? "text" : "password"}
-                    placeholder={activeAccount?.hasEncryptedCredentials ? "Enter new Secret Key to update" : "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"}
-                    value={credSecretKey}
-                    onChange={(e) => setCredSecretKey(e.target.value)}
-                    className="w-full pl-9 pr-10 py-2 rounded-xl bg-white border border-[#ECE5CC] text-[13px] text-[#2E2B1A] placeholder:text-[#8D8975]/60 focus:outline-none focus:border-[#1F8A70] focus:ring-1 focus:ring-[#1F8A70]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSecretKey(!showSecretKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D8975] hover:text-[#2E2B1A] cursor-pointer"
-                  >
-                    {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="pt-2 flex items-center justify-between gap-3 border-t border-[#ECE5CC]">
-              {activeAccount?.hasEncryptedCredentials ? (
-                <button
-                  type="button"
-                  onClick={handlePurgeCredentials}
-                  disabled={purgingCreds || savingCreds}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 bg-white hover:bg-red-50 text-[12px] font-bold text-red-600 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>{purgingCreds ? "Purging..." : "Purge Keys"}</span>
-                </button>
-              ) : (
-                <div />
-              )}
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCredentialsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[12px] font-bold text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveCredentials}
-                  disabled={savingCreds || purgingCreds || !credAccessKeyId.trim() || !credSecretKey.trim()}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {savingCreds ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Encrypting...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>Encrypt & Sync</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 1-CLICK EXPORT REPORT MODAL */}
-      {exportModalOpen && (
-        <div
-          className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
-          onClick={() => setExportModalOpen(false)}
-        >
-          <div
-            className="max-w-md w-full bg-[#FFFDF4] rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-lg space-y-5 animate-in zoom-in-95 duration-150"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="font-black text-[18px] text-[#2E2B1A]">
-                  Export Telemetry & ESG Report
-                </h3>
-                <p className="text-[12px] text-[#686450] mt-0.5">
-                  Download audit-compliant records for FinOps showback and ESG compliance.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setExportModalOpen(false)}
-                className="p-1 rounded-lg text-[#8D8975] hover:text-[#2E2B1A]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {/* Option 1: CSV Export */}
-              <button
-                type="button"
-                onClick={() => {
-                  handleExportCsv();
-                  setExportModalOpen(false);
-                }}
-                className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-between transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#E2F5EF] text-[#1F8A70] flex items-center justify-center shrink-0">
-                    <FileText className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <strong className="block text-[13px] text-[#2E2B1A]">
-                      Cost & Resource Inventory (CSV)
-                    </strong>
-                    <span className="text-[11px] text-[#686450]">
-                      Detailed ledger of all resources, billing items, and savings
-                    </span>
-                  </div>
-                </div>
-                <Download className="w-4 h-4 text-[#8D8975] group-hover:text-[#1F8A70]" />
-              </button>
-
-              {/* Option 2: JSON Export */}
-              <button
-                type="button"
-                onClick={() => {
-                  handleExportJson();
-                  setExportModalOpen(false);
-                }}
-                className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-between transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#FAF6E8] text-[#9A6B00] flex items-center justify-center shrink-0">
-                    <Code className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <strong className="block text-[13px] text-[#2E2B1A]">
-                      Full System Telemetry JSON
-                    </strong>
-                    <span className="text-[11px] text-[#686450]">
-                      Raw API data payload for automation pipelines
-                    </span>
-                  </div>
-                </div>
-                <Download className="w-4 h-4 text-[#8D8975] group-hover:text-[#9A6B00]" />
-              </button>
-
-              {/* Option 3: Print Executive Summary */}
-              <button
-                type="button"
-                onClick={() => {
-                  setExportModalOpen(false);
-                  setPreviewModalOpen(true);
-                }}
-                className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-between transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#FFF76A] text-[#2E2B1A] flex items-center justify-center shrink-0 border border-[#DFD6B5]">
-                    <Printer className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <strong className="block text-[13px] text-[#2E2B1A]">
-                        Print Executive & ESG Brief
-                      </strong>
-                      <span className="text-[10px] font-bold text-[#1F8A70] bg-[#E2F5EF] px-1.5 py-0.5 rounded-full">
-                        1-2 Pages
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-[#686450]">
-                      Print-ready PDF overview for stakeholders
-                    </span>
-                  </div>
-                </div>
-                <Printer className="w-4 h-4 text-[#8D8975] group-hover:text-[#2E2B1A]" />
-              </button>
-            </div>
-
-            <div className="pt-2 text-right">
-              <button
-                type="button"
-                onClick={() => setExportModalOpen(false)}
-                className="px-4 py-1.5 rounded-full border border-[#ECE5CC] text-[12px] font-bold text-[#686450] hover:bg-[#FAF6E8]"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* EXECUTIVE REPORT PREVIEW MODAL */}
-      {mounted && (
-        <ReportPreviewModal
-          isOpen={previewModalOpen}
-          onClose={() => setPreviewModalOpen(false)}
-          summary={executiveBriefSummary}
-          onDownloadCsv={handleExportCsv}
-          onDownloadJson={handleExportJson}
-        />
-      )}
-
-      {/* ========================================================================= */}
-      {/* SETTINGS & CLOUD GOVERNANCE MODAL                                         */}
-      {/* ========================================================================= */}
-      {settingsModalOpen && (
-        <div
-          className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
-          onClick={() => setSettingsModalOpen(false)}
-        >
-          <div
-            className="max-w-2xl w-full bg-[#FFFDF4] rounded-3xl border border-[#ECE5CC] p-6 shadow-warm-lg space-y-5 animate-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-start justify-between pb-3 border-b border-[#ECE5CC]">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A]">
-                  <Settings className="w-5 h-5 text-[#8D8975]" />
-                </div>
-                <div>
-                  <h3 className="font-black text-[18px] text-[#2E2B1A] leading-tight">
-                    Settings & Cloud Governance
-                  </h3>
-                  <p className="text-[12px] text-[#686450]">
-                    Manage connected AWS accounts, auto-sync schedules, and FinOps guardrails.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSettingsModalOpen(false)}
-                className="p-1 rounded-lg text-[#8D8975] hover:text-[#2E2B1A] transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Toast Notification Banner */}
-            {settingsToast && (
-              <div className="p-3 rounded-2xl bg-[#E2F5EF] border border-[#BDEBDD] text-[#1F8A70] text-[12.5px] font-medium flex items-center justify-between animate-in fade-in">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>{settingsToast}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSettingsToast(null)}
-                  className="text-[#1F8A70] hover:text-[#135A49] cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* Settings Tabs */}
-            <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC]">
-              <button
-                type="button"
-                onClick={() => setSettingsTab("accounts")}
-                className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${settingsTab === "accounts"
-                    ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
-                    : "text-[#686450] hover:text-[#2E2B1A]"
-                  }`}
-              >
-                <Cloud className="w-4 h-4" />
-                <span>Cloud Accounts</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10.5px] bg-[#FAF6E8] border border-[#ECE5CC] font-mono">
-                  {accountsList.length}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSettingsTab("sync")}
-                className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${settingsTab === "sync"
-                    ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
-                    : "text-[#686450] hover:text-[#2E2B1A]"
-                  }`}
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span>Sync & Discovery</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSettingsTab("guardrails")}
-                className={`flex-1 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${settingsTab === "guardrails"
-                    ? "bg-white text-[#2E2B1A] shadow-2xs border border-[#ECE5CC]"
-                    : "text-[#686450] hover:text-[#2E2B1A]"
-                  }`}
-              >
-                <Shield className="w-4 h-4" />
-                <span>FinOps Guardrails</span>
-              </button>
-            </div>
-
-            {/* Modal Body / Scrollable Content */}
-            <div className="overflow-y-auto space-y-4 pr-1 flex-1">
-              {/* TAB 1: CLOUD ACCOUNTS */}
-              {settingsTab === "accounts" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
-                        Connected AWS Accounts ({accountsList.length})
-                      </h4>
-                      <p className="text-[11.5px] text-[#686450]">
-                        Active and configured AWS cross-account IAM integrations.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleCleanDuplicates}
-                      disabled={cleaningDuplicates}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[11.5px] font-bold text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      <RefreshCw className={`w-3 h-3 ${cleaningDuplicates ? "animate-spin" : ""}`} />
-                      <span>{cleaningDuplicates ? "Cleaning..." : "Purge Duplicate Stubs"}</span>
-                    </button>
-                  </div>
-
-                  {/* Accounts Cards List */}
-                  <div className="space-y-2.5">
-                    {accountsList.map((acc) => {
-                      const isActive = acc.id === activeAccount?.id;
-                      const isDeleting = deletingAccountId === acc.id;
-
-                      return (
-                        <div
-                          key={acc.id}
-                          className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${isActive
-                              ? "bg-white border-[#1F8A70]/40 shadow-warm-xs ring-1 ring-[#1F8A70]/15"
-                              : "bg-white/80 border-[#ECE5CC] hover:bg-white"
-                            }`}
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-2xl bg-[#FAF6E8] border border-[#ECE5CC] flex items-center justify-center text-[#2E2B1A] shrink-0">
-                              <Cloud className="w-5 h-5 text-[#9A6B00]" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <strong className="text-[13.5px] text-[#2E2B1A] truncate">
-                                  {acc.name}
-                                </strong>
-                                {isActive && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E2F5EF] text-[#1F8A70] border border-[#BDEBDD] flex items-center gap-1">
-                                    <Check className="w-3 h-3" />
-                                    <span>Active</span>
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-3 text-[11.5px] text-[#686450] mt-0.5 font-mono">
-                                <span>Account ID: {acc.externalAccountId}</span>
-                                <span>•</span>
-                                <span className="uppercase">{acc.provider}</span>
-                                {acc.hasEncryptedCredentials && (
-                                  <>
-                                    <span>•</span>
-                                    <span className="text-[#1F8A70] font-sans font-bold flex items-center gap-1">
-                                      <Lock className="w-2.5 h-2.5" />
-                                      <span>AES-256 Keys</span>
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (!isActive) loadDashboard(acc.id);
-                                setCredAccessKeyId("");
-                                setCredSecretKey("");
-                                setCredsError(null);
-                                setCredentialsModalOpen(true);
-                              }}
-                              className="p-2 rounded-xl border border-[#ECE5CC] bg-white hover:bg-[#FAF6E8] text-[#686450] hover:text-[#2E2B1A] transition-colors cursor-pointer"
-                              title="Configure AES-256 encrypted credentials"
-                            >
-                              <Key className="w-4 h-4 text-[#8D8975]" />
-                            </button>
-
-                            {!isActive && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  loadDashboard(acc.id);
-                                  setSettingsToast(`Switched active context to ${acc.name}`);
-                                }}
-                                className="px-3 py-1.5 rounded-full bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] text-[11.5px] font-bold text-[#2E2B1A] transition-colors cursor-pointer"
-                              >
-                                Switch Account
-                              </button>
-                            )}
-
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteAccount(acc.id)}
-                              disabled={isDeleting}
-                              title="Disconnect cloud account"
-                              className="p-2 rounded-xl text-[#8D8975] hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors cursor-pointer disabled:opacity-50"
-                            >
-                              {isDeleting ? (
-                                <RefreshCw className="w-4 h-4 animate-spin text-red-600" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Connect New Account Action */}
-                  <div className="pt-2">
-                    <Link
-                      href="/onboarding"
-                      onClick={() => setSettingsModalOpen(false)}
-                      className="w-full py-3 rounded-2xl border border-dashed border-[#ECE5CC] hover:border-[#1F8A70] hover:bg-[#FAF6E8] text-[12.5px] font-bold text-[#2E2B1A] flex items-center justify-center gap-2 transition-all cursor-pointer group"
-                    >
-                      <PlusCircle className="w-4 h-4 text-[#8D8975] group-hover:text-[#1F8A70]" />
-                      <span>Connect Another Cloud Account</span>
-                    </Link>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 2: SYNC & SCANNING */}
-              {settingsTab === "sync" && (
-                <div className="space-y-4">
-                  {/* Auto-Sync Frequency */}
-                  <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
-                    <div>
-                      <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
-                        Telemetry Ingestion Cadence
-                      </h4>
-                      <p className="text-[11.5px] text-[#686450]">
-                        How frequently GreenCloud AI queries AWS CloudWatch, Cost Explorer, and EC2 APIs.
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2.5">
-                      {[
-                        { id: "1h", label: "Hourly", desc: "High sensitivity" },
-                        { id: "6h", label: "Every 6 Hours", desc: "Recommended balance" },
-                        { id: "24h", label: "Daily (24h)", desc: "Standard FinOps" },
-                      ].map((freq) => (
-                        <button
-                          key={freq.id}
-                          type="button"
-                          onClick={() => {
-                            setAutoSyncFrequency(freq.id);
-                            setSettingsToast(`Sync cadence updated to ${freq.label}.`);
-                          }}
-                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${autoSyncFrequency === freq.id
+                      <div className="grid grid-cols-3 gap-2.5">
+                        {[
+                          { id: "1h", label: "Hourly", desc: "High sensitivity" },
+                          { id: "6h", label: "Every 6 Hours", desc: "Recommended balance" },
+                          { id: "24h", label: "Daily (24h)", desc: "Standard FinOps" },
+                        ].map((freq) => (
+                          <button
+                            key={freq.id}
+                            type="button"
+                            onClick={() => {
+                              setAutoSyncFrequency(freq.id);
+                              setSettingsToast(`Sync cadence updated to ${freq.label}.`);
+                            }}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${autoSyncFrequency === freq.id
                               ? "bg-[#FAF6E8] border-[#9A6B00] ring-1 ring-[#9A6B00]/20"
                               : "bg-white border-[#ECE5CC] hover:bg-[#FAF6E8]/40"
-                            }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <strong className="text-[12.5px] text-[#2E2B1A]">{freq.label}</strong>
-                            {autoSyncFrequency === freq.id && (
-                              <div className="w-2 h-2 rounded-full bg-[#9A6B00]" />
-                            )}
-                          </div>
-                          <span className="text-[10.5px] text-[#8D8975] block mt-0.5">
-                            {freq.desc}
-                          </span>
-                        </button>
-                      ))}
+                              }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <strong className="text-[12.5px] text-[#2E2B1A]">{freq.label}</strong>
+                              {autoSyncFrequency === freq.id && (
+                                <div className="w-2 h-2 rounded-full bg-[#9A6B00]" />
+                              )}
+                            </div>
+                            <span className="text-[10.5px] text-[#8D8975] block mt-0.5">
+                              {freq.desc}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Multi-Region Scanning Toggle */}
-                  <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] flex items-center justify-between gap-4">
-                    <div className="space-y-0.5">
-                      <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
-                        Multi-Region Orphan Scanner
-                      </h4>
-                      <p className="text-[11.5px] text-[#686450] max-w-md">
-                        Actively scan all 17 AWS regions (us-east-1, eu-central-1, ap-south-1, etc.) to discover forgotten EC2 instances and unassociated Elastic IPs.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMultiRegionScanEnabled(!multiRegionScanEnabled);
-                        setSettingsToast(
-                          !multiRegionScanEnabled
-                            ? "Multi-Region scanning enabled (17 regions active)."
-                            : "Multi-Region scanning restricted to primary region."
-                        );
-                      }}
-                      className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer ${multiRegionScanEnabled ? "bg-[#1F8A70]" : "bg-[#ECE5CC]"
-                        }`}
-                    >
-                      <div
-                        className={`w-5 h-5 rounded-full bg-white transition-transform transform shadow-xs ${multiRegionScanEnabled ? "translate-x-6" : "translate-x-0.5"
+                    {/* Multi-Region Scanning Toggle */}
+                    <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] flex items-center justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                          Multi-Region Orphan Scanner
+                        </h4>
+                        <p className="text-[11.5px] text-[#686450] max-w-md">
+                          Actively scan all 17 AWS regions (us-east-1, eu-central-1, ap-south-1, etc.) to discover forgotten EC2 instances and unassociated Elastic IPs.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMultiRegionScanEnabled(!multiRegionScanEnabled);
+                          setSettingsToast(
+                            !multiRegionScanEnabled
+                              ? "Multi-Region scanning enabled (17 regions active)."
+                              : "Multi-Region scanning restricted to primary region."
+                          );
+                        }}
+                        className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer ${multiRegionScanEnabled ? "bg-[#1F8A70]" : "bg-[#ECE5CC]"
                           }`}
-                      />
-                    </button>
-                  </div>
-
-                  {/* Manual Sync Trigger */}
-                  <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] flex items-center justify-between gap-3">
-                    <div>
-                      <strong className="text-[13px] text-[#2E2B1A] block">Force Immediate Cloud Refresh</strong>
-                      <span className="text-[11.5px] text-[#686450]">
-                        Trigger real-time AWS API pull for instances, EBS volumes, and IP allocations.
-                      </span>
+                      >
+                        <div
+                          className={`w-5 h-5 rounded-full bg-white transition-transform transform shadow-xs ${multiRegionScanEnabled ? "translate-x-6" : "translate-x-0.5"
+                            }`}
+                        />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleTriggerSync}
-                      disabled={syncing}
-                      className="px-4 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer shrink-0 disabled:opacity-50"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
-                      <span>{syncing ? "Syncing AWS..." : "Sync AWS Telemetry"}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
 
-              {/* TAB 3: FINOPS GUARDRAILS */}
-              {settingsTab === "guardrails" && (
-                <div className="space-y-4">
-                  {/* Budget Limit */}
-                  <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
-                    <div className="flex items-center justify-between">
+                    {/* Manual Sync Trigger */}
+                    <div className="p-4 rounded-2xl bg-[#FAF6E8]/40 border border-[#ECE5CC] flex items-center justify-between gap-3">
                       <div>
-                        <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
-                          Monthly Spend Budget Target
-                        </h4>
-                        <p className="text-[11.5px] text-[#686450]">
-                          Alert FinOps team when projected burn-rate pace exceeds this monthly figure.
-                        </p>
+                        <strong className="text-[13px] text-[#2E2B1A] block">Force Immediate Cloud Refresh</strong>
+                        <span className="text-[11.5px] text-[#686450]">
+                          Trigger real-time AWS API pull for instances, EBS volumes, and IP allocations.
+                        </span>
                       </div>
-                      <span className="font-mono font-bold text-[14px] text-[#1F8A70]">
-                        ${budgetLimit}/mo
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range"
-                        min="50"
-                        max="5000"
-                        step="50"
-                        value={budgetLimit}
-                        onChange={(e) => setBudgetLimit(Number(e.target.value))}
-                        className="w-full accent-[#1F8A70] cursor-pointer"
-                      />
+                      <button
+                        type="button"
+                        onClick={handleTriggerSync}
+                        disabled={syncing}
+                        className="px-4 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12px] font-bold text-[#2E2B1A] transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer shrink-0 disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+                        <span>{syncing ? "Syncing AWS..." : "Sync AWS Telemetry"}</span>
+                      </button>
                     </div>
                   </div>
+                )}
 
-                  {/* Idle CPU Threshold */}
-                  <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
-                          Idle Compute CPU Utilization Threshold
-                        </h4>
-                        <p className="text-[11.5px] text-[#686450]">
-                          Instances averaging below this threshold over 14 days will be flagged for automated stop or decommission.
-                        </p>
+                {/* TAB 3: FINOPS GUARDRAILS */}
+                {settingsTab === "guardrails" && (
+                  <div className="space-y-4">
+                    {/* Budget Limit */}
+                    <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                            Monthly Spend Budget Target
+                          </h4>
+                          <p className="text-[11.5px] text-[#686450]">
+                            Alert FinOps team when projected burn-rate pace exceeds this monthly figure.
+                          </p>
+                        </div>
+                        <span className="font-mono font-bold text-[14px] text-[#1F8A70]">
+                          ${budgetLimit}/mo
+                        </span>
                       </div>
-                      <span className="font-mono font-bold text-[14px] text-[#9A6B00]">
-                        {idleCpuThresholdVal}% CPU
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="50"
+                          max="5000"
+                          step="50"
+                          value={budgetLimit}
+                          onChange={(e) => setBudgetLimit(Number(e.target.value))}
+                          className="w-full accent-[#1F8A70] cursor-pointer"
+                        />
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range"
-                        min="1"
-                        max="20"
-                        step="1"
-                        value={idleCpuThresholdVal}
-                        onChange={(e) => setIdleCpuThresholdVal(Number(e.target.value))}
-                        className="w-full accent-[#9A6B00] cursor-pointer"
-                      />
+
+                    {/* Idle CPU Threshold */}
+                    <div className="p-4 rounded-2xl bg-white border border-[#ECE5CC] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-[13.5px] font-bold text-[#2E2B1A]">
+                            Idle Compute CPU Utilization Threshold
+                          </h4>
+                          <p className="text-[11.5px] text-[#686450]">
+                            Instances averaging below this threshold over 14 days will be flagged for automated stop or decommission.
+                          </p>
+                        </div>
+                        <span className="font-mono font-bold text-[14px] text-[#9A6B00]">
+                          {idleCpuThresholdVal}% CPU
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="1"
+                          max="20"
+                          step="1"
+                          value={idleCpuThresholdVal}
+                          onChange={(e) => setIdleCpuThresholdVal(Number(e.target.value))}
+                          className="w-full accent-[#9A6B00] cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Save Button */}
+                    <div className="pt-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSettingsToast("Governance guardrails saved and applied.");
+                          setTimeout(() => setSettingsToast(null), 3500);
+                        }}
+                        className="px-5 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12.5px] font-bold text-[#2E2B1A] shadow-xs cursor-pointer"
+                      >
+                        Save Guardrail Rules
+                      </button>
                     </div>
                   </div>
+                )}
+              </div>
 
-                  {/* Save Button */}
-                  <div className="pt-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSettingsToast("Governance guardrails saved and applied.");
-                        setTimeout(() => setSettingsToast(null), 3500);
-                      }}
-                      className="px-5 py-2 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[12.5px] font-bold text-[#2E2B1A] shadow-xs cursor-pointer"
-                    >
-                      Save Guardrail Rules
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="pt-3 border-t border-[#ECE5CC] flex items-center justify-between">
-              <span className="text-[11px] text-[#8D8975] font-mono">
-                GreenCloud AI v2.4 • Tenant Scoped
-              </span>
-              <button
-                type="button"
-                onClick={() => setSettingsModalOpen(false)}
-                className="px-4 py-1.5 rounded-full border border-[#ECE5CC] text-[12px] font-bold text-[#686450] hover:bg-[#FAF6E8] cursor-pointer"
-              >
-                Done
-              </button>
+              {/* Modal Footer */}
+              <div className="pt-3 border-t border-[#ECE5CC] flex items-center justify-between">
+                <span className="text-[11px] text-[#8D8975] font-mono">
+                  GreenCloud AI v2.4 • Tenant Scoped
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSettingsModalOpen(false)}
+                  className="px-4 py-1.5 rounded-full border border-[#ECE5CC] text-[12px] font-bold text-[#686450] hover:bg-[#FAF6E8] cursor-pointer"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* DEDICATED PRINT DOM CONTAINER (Visible ONLY during window.print()) */}
+      {mounted && (
+        <div className="hidden print:block">
+          <ExecutivePdfReport summary={executiveBriefSummary} />
         </div>
       )}
-    </div>
-
-    {/* DEDICATED PRINT DOM CONTAINER (Visible ONLY during window.print()) */}
-    {mounted && (
-      <div className="hidden print:block">
-        <ExecutivePdfReport summary={executiveBriefSummary} />
-      </div>
-    )}
-  </>
+    </>
   );
 }
-
+

@@ -53,11 +53,12 @@ export default function OnboardingPage() {
   const [selectedRegion, setSelectedRegion] = useState("us-east-1");
   const [providerError, setProviderError] = useState<string | null>(null);
 
-  // Step 4: AWS Connection Form State (clean, un-prefilled)
+  // Step 4: Cloud Connection Form State (AWS & Azure)
   const [accountName, setAccountName] = useState("");
   const [accountId, setAccountId] = useState("");
   const [roleArn, setRoleArn] = useState("");
   const [externalId, setExternalId] = useState("");
+  const [azureTenantId, setAzureTenantId] = useState("");
   const [showEncryptedCreds, setShowEncryptedCreds] = useState(false);
   const [accessKeyId, setAccessKeyId] = useState("");
   const [secretAccessKey, setSecretAccessKey] = useState("");
@@ -157,10 +158,18 @@ export default function OnboardingPage() {
 
   // Quick fill helper for testing
   const handleQuickFill = () => {
-    setAccountName("My AWS Production");
-    setAccountId("123456789012");
-    setRoleArn("arn:aws:iam::123456789012:role/GreenCloudReadOnlyRole");
-    setExternalId("greencloud-demo");
+    if (selectedProvider === "azure") {
+      setAccountName("My Azure Production");
+      setAccountId("00000000-0000-0000-0000-000000000000");
+      setAzureTenantId("11111111-1111-1111-1111-111111111111");
+      setAccessKeyId("22222222-2222-2222-2222-222222222222");
+      setSecretAccessKey("demo-azure-client-secret");
+    } else {
+      setAccountName("My AWS Production");
+      setAccountId("123456789012");
+      setRoleArn("arn:aws:iam::123456789012:role/GreenCloudReadOnlyRole");
+      setExternalId("greencloud-demo");
+    }
     setError(null);
   };
 
@@ -170,37 +179,76 @@ export default function OnboardingPage() {
     setError(null);
 
     if (!accountName.trim()) {
-      setError("Please provide a connection name (e.g. My AWS Production).");
+      setError(
+        selectedProvider === "azure"
+          ? "Please provide a connection name (e.g. My Azure Production)."
+          : "Please provide a connection name (e.g. My AWS Production)."
+      );
       return;
     }
 
-    if (!/^\d{12}$/.test(accountId.trim())) {
-      setError("AWS Account ID must be exactly 12 numeric digits (e.g. 123456789012).");
-      return;
-    }
+    if (selectedProvider === "azure") {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(accountId.trim())) {
+        setError("Azure Subscription ID must be a valid UUID.");
+        return;
+      }
+      if (!uuidRegex.test(azureTenantId.trim())) {
+        setError("Azure Directory (Tenant) ID must be a valid UUID.");
+        return;
+      }
+      if (!uuidRegex.test(accessKeyId.trim())) {
+        setError("Azure Application (Client) ID must be a valid UUID.");
+        return;
+      }
+      if (!secretAccessKey.trim()) {
+        setError("Azure Client Secret is required for Service Principal authentication.");
+        return;
+      }
+    } else {
+      if (!/^\d{12}$/.test(accountId.trim())) {
+        setError("AWS Account ID must be exactly 12 numeric digits (e.g. 123456789012).");
+        return;
+      }
 
-    if (!roleArn.trim().startsWith("arn:aws:iam::")) {
-      setError("Role ARN must follow format: arn:aws:iam::<12-digit-account>:role/<role-name>");
-      return;
+      if (!roleArn.trim().startsWith("arn:aws:iam::")) {
+        setError("Role ARN must follow format: arn:aws:iam::<12-digit-account>:role/<role-name>");
+        return;
+      }
     }
 
     setConnecting(true);
 
     try {
-      setConnectionStage("Authenticating AWS IAM Role via STS AssumeRole...");
+      setConnectionStage(
+        selectedProvider === "azure"
+          ? "Encrypting Azure Service Principal credentials with AES-256-GCM..."
+          : "Authenticating AWS IAM Role via STS AssumeRole..."
+      );
 
       const res = await fetch("/api/cloud-accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider: "aws",
-          externalAccountId: accountId.trim(),
-          name: accountName.trim(),
-          roleArn: roleArn.trim(),
-          externalId: externalId.trim() || undefined,
-          accessKeyId: accessKeyId.trim() || undefined,
-          secretAccessKey: secretAccessKey.trim() || undefined,
-        }),
+        body: JSON.stringify(
+          selectedProvider === "azure"
+            ? {
+                provider: "azure",
+                externalAccountId: accountId.trim(),
+                name: accountName.trim(),
+                externalId: azureTenantId.trim(),
+                accessKeyId: accessKeyId.trim(),
+                secretAccessKey: secretAccessKey.trim(),
+              }
+            : {
+                provider: "aws",
+                externalAccountId: accountId.trim(),
+                name: accountName.trim(),
+                roleArn: roleArn.trim(),
+                externalId: externalId.trim() || undefined,
+                accessKeyId: accessKeyId.trim() || undefined,
+                secretAccessKey: secretAccessKey.trim() || undefined,
+              }
+        ),
       });
 
       const data = await res.json();
@@ -211,7 +259,7 @@ export default function OnboardingPage() {
         router.push("/dashboard");
       }, 700);
     } catch (err: any) {
-      setError(err.message || "Failed to connect cloud account. Please check the IAM Role ARN.");
+      setError(err.message || "Failed to connect cloud account. Please verify your credentials.");
       setConnecting(false);
     }
   };
@@ -579,7 +627,7 @@ export default function OnboardingPage() {
                 Choose your cloud provider
               </h2>
               <p className="text-[13.5px] text-[#686450]">
-                Select the cloud provider to scan. Currently, Amazon Web Services is supported.
+                Select the cloud provider to scan. Both Amazon Web Services and Microsoft Azure are supported.
               </p>
             </div>
 
@@ -626,32 +674,39 @@ export default function OnboardingPage() {
                 </div>
               </button>
 
-              {/* Azure (LOCKED) */}
-              <div
-                onClick={() => setProviderError("Microsoft Azure integration is currently locked. Please select Amazon Web Services to proceed.")}
-                className="p-5 rounded-2xl border border-[#ECE5CC] bg-[#FAF6E8]/50 opacity-60 cursor-not-allowed text-left flex flex-col justify-between transition-all"
+              {/* Azure (Active & Selectable) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedProvider("azure");
+                  setSelectedRegion("eastus");
+                  setProviderError(null);
+                }}
+                className={`p-5 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${selectedProvider === "azure"
+                    ? "bg-white border-[#2E2B1A] shadow-warm-sm ring-2 ring-[#FFF76A]"
+                    : "bg-white border-[#ECE5CC] hover:border-[#DFD6B5]"
+                  }`}
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <div className="w-10 h-10 rounded-xl bg-[#FAF6E8] flex items-center justify-center text-[#8D8975]">
+                    <div className="w-10 h-10 rounded-xl bg-[#E8F1FF] flex items-center justify-center text-[#0078D4]">
                       <Server className="w-5 h-5" />
                     </div>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-[#ECE5CC] text-[10.5px] font-bold text-[#8D8975]">
-                      <Lock className="w-3 h-3" />
-                      Locked
+                    <span className="px-2 py-0.5 rounded bg-[#E2F5EF] border border-[#BDEBDD] text-[11px] font-bold text-[#1F8A70]">
+                      Available
                     </span>
                   </div>
-                  <h3 className="font-bold text-[#686450] text-[16px] mb-1">
+                  <h3 className="font-bold text-[#2E2B1A] text-[16px] mb-1">
                     Microsoft Azure
                   </h3>
-                  <p className="text-[12.5px] text-[#8D8975] leading-relaxed">
-                    Azure Virtual Machines, Disks, and Azure Cost Management adapter.
+                  <p className="text-[12.5px] text-[#686450] leading-relaxed">
+                    Azure Virtual Machines, Managed Disks, Azure Monitor & Cost Management.
                   </p>
                 </div>
-                <div className="mt-4 pt-2.5 border-t border-[#ECE5CC]/60 text-[11px] font-medium text-[#8D8975]">
-                  Coming Soon
+                <div className="mt-4 pt-2.5 border-t border-[#ECE5CC] text-[11.5px] font-bold text-[#1F8A70]">
+                  Ready to Connect
                 </div>
-              </div>
+              </button>
 
               {/* GCP (LOCKED) */}
               <div
@@ -681,30 +736,47 @@ export default function OnboardingPage() {
               </div>
             </div>
 
-            {/* AWS Region Dropdown (Clean, unconstrained) */}
+            {/* Primary Region Dropdown */}
             <div className="bg-white rounded-2xl border border-[#ECE5CC] p-4 sm:p-5 shadow-warm-sm">
               <label className="block text-[13px] font-bold text-[#2E2B1A] mb-1.5">
-                Primary AWS Region
+                {selectedProvider === "azure" ? "Primary Azure Region" : "Primary AWS Region"}
               </label>
               <select
                 value={selectedRegion}
                 onChange={(e) => setSelectedRegion(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8]/40 focus:bg-white focus:outline-none focus:border-[#9A6B00] text-[13.5px] text-[#2E2B1A] font-medium transition-all cursor-pointer"
               >
-                <option value="us-east-1">US East (N. Virginia) [us-east-1] - Default</option>
-                <option value="us-east-2">US East (Ohio) [us-east-2]</option>
-                <option value="us-west-2">US West (Oregon) [us-west-2]</option>
-                <option value="us-west-1">US West (N. California) [us-west-1]</option>
-                <option value="eu-central-1">Europe (Frankfurt) [eu-central-1]</option>
-                <option value="eu-west-1">Europe (Ireland) [eu-west-1]</option>
-                <option value="eu-west-2">Europe (London) [eu-west-2]</option>
-                <option value="ap-northeast-1">Asia Pacific (Tokyo) [ap-northeast-1]</option>
-                <option value="ap-south-1">Asia Pacific (Mumbai) [ap-south-1]</option>
-                <option value="ap-southeast-1">Asia Pacific (Singapore) [ap-southeast-1]</option>
-                <option value="all">All Active Regions (Global Scan)</option>
+                {selectedProvider === "azure" ? (
+                  <>
+                    <option value="eastus">East US [eastus] - Default</option>
+                    <option value="eastus2">East US 2 [eastus2]</option>
+                    <option value="westus2">West US 2 [westus2] - Low Carbon</option>
+                    <option value="centralindia">Central India [centralindia]</option>
+                    <option value="northeurope">North Europe [northeurope]</option>
+                    <option value="westeurope">West Europe [westeurope]</option>
+                    <option value="uksouth">UK South [uksouth]</option>
+                    <option value="swedencentral">Sweden Central [swedencentral] - Ultra Clean</option>
+                    <option value="southeastasia">Southeast Asia [southeastasia]</option>
+                    <option value="all">All Subscription Regions (Global Scan)</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="us-east-1">US East (N. Virginia) [us-east-1] - Default</option>
+                    <option value="us-east-2">US East (Ohio) [us-east-2]</option>
+                    <option value="us-west-2">US West (Oregon) [us-west-2]</option>
+                    <option value="us-west-1">US West (N. California) [us-west-1]</option>
+                    <option value="eu-central-1">Europe (Frankfurt) [eu-central-1]</option>
+                    <option value="eu-west-1">Europe (Ireland) [eu-west-1]</option>
+                    <option value="eu-west-2">Europe (London) [eu-west-2]</option>
+                    <option value="ap-northeast-1">Asia Pacific (Tokyo) [ap-northeast-1]</option>
+                    <option value="ap-south-1">Asia Pacific (Mumbai) [ap-south-1]</option>
+                    <option value="ap-southeast-1">Asia Pacific (Singapore) [ap-southeast-1]</option>
+                    <option value="all">All Active Regions (Global Scan)</option>
+                  </>
+                )}
               </select>
               <p className="mt-2 text-[11.5px] text-[#8D8975]">
-                GreenCloud uses your primary AWS region to calculate regional grid carbon intensity (gCO2e/kWh).
+                GreenCloud uses your primary {selectedProvider === "azure" ? "Azure" : "AWS"} region to calculate regional grid carbon intensity (gCO2e/kWh).
               </p>
             </div>
 
@@ -731,16 +803,18 @@ export default function OnboardingPage() {
         )}
 
         {/* ========================================================================= */}
-        {/* STEP 4: CONNECT AWS ACCOUNT (BALANCED SIDE-BY-SIDE MODERN LAYOUT)         */}
+        {/* STEP 4: CONNECT CLOUD ACCOUNT (AWS OR AZURE)                              */}
         {/* ========================================================================= */}
         {currentStep === 4 && (
           <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-200">
             <div className="text-center">
               <h2 className="text-[24px] sm:text-[28px] font-black text-[#2E2B1A] tracking-tight mb-1">
-                Connect AWS Account
+                {selectedProvider === "azure" ? "Connect Microsoft Azure Subscription" : "Connect AWS Account"}
               </h2>
               <p className="text-[13.5px] text-[#686450]">
-                Enter your AWS IAM Role details to begin syncing resource inventory, billing, and carbon telemetry.
+                {selectedProvider === "azure"
+                  ? "Enter your Azure Service Principal details to sync VMs, Managed Disks, Monitor metrics, and Cost Management."
+                  : "Enter your AWS IAM Role details to begin syncing resource inventory, billing, and carbon telemetry."}
               </p>
             </div>
 
@@ -767,10 +841,10 @@ export default function OnboardingPage() {
                       </div>
                       <div>
                         <span className="font-bold text-[#2E2B1A] text-[13.5px] block leading-tight">
-                          IAM Role Credentials
+                          {selectedProvider === "azure" ? "Service Principal Credentials" : "IAM Role Credentials"}
                         </span>
                         <span className="text-[11px] text-[#8D8975]">
-                          STS AssumeRole Authentication
+                          {selectedProvider === "azure" ? "Azure AD OAuth2 + AES-256-GCM" : "STS AssumeRole Authentication"}
                         </span>
                       </div>
                     </div>
@@ -785,7 +859,7 @@ export default function OnboardingPage() {
                   </div>
 
                   <div className="space-y-3.5">
-                    {/* Compact 2-Column Grid for Name & Account ID */}
+                    {/* Compact 2-Column Grid for Name & Account/Subscription ID */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
@@ -796,105 +870,161 @@ export default function OnboardingPage() {
                           required
                           value={accountName}
                           onChange={(e) => setAccountName(e.target.value)}
-                          placeholder="e.g. My AWS Production"
+                          placeholder={selectedProvider === "azure" ? "e.g. My Azure Production" : "e.g. My AWS Production"}
                           className="w-full px-3 py-2 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8]/30 focus:bg-white focus:outline-none focus:border-[#9A6B00] text-[12.5px] text-[#2E2B1A] placeholder:text-[#8D8975]/60"
                         />
                       </div>
 
                       <div>
                         <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
-                          AWS Account ID (12 digits)
+                          {selectedProvider === "azure" ? "Azure Subscription ID (UUID)" : "AWS Account ID (12 digits)"}
                         </label>
                         <input
                           type="text"
                           required
-                          maxLength={12}
+                          maxLength={selectedProvider === "azure" ? 36 : 12}
                           value={accountId}
-                          onChange={(e) => setAccountId(e.target.value.replace(/\D/g, ""))}
-                          placeholder="123456789012"
+                          onChange={(e) =>
+                            setAccountId(
+                              selectedProvider === "azure"
+                                ? e.target.value.trim()
+                                : e.target.value.replace(/\D/g, "")
+                            )
+                          }
+                          placeholder={selectedProvider === "azure" ? "00000000-0000-0000-0000-000000000000" : "123456789012"}
                           className="w-full px-3 py-2 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8]/30 focus:bg-white focus:outline-none focus:border-[#9A6B00] text-[12.5px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
                         />
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
-                        IAM Role ARN
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={roleArn}
-                        onChange={(e) => setRoleArn(e.target.value)}
-                        placeholder="arn:aws:iam::<account-id>:role/GreenCloudReadOnlyRole"
-                        className="w-full px-3 py-2 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8]/30 focus:bg-white focus:outline-none focus:border-[#9A6B00] text-[12.5px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
-                        External ID (Confused Deputy Prevention)
-                      </label>
-                      <input
-                        type="text"
-                        value={externalId}
-                        onChange={(e) => setExternalId(e.target.value)}
-                        placeholder="e.g. greencloud-demo"
-                        className="w-full px-3 py-2 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8]/30 focus:bg-white focus:outline-none focus:border-[#9A6B00] text-[12.5px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
-                      />
-                    </div>
-
-                    {/* 🔒 Optional AES-256-GCM Encrypted Base Credentials for Live Cloud Sync */}
-                    <div className="pt-2 border-t border-[#ECE5CC]">
-                      <button
-                        type="button"
-                        onClick={() => setShowEncryptedCreds(!showEncryptedCreds)}
-                        className="flex items-center justify-between w-full text-left py-1 text-[12px] font-bold text-[#1F8A70] hover:underline cursor-pointer"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <Lock className="w-3.5 h-3.5" />
-                          <span>Optional: Enable Live Vercel Sync (AES-256 Encrypted)</span>
+                    {selectedProvider === "azure" ? (
+                      <>
+                        <div>
+                          <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
+                            Directory (Tenant) ID
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={azureTenantId}
+                            onChange={(e) => setAzureTenantId(e.target.value.trim())}
+                            placeholder="11111111-1111-1111-1111-111111111111"
+                            className="w-full px-3 py-2 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8]/30 focus:bg-white focus:outline-none focus:border-[#9A6B00] text-[12.5px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
+                          />
                         </div>
-                        <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-[#E2F5EF] border border-[#BDEBDD] font-mono">
-                          {showEncryptedCreds ? "Hide" : "+ Add Keys"}
-                        </span>
-                      </button>
 
-                      {showEncryptedCreds && (
-                        <div className="mt-2.5 p-3.5 rounded-2xl bg-[#FAF6E8]/70 border border-[#ECE5CC] space-y-3 animate-in fade-in duration-150">
-                          <div className="flex items-start gap-2 text-[11px] text-[#686450] leading-snug">
-                            <Shield className="w-3.5 h-3.5 text-[#1F8A70] shrink-0 mt-0.5" />
-                            <span>
-                              Keys are <strong>encrypted at rest with AES-256-GCM</strong>. They are decrypted in-memory only during sync and never logged or exposed.
-                            </span>
-                          </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-[11px] font-bold text-[#2E2B1A] mb-1">
-                              AWS Access Key ID
+                            <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
+                              Application (Client) ID
                             </label>
                             <input
                               type="text"
+                              required
                               value={accessKeyId}
-                              onChange={(e) => setAccessKeyId(e.target.value)}
-                              placeholder="AKIA..."
-                              className="w-full px-3 py-1.5 rounded-xl border border-[#ECE5CC] bg-white text-[12px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
+                              onChange={(e) => setAccessKeyId(e.target.value.trim())}
+                              placeholder="22222222-2222-2222-2222-222222222222"
+                              className="w-full px-3 py-2 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8]/30 focus:bg-white focus:outline-none focus:border-[#9A6B00] text-[12.5px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
                             />
                           </div>
+
                           <div>
-                            <label className="block text-[11px] font-bold text-[#2E2B1A] mb-1">
-                              AWS Secret Access Key
+                            <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
+                              Client Secret (AES-256 Encrypted)
                             </label>
                             <input
                               type="password"
+                              required
                               value={secretAccessKey}
                               onChange={(e) => setSecretAccessKey(e.target.value)}
                               placeholder="••••••••••••••••••••••••••••••••"
-                              className="w-full px-3 py-1.5 rounded-xl border border-[#ECE5CC] bg-white text-[12px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
+                              className="w-full px-3 py-2 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8]/30 focus:bg-white focus:outline-none focus:border-[#9A6B00] text-[12.5px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
                             />
                           </div>
                         </div>
-                      )}
-                    </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
+                            IAM Role ARN
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={roleArn}
+                            onChange={(e) => setRoleArn(e.target.value)}
+                            placeholder="arn:aws:iam::<account-id>:role/GreenCloudReadOnlyRole"
+                            className="w-full px-3 py-2 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8]/30 focus:bg-white focus:outline-none focus:border-[#9A6B00] text-[12.5px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[12px] font-bold text-[#2E2B1A] mb-1">
+                            External ID (Confused Deputy Prevention)
+                          </label>
+                          <input
+                            type="text"
+                            value={externalId}
+                            onChange={(e) => setExternalId(e.target.value)}
+                            placeholder="e.g. greencloud-demo"
+                            className="w-full px-3 py-2 rounded-xl border border-[#ECE5CC] bg-[#FAF6E8]/30 focus:bg-white focus:outline-none focus:border-[#9A6B00] text-[12.5px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
+                          />
+                        </div>
+
+                        {/* 🔒 Optional AES-256-GCM Encrypted Base Credentials for Live Cloud Sync */}
+                        <div className="pt-2 border-t border-[#ECE5CC]">
+                          <button
+                            type="button"
+                            onClick={() => setShowEncryptedCreds(!showEncryptedCreds)}
+                            className="flex items-center justify-between w-full text-left py-1 text-[12px] font-bold text-[#1F8A70] hover:underline cursor-pointer"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <Lock className="w-3.5 h-3.5" />
+                              <span>Optional: Enable Live Vercel Sync (AES-256 Encrypted)</span>
+                            </div>
+                            <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-[#E2F5EF] border border-[#BDEBDD] font-mono">
+                              {showEncryptedCreds ? "Hide" : "+ Add Keys"}
+                            </span>
+                          </button>
+
+                          {showEncryptedCreds && (
+                            <div className="mt-2.5 p-3.5 rounded-2xl bg-[#FAF6E8]/70 border border-[#ECE5CC] space-y-3 animate-in fade-in duration-150">
+                              <div className="flex items-start gap-2 text-[11px] text-[#686450] leading-snug">
+                                <Shield className="w-3.5 h-3.5 text-[#1F8A70] shrink-0 mt-0.5" />
+                                <span>
+                                  Keys are <strong>encrypted at rest with AES-256-GCM</strong>. They are decrypted in-memory only during sync and never logged or exposed.
+                                </span>
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-bold text-[#2E2B1A] mb-1">
+                                  AWS Access Key ID
+                                </label>
+                                <input
+                                  type="text"
+                                  value={accessKeyId}
+                                  onChange={(e) => setAccessKeyId(e.target.value)}
+                                  placeholder="AKIA..."
+                                  className="w-full px-3 py-1.5 rounded-xl border border-[#ECE5CC] bg-white text-[12px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-bold text-[#2E2B1A] mb-1">
+                                  AWS Secret Access Key
+                                </label>
+                                <input
+                                  type="password"
+                                  value={secretAccessKey}
+                                  onChange={(e) => setSecretAccessKey(e.target.value)}
+                                  placeholder="••••••••••••••••••••••••••••••••"
+                                  className="w-full px-3 py-1.5 rounded-xl border border-[#ECE5CC] bg-white text-[12px] text-[#2E2B1A] font-mono placeholder:text-[#8D8975]/60"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
 
                     {/* Progress feedback */}
                     {connecting && (
@@ -923,7 +1053,7 @@ export default function OnboardingPage() {
                     disabled={connecting}
                     className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-full bg-[#FFF76A] hover:bg-[#F5EC50] border border-[#DFD6B5] text-[13px] font-bold text-[#2E2B1A] shadow-sm hover:shadow-sunshine-glow transition-all disabled:opacity-50 cursor-pointer"
                   >
-                    <span>Connect AWS</span>
+                    <span>{selectedProvider === "azure" ? "Connect Azure" : "Connect AWS"}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -941,52 +1071,88 @@ export default function OnboardingPage() {
                         Setup Reference Guide
                       </h3>
                       <span className="text-[11px] text-[#8D8975]">
-                        docs/aws-setup-guide.md
+                        {selectedProvider === "azure" ? "Azure Service Principal Setup" : "docs/aws-setup-guide.md"}
                       </span>
                     </div>
                   </div>
 
-                  <div className="space-y-3.5 text-[12px] text-[#686450]">
-                    <div className="flex items-start gap-2.5">
-                      <span className="w-5 h-5 rounded-full bg-[#FAF6E8] border border-[#ECE5CC] text-[#9A6B00] font-mono text-[10.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                        1
-                      </span>
-                      <div>
-                        <strong className="text-[#2E2B1A] block">12-Digit Account ID</strong>
-                        Find in the top-right user menu in the AWS Management Console.
+                  {selectedProvider === "azure" ? (
+                    <div className="space-y-3.5 text-[12px] text-[#686450]">
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-5 h-5 rounded-full bg-[#FAF6E8] border border-[#ECE5CC] text-[#0078D4] font-mono text-[10.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                          1
+                        </span>
+                        <div>
+                          <strong className="text-[#2E2B1A] block">Subscription & Tenant ID</strong>
+                          Find your Subscription ID under Azure Subscriptions and Tenant ID in Microsoft Entra ID.
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-start gap-2.5">
-                      <span className="w-5 h-5 rounded-full bg-[#FAF6E8] border border-[#ECE5CC] text-[#9A6B00] font-mono text-[10.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                        2
-                      </span>
-                      <div>
-                        <strong className="text-[#2E2B1A] block">Read-Only IAM Role</strong>
-                        Attach policy with least-privilege telemetry permissions (<code className="bg-[#FAF6E8] px-1 py-0.5 rounded text-[10.5px]">ec2:Describe*</code>, <code className="bg-[#FAF6E8] px-1 py-0.5 rounded text-[10.5px]">cloudwatch:Get*</code>, <code className="bg-[#FAF6E8] px-1 py-0.5 rounded text-[10.5px]">ce:Get*</code>).
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-5 h-5 rounded-full bg-[#FAF6E8] border border-[#ECE5CC] text-[#0078D4] font-mono text-[10.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                          2
+                        </span>
+                        <div>
+                          <strong className="text-[#2E2B1A] block">App Registration & Read-Only Roles</strong>
+                          Create an App Registration, generate a Client Secret, and assign <code className="bg-[#FAF6E8] px-1 py-0.5 rounded text-[10.5px]">Reader</code> + <code className="bg-[#FAF6E8] px-1 py-0.5 rounded text-[10.5px]">Cost Management Reader</code> on your subscription.
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-start gap-2.5">
-                      <span className="w-5 h-5 rounded-full bg-[#FAF6E8] border border-[#ECE5CC] text-[#9A6B00] font-mono text-[10.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                        3
-                      </span>
-                      <div>
-                        <strong className="text-[#2E2B1A] block">External ID Security</strong>
-                        Configured in your Trust Policy to prevent confused deputy impersonation.
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-5 h-5 rounded-full bg-[#FAF6E8] border border-[#ECE5CC] text-[#0078D4] font-mono text-[10.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                          3
+                        </span>
+                        <div>
+                          <strong className="text-[#2E2B1A] block">Multi-Cloud Recommendations</strong>
+                          Once synced, GreenCloud evaluates both AWS and Azure resources together in your Recommendations queue.
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="space-y-3.5 text-[12px] text-[#686450]">
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-5 h-5 rounded-full bg-[#FAF6E8] border border-[#ECE5CC] text-[#9A6B00] font-mono text-[10.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                          1
+                        </span>
+                        <div>
+                          <strong className="text-[#2E2B1A] block">12-Digit Account ID</strong>
+                          Find in the top-right user menu in the AWS Management Console.
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-5 h-5 rounded-full bg-[#FAF6E8] border border-[#ECE5CC] text-[#9A6B00] font-mono text-[10.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                          2
+                        </span>
+                        <div>
+                          <strong className="text-[#2E2B1A] block">Read-Only IAM Role</strong>
+                          Attach policy with least-privilege telemetry permissions (<code className="bg-[#FAF6E8] px-1 py-0.5 rounded text-[10.5px]">ec2:Describe*</code>, <code className="bg-[#FAF6E8] px-1 py-0.5 rounded text-[10.5px]">cloudwatch:Get*</code>, <code className="bg-[#FAF6E8] px-1 py-0.5 rounded text-[10.5px]">ce:Get*</code>).
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-5 h-5 rounded-full bg-[#FAF6E8] border border-[#ECE5CC] text-[#9A6B00] font-mono text-[10.5px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                          3
+                        </span>
+                        <div>
+                          <strong className="text-[#2E2B1A] block">External ID Security</strong>
+                          Configured in your Trust Policy to prevent confused deputy impersonation.
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Security Guarantee Pill at Bottom */}
                 <div className="mt-4 pt-3 border-t border-[#ECE5CC] bg-[#FAF6E8]/50 rounded-xl p-3 border border-[#ECE5CC]/60">
                   <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#1F8A70] mb-0.5">
                     <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                    <span>Zero Static Keys Stored</span>
+                    <span>{selectedProvider === "azure" ? "AES-256-GCM Encrypted" : "Zero Static Keys Stored"}</span>
                   </div>
                   <p className="text-[11px] text-[#8D8975] leading-relaxed">
-                    GreenCloud authenticates via AWS STS to generate short-lived 15-minute temporary credentials on demand.
+                    {selectedProvider === "azure"
+                      ? "Your Azure Client ID and Secret are encrypted at rest with AES-256-GCM and decrypted in-memory only during sync."
+                      : "GreenCloud authenticates via AWS STS to generate short-lived 15-minute temporary credentials on demand."}
                   </p>
                 </div>
               </div>

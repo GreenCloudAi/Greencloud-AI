@@ -46,6 +46,46 @@ export async function POST(
       );
     }
 
+    // Cross-cloud migrations are human-guided only (never auto-executed)
+    if (rec.category === "cross_cloud_migration") {
+      await db.approveRecommendation(
+        recommendationId,
+        approver,
+        comment || "Cross-cloud migration plan approved for human execution"
+      );
+
+      let outputPath = "";
+      try {
+        outputPath = await TicketService.createJiraTicket({
+          recommendationId: rec.id,
+          title: rec.title,
+          category: rec.category,
+          estimatedMonthlySavings: rec.estimatedMonthlySavings,
+          estimatedGco2eSavings: rec.estimatedGco2eSavings,
+          riskScore: rec.riskScore,
+          evidence: JSON.parse(rec.evidence),
+          resourceId: rec.resource.providerResourceId,
+        });
+      } catch {
+        // Ticket creation is optional
+      }
+
+      await db.logAction(
+        approver,
+        "cross_cloud_migration_approved",
+        "recommendation",
+        recommendationId,
+        { mode, outputPath }
+      );
+
+      return NextResponse.json({
+        recommendationId,
+        status: "approved",
+        mode,
+        outputPath: outputPath ? outputPath.replace(/\\/g, "/") : "",
+      });
+    }
+
     // 2. Approve in Database (transaction isolates and audits)
     await db.approveRecommendation(recommendationId, approver, comment || "Approved via dashboard workflow");
 

@@ -122,6 +122,14 @@ export function RecommendationsView({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => onNavigateSubTab("opt-cross-cloud")}
+              className="px-3.5 py-1.5 rounded-xl bg-[#E2F5EF] hover:bg-[#D1EFE6] border border-[#BDEBDD] text-[12px] font-bold text-[#1F8A70] transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            >
+              <span>Cross-Cloud Advisor</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
               onClick={() => onNavigateSubTab("opt-opportunities")}
               className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-[#FAF6E8] border border-[#ECE5CC] text-[12px] font-bold text-[#2E2B1A] transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
             >

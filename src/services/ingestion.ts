@@ -1,9 +1,12 @@
 import { prisma } from "./db";
 import { AwsCloudConnector } from "./awsConnector";
+import { AzureCloudConnector } from "./azureConnector";
 import { CarbonEngine } from "./carbonEngine";
 import { GreenCloudConfig } from "./config";
 import { Logger } from "./logger";
 import { decryptCredential } from "./encryption";
+import { syncRegions } from "./pricing/pricingSync";
+import { pairedRegion, type Provider } from "./pricing/regionMap";
 
 /**
  * Resilient Retry Helper
@@ -64,6 +67,10 @@ export class IngestionService {
       throw new Error(
         `Cloud account ${this.accountId} not found for tenant ${this.tenantId}`
       );
+    }
+
+    if (account.provider === "azure") {
+      return this.runAzureSync(account);
     }
 
     if (!account.roleArn) {
@@ -194,6 +201,7 @@ export class IngestionService {
             tags: JSON.stringify(vol.Tags),
             sizeGb: vol.Size,
             monthlyCost: vol.MonthlyCost,
+            attachedToResourceId: vol.AttachmentInstanceId || null,
             firstSeenAt: new Date(vol.CreateTime),
             lastSeenAt: syncTime,
           },
@@ -202,6 +210,7 @@ export class IngestionService {
             tags: JSON.stringify(vol.Tags),
             sizeGb: vol.Size,
             monthlyCost: vol.MonthlyCost,
+            attachedToResourceId: vol.AttachmentInstanceId || null,
             lastSeenAt: syncTime,
           },
         });
@@ -363,6 +372,26 @@ export class IngestionService {
     const isSuccess = errors.length < 4; // Resilient: succeeds if at least one sub-scan worked
     const finalStatus = isSuccess ? "active" : "sync_failed";
 
+    // Best-effort pricing sync for regions discovered during AWS ingestion
+    if (isSuccess && syncedResourceIds.length > 0) {
+      try {
+        const syncedRegions = await prisma.cloudResource.findMany({
+          where: { id: { in: syncedResourceIds } },
+          select: { region: true },
+          distinct: ["region"],
+        });
+        const targets: Array<{ provider: Provider; region: string }> = [];
+        for (const r of syncedRegions) {
+          targets.push({ provider: "aws", region: r.region });
+          const pair = pairedRegion("aws", r.region);
+          if (pair) targets.push({ provider: "azure", region: pair });
+        }
+        await syncRegions(targets, { maxAgeHours: GreenCloudConfig.crossCloud.priceMaxAgeHours });
+      } catch (err: any) {
+        Logger.warn("PRICING", "POST_SYNC_PRICING_WARN", err?.message || "Pricing sync skipped");
+      }
+    }
+
     await prisma.cloudAccount.update({
       where: { id: this.accountId },
       data: {
@@ -408,5 +437,309 @@ export class IngestionService {
       success: isSuccess,
       errors,
     };
+  }
+
+  /**
+   * Runs the complete ingestion and normalization workflow for Microsoft Azure
+   * using ARM, Azure Monitor, and Azure Cost Management APIs.
+   */
+  private async runAzureSync(account: any): Promise<{ success: boolean; errors: string[] }> {
+    const errors: string[] = [];
+    const tenantId = account.externalId || account.roleArn;
+    const clientId = account.encryptedAccessKey ? decryptCredential(account.encryptedAccessKey) : null;
+    const clientSecret = account.encryptedSecretKey ? decryptCredential(account.encryptedSecretKey) : null;
+
+    if (!tenantId || !clientId || !clientSecret) {
+      throw new Error(
+        `Azure account "${account.name}" is missing Service Principal credentials (Tenant ID, Client ID, or Client Secret).`
+      );
+    }
+
+    await prisma.cloudAccount.update({
+      where: { id: this.accountId },
+      data: { status: "syncing" },
+    });
+
+    const connector = new AzureCloudConnector(
+      account.externalAccountId,
+      tenantId,
+      clientId,
+      clientSecret
+    );
+    const syncTime = new Date();
+    const syncedResourceIds: string[] = [];
+
+    // --- Sub-scan 1: Azure Virtual Machines ---
+    try {
+      Logger.info("INGEST", "AZURE_VM_START", "Starting Azure Virtual Machines and Azure Monitor telemetry scan...");
+      const vms = await withRetry(() => connector.fetchVirtualMachines(), "Azure VM Ingestion");
+
+      for (const vm of vms) {
+        const resourceId = `${this.accountId}_azvm_${vm.VmId}`;
+        const resource = await prisma.cloudResource.upsert({
+          where: { id: resourceId },
+          create: {
+            id: resourceId,
+            cloudAccountId: this.accountId,
+            providerResourceId: vm.ResourceId,
+            resourceType: "azure_vm",
+            region: vm.Region,
+            lifecycleState: vm.State,
+            tags: JSON.stringify(vm.Tags),
+            instanceType: vm.VmSize,
+            monthlyCost: vm.MonthlyCost,
+            telemetryMetrics: JSON.stringify({
+              cpuDailyAverages: vm.CpuUtilizationSeries,
+              peakCpu: vm.PeakCpuUtilization,
+              lookbackDays: GreenCloudConfig.cloudwatchLookbackDays,
+              collectedAt: syncTime.toISOString(),
+            }),
+            firstSeenAt: new Date(vm.TimeCreated),
+            lastSeenAt: syncTime,
+          },
+          update: {
+            lifecycleState: vm.State,
+            tags: JSON.stringify(vm.Tags),
+            instanceType: vm.VmSize,
+            monthlyCost: vm.MonthlyCost,
+            telemetryMetrics: JSON.stringify({
+              cpuDailyAverages: vm.CpuUtilizationSeries,
+              peakCpu: vm.PeakCpuUtilization,
+              lookbackDays: GreenCloudConfig.cloudwatchLookbackDays,
+              collectedAt: syncTime.toISOString(),
+            }),
+            lastSeenAt: syncTime,
+          },
+        });
+
+        syncedResourceIds.push(resource.id);
+
+        const avgCpu =
+          vm.CpuUtilizationSeries.length > 0
+            ? vm.CpuUtilizationSeries.reduce((a, b) => a + b, 0) / vm.CpuUtilizationSeries.length
+            : 0;
+
+        const carbonResult = CarbonEngine.calculateEC2Carbon(vm.VmSize, vm.Region, avgCpu);
+        await prisma.carbonEmission.create({
+          data: {
+            resourceId: resource.id,
+            ts: syncTime,
+            energyKwh: carbonResult.energyKwh,
+            operationalGco2e: carbonResult.operationalGco2e,
+            embodiedGco2e: carbonResult.embodiedGco2e,
+            method: carbonResult.method,
+          },
+        });
+      }
+    } catch (err: any) {
+      const msg = `Azure VM Ingestion failed: ${err.message || err}`;
+      Logger.error("INGEST", "AZURE_VM_ERROR", err);
+      errors.push(msg);
+    }
+
+    // --- Sub-scan 2: Azure Managed Disks ---
+    try {
+      Logger.info("INGEST", "AZURE_DISK_START", "Starting Azure Managed Disks scan...");
+      const disks = await withRetry(() => connector.fetchManagedDisks(), "Azure Disk Ingestion");
+
+      for (const disk of disks) {
+        const resourceId = `${this.accountId}_azdisk_${disk.DiskId}`;
+        const resource = await prisma.cloudResource.upsert({
+          where: { id: resourceId },
+          create: {
+            id: resourceId,
+            cloudAccountId: this.accountId,
+            providerResourceId: disk.Name,
+            resourceType: "azure_disk",
+            region: disk.Region,
+            lifecycleState: disk.State,
+            tags: JSON.stringify(disk.Tags),
+            sizeGb: disk.SizeGb,
+            monthlyCost: disk.MonthlyCost,
+            attachedToResourceId: disk.ManagedBy || null,
+            firstSeenAt: new Date(disk.TimeCreated),
+            lastSeenAt: syncTime,
+          },
+          update: {
+            lifecycleState: disk.State,
+            tags: JSON.stringify(disk.Tags),
+            sizeGb: disk.SizeGb,
+            monthlyCost: disk.MonthlyCost,
+            attachedToResourceId: disk.ManagedBy || null,
+            lastSeenAt: syncTime,
+          },
+        });
+
+        syncedResourceIds.push(resource.id);
+
+        const carbonResult = CarbonEngine.calculateEBSCarbon(disk.SizeGb, disk.Region);
+        await prisma.carbonEmission.create({
+          data: {
+            resourceId: resource.id,
+            ts: syncTime,
+            energyKwh: carbonResult.energyKwh,
+            operationalGco2e: carbonResult.operationalGco2e,
+            embodiedGco2e: carbonResult.embodiedGco2e,
+            method: carbonResult.method,
+          },
+        });
+      }
+    } catch (err: any) {
+      const msg = `Azure Managed Disk Ingestion failed: ${err.message || err}`;
+      Logger.error("INGEST", "AZURE_DISK_ERROR", err);
+      errors.push(msg);
+    }
+
+    // --- Sub-scan 3: Azure Public IPs ---
+    try {
+      Logger.info("INGEST", "AZURE_IP_START", "Starting Azure Public IP scan...");
+      const ips = await withRetry(() => connector.fetchPublicIPs(), "Azure Public IP Ingestion");
+
+      for (const ip of ips) {
+        const resourceId = `${this.accountId}_azip_${ip.Name}`;
+        const resource = await prisma.cloudResource.upsert({
+          where: { id: resourceId },
+          create: {
+            id: resourceId,
+            cloudAccountId: this.accountId,
+            providerResourceId: ip.IpAddress,
+            resourceType: "azure_ip",
+            region: ip.Region,
+            lifecycleState: ip.AssociationId ? "associated" : "unassociated",
+            tags: JSON.stringify(ip.Tags),
+            monthlyCost: ip.MonthlyCost,
+            firstSeenAt: syncTime,
+            lastSeenAt: syncTime,
+          },
+          update: {
+            lifecycleState: ip.AssociationId ? "associated" : "unassociated",
+            tags: JSON.stringify(ip.Tags),
+            monthlyCost: ip.MonthlyCost,
+            lastSeenAt: syncTime,
+          },
+        });
+
+        syncedResourceIds.push(resource.id);
+
+        await prisma.carbonEmission.create({
+          data: {
+            resourceId: resource.id,
+            ts: syncTime,
+            energyKwh: 0,
+            operationalGco2e: 0,
+            embodiedGco2e: 0,
+            method: "zero_emission_source",
+          },
+        });
+      }
+    } catch (err: any) {
+      const msg = `Azure Public IP Ingestion failed: ${err.message || err}`;
+      Logger.error("INGEST", "AZURE_IP_ERROR", err);
+      errors.push(msg);
+    }
+
+    // --- Sub-scan 4: Azure Cost Management ---
+    try {
+      Logger.info("INGEST", "AZURE_BILLING_START", "Starting Azure Cost Management 30-day billing scan...");
+      const thirtyDaysAgo = new Date(syncTime.getTime() - 30 * 24 * 3600 * 1000);
+      const startStr = thirtyDaysAgo.toISOString().slice(0, 10);
+      const endStr = syncTime.toISOString().slice(0, 10);
+
+      const billRows = await withRetry(
+        () => connector.fetchBillingSummary(startStr, endStr),
+        "Azure Cost Management Ingestion"
+      );
+
+      await prisma.costLineItem.deleteMany({
+        where: { cloudAccountId: this.accountId },
+      });
+
+      for (const row of billRows) {
+        let matchedResourceId: string | null = null;
+        const svcLower = row.Service.toLowerCase();
+        if (svcLower.includes("virtual machines")) {
+          const match = await prisma.cloudResource.findFirst({
+            where: { cloudAccountId: this.accountId, resourceType: "azure_vm" },
+          });
+          if (match) matchedResourceId = match.id;
+        } else if (svcLower.includes("storage")) {
+          const match = await prisma.cloudResource.findFirst({
+            where: { cloudAccountId: this.accountId, resourceType: "azure_disk" },
+          });
+          if (match) matchedResourceId = match.id;
+        } else if (svcLower.includes("network") || svcLower.includes("ip")) {
+          const match = await prisma.cloudResource.findFirst({
+            where: { cloudAccountId: this.accountId, resourceType: "azure_ip" },
+          });
+          if (match) matchedResourceId = match.id;
+        }
+
+        await prisma.costLineItem.create({
+          data: {
+            cloudAccountId: this.accountId,
+            resourceId: matchedResourceId,
+            chargeDate: new Date(row.Date),
+            providerService: row.Service,
+            billedCost: row.Cost,
+            effectiveCost: row.Cost,
+            currency: "USD",
+          },
+        });
+      }
+    } catch (err: any) {
+      const msg = `Azure Billing Ingestion failed: ${err.message || err}`;
+      Logger.error("INGEST", "AZURE_BILLING_ERROR", err);
+      errors.push(msg);
+    }
+
+    const isSuccess = errors.length < 4;
+    const finalStatus = isSuccess ? "active" : "sync_failed";
+
+    // Best-effort pricing sync for regions discovered during Azure ingestion
+    if (isSuccess && syncedResourceIds.length > 0) {
+      try {
+        const syncedRegions = await prisma.cloudResource.findMany({
+          where: { id: { in: syncedResourceIds } },
+          select: { region: true },
+          distinct: ["region"],
+        });
+        const targets: Array<{ provider: Provider; region: string }> = [];
+        for (const r of syncedRegions) {
+          targets.push({ provider: "azure", region: r.region });
+          const pair = pairedRegion("azure", r.region);
+          if (pair) targets.push({ provider: "aws", region: pair });
+        }
+        await syncRegions(targets, { maxAgeHours: GreenCloudConfig.crossCloud.priceMaxAgeHours });
+      } catch (err: any) {
+        Logger.warn("PRICING", "POST_SYNC_PRICING_WARN", err?.message || "Pricing sync skipped");
+      }
+    }
+
+    await prisma.cloudAccount.update({
+      where: { id: this.accountId },
+      data: {
+        status: finalStatus,
+        syncFreshness: isSuccess ? syncTime : undefined,
+        syncError: errors.length > 0 ? errors.join(" | ") : null,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId: this.tenantId,
+        actor: "system_ingest",
+        action: "sync_completed",
+        objectType: "cloud_account",
+        objectId: this.accountId,
+        metadata: JSON.stringify({
+          provider: "azure",
+          success: isSuccess,
+          syncedResourceCount: syncedResourceIds.length,
+          errors,
+        }),
+      },
+    });
+
+    return { success: isSuccess, errors };
   }
 }

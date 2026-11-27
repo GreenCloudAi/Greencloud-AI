@@ -2,29 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma, TenantIsolatedDb } from "@/services/db";
 import { seedDefaultTenant } from "@/services/seed";
 import { ForecastingEngine } from "@/services/forecastingEngine";
-
-const REGION_METADATA: Record<
-  string,
-  { name: string; country: string; flag: string; gridIntensity: number; mix: string; carbonStatus: string }
-> = {
-  "ap-south-1": { name: "Asia Pacific (Mumbai)", country: "India", flag: "🇮🇳", gridIntensity: 680, mix: "Thermal & Solar", carbonStatus: "High Carbon" },
-  "us-east-1": { name: "US East (N. Virginia)", country: "United States", flag: "🇺🇸", gridIntensity: 420, mix: "Gas & Coal", carbonStatus: "Moderate" },
-  "us-east-2": { name: "US East (Ohio)", country: "United States", flag: "🇺🇸", gridIntensity: 410, mix: "Coal & Gas", carbonStatus: "Moderate" },
-  "us-west-1": { name: "US West (N. California)", country: "United States", flag: "🇺🇸", gridIntensity: 210, mix: "Solar & Gas", carbonStatus: "Clean" },
-  "us-west-2": { name: "US West (Oregon)", country: "United States", flag: "🇺🇸", gridIntensity: 80, mix: "Hydro & Wind", carbonStatus: "Ultra Clean" },
-  "eu-central-1": { name: "Europe (Frankfurt)", country: "Germany", flag: "🇩🇪", gridIntensity: 340, mix: "Wind, Coal & Solar", carbonStatus: "Moderate" },
-  "eu-west-1": { name: "Europe (Ireland)", country: "Ireland", flag: "🇮🇪", gridIntensity: 310, mix: "Wind & Gas", carbonStatus: "Moderate" },
-  "eu-west-2": { name: "Europe (London)", country: "United Kingdom", flag: "🇬🇧", gridIntensity: 220, mix: "Wind & Nuclear", carbonStatus: "Clean" },
-  "eu-west-3": { name: "Europe (Paris)", country: "France", flag: "🇫🇷", gridIntensity: 75, mix: "Nuclear & Hydro", carbonStatus: "Ultra Clean" },
-  "eu-north-1": { name: "Europe (Stockholm)", country: "Sweden", flag: "🇸🇪", gridIntensity: 45, mix: "Hydro & Nuclear", carbonStatus: "Ultra Clean" },
-  "ap-southeast-1": { name: "Asia Pacific (Singapore)", country: "Singapore", flag: "🇸🇬", gridIntensity: 480, mix: "Natural Gas", carbonStatus: "High Carbon" },
-  "ap-southeast-2": { name: "Asia Pacific (Sydney)", country: "Australia", flag: "🇦🇺", gridIntensity: 560, mix: "Coal & Solar", carbonStatus: "High Carbon" },
-  "ap-northeast-1": { name: "Asia Pacific (Tokyo)", country: "Japan", flag: "🇯🇵", gridIntensity: 470, mix: "LNG & Coal", carbonStatus: "High Carbon" },
-  "ap-northeast-2": { name: "Asia Pacific (Seoul)", country: "South Korea", flag: "🇰🇷", gridIntensity: 460, mix: "Nuclear & Coal", carbonStatus: "High Carbon" },
-  "ap-northeast-3": { name: "Asia Pacific (Osaka)", country: "Japan", flag: "🇯🇵", gridIntensity: 390, mix: "Nuclear & LNG", carbonStatus: "Moderate" },
-  "ca-central-1": { name: "Canada (Central)", country: "Canada", flag: "🇨🇦", gridIntensity: 120, mix: "Hydro & Nuclear", carbonStatus: "Clean" },
-  "sa-east-1": { name: "South America (São Paulo)", country: "Brazil", flag: "🇧🇷", gridIntensity: 110, mix: "Hydroelectric", carbonStatus: "Clean" },
-};
+import { REGION_METADATA } from "@/services/pricing/regionMap";
 
 export async function GET(request: Request) {
   try {
@@ -140,9 +118,9 @@ export async function GET(request: Request) {
       },
     });
 
-    const ec2List = resources.filter((r) => r.resourceType === "ec2");
-    const ebsList = resources.filter((r) => r.resourceType === "ebs");
-    const eipList = resources.filter((r) => r.resourceType === "eip");
+    const ec2List = resources.filter((r) => r.resourceType === "ec2" || r.resourceType === "azure_vm");
+    const ebsList = resources.filter((r) => r.resourceType === "ebs" || r.resourceType === "azure_disk");
+    const eipList = resources.filter((r) => r.resourceType === "eip" || r.resourceType === "azure_ip");
 
     // Resource Health classification
     let healthyCount = 0;
@@ -387,7 +365,7 @@ export async function GET(request: Request) {
       item.resourcesCount++;
       item.monthlyCost += r.monthlyCost || 0;
 
-      if (r.resourceType === "ec2") {
+      if (r.resourceType === "ec2" || r.resourceType === "azure_vm") {
         item.totalEc2++;
         if (r.lifecycleState === "running") {
           item.runningEc2++;
@@ -403,9 +381,9 @@ export async function GET(request: Request) {
         } else if (r.lifecycleState === "stopped") {
           item.stoppedEc2++;
         }
-      } else if (r.resourceType === "ebs") {
+      } else if (r.resourceType === "ebs" || r.resourceType === "azure_disk") {
         item.totalEbs++;
-      } else if (r.resourceType === "eip") {
+      } else if (r.resourceType === "eip" || r.resourceType === "azure_ip") {
         item.totalEip++;
       }
 

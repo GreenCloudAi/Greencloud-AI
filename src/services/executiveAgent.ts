@@ -98,6 +98,11 @@ export interface ExecutiveReportSummary {
   machineShiftLedger: MachineShiftLedgerItem[];
   modernizationLevers: ModernizationLever[];
   regionalComparison: RegionalGridComparison;
+  cloudPlacement?: {
+    shiftCandidatesCount: number;
+    monthlyShiftSavings: number;
+    headline: string;
+  };
   compliance: {
     standard: string;
     auditStatus: string;
@@ -442,6 +447,22 @@ export function generateExecutiveBrief(data: any): ExecutiveReportSummary {
   const generatedAt = data?.account?.syncFreshness || "2026-09-29T12:00:00.000Z";
   const immutableHash = getDeterministicHash(providerAccountId, generatedAt);
 
+  const xcRecs = (data?.recommendations?.items || []).filter(
+    (r: any) => r.category === "cross_cloud_migration"
+  );
+  const xcSavings = xcRecs.reduce(
+    (sum: number, r: any) => sum + Number(r.estimatedMonthlySavings || 0),
+    0
+  );
+  const cloudPlacement = {
+    shiftCandidatesCount: xcRecs.length,
+    monthlyShiftSavings: parseFloat(xcSavings.toFixed(2)),
+    headline:
+      xcRecs.length > 0
+        ? `Move ${xcRecs.length} workload(s) across clouds for $${xcSavings.toFixed(2)}/mo net savings.`
+        : "Stay on current cloud; rightsize in place.",
+  };
+
   return {
     account: {
       name: accountName,
@@ -469,6 +490,7 @@ export function generateExecutiveBrief(data: any): ExecutiveReportSummary {
     machineShiftLedger,
     modernizationLevers,
     regionalComparison,
+    cloudPlacement,
     compliance: {
       standard: "GHG Protocol Corporate Standard & FinOps Open Cost Schema",
       auditStatus: "Verified Cryptographic Ledger (SHA-256)",

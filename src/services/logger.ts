@@ -4,7 +4,7 @@
  * Automatically masks sensitive tokens (e.g. AWS Keys, Session Tokens).
  */
 
-type LogCategory = "AWS" | "INGEST" | "REC" | "AUTH" | "DB" | "SECURITY" | "API";
+type LogCategory = "AWS" | "AZURE" | "AGENT" | "PRICING" | "INGEST" | "REC" | "AUTH" | "DB" | "SECURITY" | "API";
 
 interface LogMeta {
   [key: string]: any;

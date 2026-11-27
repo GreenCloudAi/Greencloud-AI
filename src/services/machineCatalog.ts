@@ -4,6 +4,8 @@
  * providing deterministic sizing, specs, cost savings, and ESG carbon reduction.
  */
 
+import { getSnapshotRegionPrices } from "./pricing/snapshotStore";
+
 export interface MachineSpec {
   instanceType: string;
   family: string;
@@ -87,12 +89,35 @@ export const EC2_CATALOG: Record<string, MachineSpec> = {
   "r5.xlarge": { instanceType: "r5.xlarge", family: "r5", vCpu: 4, memoryGb: 32, architecture: "x86_64", hourlyRateUsd: 0.252, monthlyCostUsd: 183.96, baselineNetwork: "Up to 10 Gbps", category: "Memory Optimized", isGraviton: false },
   "r5.2xlarge": { instanceType: "r5.2xlarge", family: "r5", vCpu: 8, memoryGb: 64, architecture: "x86_64", hourlyRateUsd: 0.504, monthlyCostUsd: 367.92, baselineNetwork: "Up to 10 Gbps", category: "Memory Optimized", isGraviton: false },
 
+  // Memory Optimized R6g / R7g (Graviton / Arm64)
+  "r6g.medium": { instanceType: "r6g.medium", family: "r6g", vCpu: 1, memoryGb: 8, architecture: "arm64", hourlyRateUsd: 0.0504, monthlyCostUsd: 36.79, baselineNetwork: "Up to 10 Gbps", category: "Memory Optimized", isGraviton: true },
+  "r6g.large": { instanceType: "r6g.large", family: "r6g", vCpu: 2, memoryGb: 16, architecture: "arm64", hourlyRateUsd: 0.1008, monthlyCostUsd: 73.58, baselineNetwork: "Up to 10 Gbps", category: "Memory Optimized", isGraviton: true },
+  "r6g.xlarge": { instanceType: "r6g.xlarge", family: "r6g", vCpu: 4, memoryGb: 32, architecture: "arm64", hourlyRateUsd: 0.2016, monthlyCostUsd: 147.17, baselineNetwork: "Up to 10 Gbps", category: "Memory Optimized", isGraviton: true },
+  "r7g.medium": { instanceType: "r7g.medium", family: "r7g", vCpu: 1, memoryGb: 8, architecture: "arm64", hourlyRateUsd: 0.0536, monthlyCostUsd: 39.13, baselineNetwork: "Up to 12.5 Gbps", category: "Memory Optimized", isGraviton: true },
+  "r7g.large": { instanceType: "r7g.large", family: "r7g", vCpu: 2, memoryGb: 16, architecture: "arm64", hourlyRateUsd: 0.1071, monthlyCostUsd: 78.18, baselineNetwork: "Up to 12.5 Gbps", category: "Memory Optimized", isGraviton: true },
+  "r7g.xlarge": { instanceType: "r7g.xlarge", family: "r7g", vCpu: 4, memoryGb: 32, architecture: "arm64", hourlyRateUsd: 0.2142, monthlyCostUsd: 156.37, baselineNetwork: "Up to 12.5 Gbps", category: "Memory Optimized", isGraviton: true },
+
   // Legacy T2 (x86_64)
   "t2.nano": { instanceType: "t2.nano", family: "t2", vCpu: 1, memoryGb: 0.5, architecture: "x86_64", hourlyRateUsd: 0.0058, monthlyCostUsd: 4.23, baselineNetwork: "Low to Moderate", category: "Burstable", isGraviton: false },
   "t2.micro": { instanceType: "t2.micro", family: "t2", vCpu: 1, memoryGb: 1, architecture: "x86_64", hourlyRateUsd: 0.0116, monthlyCostUsd: 8.47, baselineNetwork: "Low to Moderate", category: "Burstable", isGraviton: false },
   "t2.small": { instanceType: "t2.small", family: "t2", vCpu: 1, memoryGb: 2, architecture: "x86_64", hourlyRateUsd: 0.023, monthlyCostUsd: 16.79, baselineNetwork: "Low to Moderate", category: "Burstable", isGraviton: false },
   "t2.medium": { instanceType: "t2.medium", family: "t2", vCpu: 2, memoryGb: 4, architecture: "x86_64", hourlyRateUsd: 0.0464, monthlyCostUsd: 33.87, baselineNetwork: "Low to Moderate", category: "Burstable", isGraviton: false },
   "t2.large": { instanceType: "t2.large", family: "t2", vCpu: 2, memoryGb: 8, architecture: "x86_64", hourlyRateUsd: 0.0928, monthlyCostUsd: 67.74, baselineNetwork: "Low to Moderate", category: "Burstable", isGraviton: false },
+};
+
+export const AZURE_VM_CATALOG: Record<string, MachineSpec> = {
+  "standard_b1ls": { instanceType: "Standard_B1ls", family: "B", vCpu: 1, memoryGb: 0.5, architecture: "x86_64", hourlyRateUsd: 0.0052, monthlyCostUsd: 3.80, baselineNetwork: "Low", category: "Burstable", isGraviton: false },
+  "standard_b1s": { instanceType: "Standard_B1s", family: "B", vCpu: 1, memoryGb: 1, architecture: "x86_64", hourlyRateUsd: 0.0104, monthlyCostUsd: 7.59, baselineNetwork: "Moderate", category: "Burstable", isGraviton: false },
+  "standard_b2s": { instanceType: "Standard_B2s", family: "B", vCpu: 2, memoryGb: 4, architecture: "x86_64", hourlyRateUsd: 0.0416, monthlyCostUsd: 30.37, baselineNetwork: "Moderate", category: "Burstable", isGraviton: false },
+  "standard_b2ms": { instanceType: "Standard_B2ms", family: "B", vCpu: 2, memoryGb: 8, architecture: "x86_64", hourlyRateUsd: 0.0832, monthlyCostUsd: 60.74, baselineNetwork: "Moderate", category: "Burstable", isGraviton: false },
+  "standard_b2ps_v2": { instanceType: "Standard_B2ps_v2", family: "Bps_v2", vCpu: 2, memoryGb: 4, architecture: "arm64", hourlyRateUsd: 0.032, monthlyCostUsd: 23.36, baselineNetwork: "Moderate", category: "Burstable", isGraviton: true },
+  "standard_d2s_v5": { instanceType: "Standard_D2s_v5", family: "Ds_v5", vCpu: 2, memoryGb: 8, architecture: "x86_64", hourlyRateUsd: 0.096, monthlyCostUsd: 70.08, baselineNetwork: "Up to 12.5 Gbps", category: "General Purpose", isGraviton: false },
+  "standard_d4s_v5": { instanceType: "Standard_D4s_v5", family: "Ds_v5", vCpu: 4, memoryGb: 16, architecture: "x86_64", hourlyRateUsd: 0.192, monthlyCostUsd: 140.16, baselineNetwork: "Up to 12.5 Gbps", category: "General Purpose", isGraviton: false },
+  "standard_d8s_v5": { instanceType: "Standard_D8s_v5", family: "Ds_v5", vCpu: 8, memoryGb: 32, architecture: "x86_64", hourlyRateUsd: 0.384, monthlyCostUsd: 280.32, baselineNetwork: "Up to 12.5 Gbps", category: "General Purpose", isGraviton: false },
+  "standard_d2ps_v5": { instanceType: "Standard_D2ps_v5", family: "Dps_v5", vCpu: 2, memoryGb: 8, architecture: "arm64", hourlyRateUsd: 0.077, monthlyCostUsd: 56.21, baselineNetwork: "Up to 12.5 Gbps", category: "General Purpose", isGraviton: true },
+  "standard_d4ps_v5": { instanceType: "Standard_D4ps_v5", family: "Dps_v5", vCpu: 4, memoryGb: 16, architecture: "arm64", hourlyRateUsd: 0.154, monthlyCostUsd: 112.42, baselineNetwork: "Up to 12.5 Gbps", category: "General Purpose", isGraviton: true },
+  "standard_f4s_v2": { instanceType: "Standard_F4s_v2", family: "Fs_v2", vCpu: 4, memoryGb: 8, architecture: "x86_64", hourlyRateUsd: 0.169, monthlyCostUsd: 123.37, baselineNetwork: "High", category: "Compute Optimized", isGraviton: false },
+  "standard_e4s_v5": { instanceType: "Standard_E4s_v5", family: "Es_v5", vCpu: 4, memoryGb: 32, architecture: "x86_64", hourlyRateUsd: 0.252, monthlyCostUsd: 183.96, baselineNetwork: "Up to 12.5 Gbps", category: "Memory Optimized", isGraviton: false },
 };
 
 /**
@@ -108,6 +133,16 @@ export function calculateTargetMachine(
   region: string = "ap-south-1"
 ): TargetMachineShift {
   const normType = (currentType || "t3.large").trim().toLowerCase();
+
+  if (normType.startsWith("standard_")) {
+    return calculateAzureTargetMachine(
+      normType,
+      peakCpu,
+      actualMonthlyCost,
+      resourceId,
+      region
+    );
+  }
   const currentSpec = EC2_CATALOG[normType] || {
     instanceType: normType,
     family: normType.split(".")[0] || "t3",
@@ -121,9 +156,11 @@ export function calculateTargetMachine(
     isGraviton: false,
   };
 
+  const regionPrices = getSnapshotRegionPrices("aws", region);
+  const currentLive = regionPrices.get(normType)?.monthlyUsd;
   const currentCost = actualMonthlyCost && actualMonthlyCost > 0
     ? actualMonthlyCost
-    : currentSpec.monthlyCostUsd;
+    : (currentLive ?? currentSpec.monthlyCostUsd);
 
   let targetName = "t4g.small";
   let altX86Name = "t3.small";
@@ -233,14 +270,14 @@ export function calculateTargetMachine(
   targetSpec = EC2_CATALOG[targetName] || EC2_CATALOG["t4g.small"];
   altX86Spec = EC2_CATALOG[altX86Name] || EC2_CATALOG["t3.small"];
 
-  const targetMonthlyCost = targetSpec.monthlyCostUsd;
-  const altX86MonthlyCost = altX86Spec.monthlyCostUsd;
+  const targetMonthlyCost = regionPrices.get(targetName)?.monthlyUsd ?? targetSpec.monthlyCostUsd;
+  const altX86MonthlyCost = regionPrices.get(altX86Name)?.monthlyUsd ?? altX86Spec.monthlyCostUsd;
 
   const rawSavings = Math.max(0, currentCost - targetMonthlyCost);
   const monthlySavings = parseFloat(rawSavings.toFixed(2));
   const savingsPercentage = currentCost > 0
-    ? Math.min(95, Math.max(15, Math.round((monthlySavings / currentCost) * 1000) / 10))
-    : 45;
+    ? Math.min(95, Math.max(0, Math.round((monthlySavings / currentCost) * 1000) / 10))
+    : 0;
   const annualSavings = parseFloat((monthlySavings * 12).toFixed(2));
 
   const altSavings = Math.max(0, currentCost - altX86MonthlyCost);
@@ -286,6 +323,125 @@ resource "aws_instance" "optimized_node" {
     architecture: targetSpec.architecture,
     category: targetSpec.category,
     alternativeX86Target: altX86Name,
+    alternativeX86Specs,
+    alternativeX86MonthlyCost: parseFloat(altX86MonthlyCost.toFixed(2)),
+    alternativeX86Savings: parseFloat(altSavings.toFixed(2)),
+    agentCliCommand,
+    agentTerraformSnippet,
+    agentActionDescription,
+  };
+}
+
+function calculateAzureTargetMachine(
+  normType: string,
+  peakCpu: number,
+  actualMonthlyCost: number | null | undefined,
+  resourceId: string,
+  region: string
+): TargetMachineShift {
+  const currentSpec = AZURE_VM_CATALOG[normType] || {
+    instanceType: normType,
+    family: "Ds_v5",
+    vCpu: 2,
+    memoryGb: 8,
+    architecture: "x86_64" as const,
+    hourlyRateUsd: 0.096,
+    monthlyCostUsd: actualMonthlyCost || 70.08,
+    baselineNetwork: "Up to 12.5 Gbps",
+    category: "General Purpose" as const,
+    isGraviton: false,
+  };
+
+  const regionPrices = getSnapshotRegionPrices("azure", region);
+  const currentLive = regionPrices.get(normType)?.monthlyUsd;
+  const currentCost =
+    actualMonthlyCost && actualMonthlyCost > 0
+      ? actualMonthlyCost
+      : (currentLive ?? currentSpec.monthlyCostUsd);
+
+  let targetKey = "standard_b2ps_v2";
+  let altX86Key = "standard_b1s";
+
+  switch (normType) {
+    case "standard_d8s_v5":
+    case "standard_d8s_v3":
+      targetKey = peakCpu < 20 ? "standard_d2ps_v5" : "standard_d4ps_v5";
+      altX86Key = peakCpu < 20 ? "standard_d2s_v5" : "standard_d4s_v5";
+      break;
+    case "standard_d4s_v5":
+    case "standard_d4s_v3":
+    case "standard_e4s_v5":
+    case "standard_f4s_v2":
+      targetKey = peakCpu < 20 ? "standard_b2ps_v2" : "standard_d2ps_v5";
+      altX86Key = peakCpu < 20 ? "standard_b2s" : "standard_d2s_v5";
+      break;
+    case "standard_d2s_v5":
+    case "standard_d2s_v3":
+    case "standard_b2ms":
+      targetKey = "standard_b2ps_v2";
+      altX86Key = peakCpu < 20 ? "standard_b1s" : "standard_b2s";
+      break;
+    default:
+      targetKey = "standard_b2ps_v2";
+      altX86Key = "standard_b1s";
+      break;
+  }
+
+  const targetSpec = AZURE_VM_CATALOG[targetKey] || AZURE_VM_CATALOG["standard_b2ps_v2"];
+  const altX86Spec = AZURE_VM_CATALOG[altX86Key] || AZURE_VM_CATALOG["standard_b1s"];
+  const carbonReduction = 55;
+
+  const targetMonthlyCost = regionPrices.get(targetKey)?.monthlyUsd ?? targetSpec.monthlyCostUsd;
+  const altX86MonthlyCost = regionPrices.get(altX86Key)?.monthlyUsd ?? altX86Spec.monthlyCostUsd;
+  const rawSavings = Math.max(0, currentCost - targetMonthlyCost);
+  const monthlySavings = parseFloat(rawSavings.toFixed(2));
+  const savingsPercentage =
+    currentCost > 0
+      ? Math.min(95, Math.max(0, Math.round((monthlySavings / currentCost) * 1000) / 10))
+      : 0;
+  const annualSavings = parseFloat((monthlySavings * 12).toFixed(2));
+  const altSavings = Math.max(0, currentCost - altX86MonthlyCost);
+
+  const specRatio = targetSpec.vCpu / Math.max(1, currentSpec.vCpu);
+  const projectedPeakOnTarget = Math.min(95, Math.round(peakCpu / Math.max(0.2, specRatio)));
+  const safetyMarginPercent = Math.max(25, 100 - projectedPeakOnTarget);
+
+  const currentSpecs = `${currentSpec.vCpu} vCPU • ${currentSpec.memoryGb} GB RAM • ${currentSpec.architecture}`;
+  const targetSpecs = `${targetSpec.vCpu} vCPU • ${targetSpec.memoryGb} GB RAM • Azure Ampere Altra (Arm64)`;
+  const alternativeX86Specs = `${altX86Spec.vCpu} vCPU • ${altX86Spec.memoryGb} GB RAM • x86_64`;
+
+  const agentCliCommand = `az vm resize --ids ${resourceId} --size ${targetSpec.instanceType}`;
+  const agentTerraformSnippet = `# Autonomous GreenCloud Agent — Azure VM Rightsizing Manifest
+resource "azurerm_linux_virtual_machine" "optimized_node" {
+  name     = "${resourceId.split("/").pop() || "greencloud-vm"}"
+  location = "${region}"
+  size     = "${targetSpec.instanceType}" # Shifted from ${currentSpec.instanceType} ($${monthlySavings}/mo saved)
+
+  tags = {
+    OptimizedBy       = "GreenCloudAgent"
+    PreviousVmSize    = "${currentSpec.instanceType}"
+    ShiftDate         = "${new Date().toISOString().split("T")[0]}"
+    TargetUtilization = "${projectedPeakOnTarget}% (Headroom: ${safetyMarginPercent}%)"
+  }
+}`;
+
+  const agentActionDescription = `Resize Azure VM "${resourceId.split("/").pop() || resourceId}" from ${currentSpec.instanceType} to ${targetSpec.instanceType}. Saves $${monthlySavings}/mo with ~${carbonReduction}% carbon reduction.`;
+
+  return {
+    currentMachine: currentSpec.instanceType,
+    currentSpecs,
+    currentMonthlyCost: parseFloat(currentCost.toFixed(2)),
+    targetMachine: targetSpec.instanceType,
+    targetSpecs,
+    targetMonthlyCost: parseFloat(targetMonthlyCost.toFixed(2)),
+    monthlySavings,
+    savingsPercentage,
+    annualSavings,
+    carbonReductionPercent: carbonReduction,
+    safetyMarginPercent,
+    architecture: targetSpec.architecture,
+    category: targetSpec.category,
+    alternativeX86Target: altX86Spec.instanceType,
     alternativeX86Specs,
     alternativeX86MonthlyCost: parseFloat(altX86MonthlyCost.toFixed(2)),
     alternativeX86Savings: parseFloat(altSavings.toFixed(2)),
